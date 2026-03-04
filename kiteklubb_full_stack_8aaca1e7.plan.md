@@ -210,7 +210,7 @@ Synced from Supabase Auth on first login via auth callback.
 | date            | timestamp     |                                       |
 | maxParticipants | integer       | nullable = unlimited                  |
 | instructorId    | uuid FK       | -> instructors.id                     |
-| spotId          | uuid FK       | -> spots.id, NOT NULL                 |
+| spotId          | uuid FK       | -> spots.id, nullable                 |
 | status          | enum          | `scheduled`, `completed`, `cancelled` |
 | createdAt       | timestamp     |                                       |
 

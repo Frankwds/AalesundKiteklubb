@@ -210,6 +210,7 @@ Synced from Supabase Auth on first login via auth callback.
 | date            | timestamp     |                                       |
 | maxParticipants | integer       | nullable = unlimited                  |
 | instructorId    | uuid FK       | -> instructors.id                     |
+| spotId          | uuid FK       | -> spots.id, NOT NULL                 |
 | status          | enum          | `scheduled`, `completed`, `cancelled` |
 | createdAt       | timestamp     |                                       |
 
@@ -529,7 +530,7 @@ Sections (anchor-linked from top nav):
 - **Instructor intro** -- pulled from instructor profiles in DB
 - **Pris og regler** -- pricing (500 kr/person, 250 kr/t)
 - **Subscribe** -- requires login, autofills email, stores in subscriptions table
-- **Scheduled Courses** -- list from DB, each with "Meld på" button (requires login)
+- **Scheduled Courses** -- list from DB, each showing spot name (linked to `/spots/[spotId]`), date, instructor, and "Meld på" button (requires login)
   - When no courses: explanatory text + Subscribe button
 
 ### 5d. Course Chat (`src/app/courses/[id]/chat/page.tsx`)
@@ -546,7 +547,7 @@ Sections (anchor-linked from top nav):
 Protected by middleware (admin role only). Tabs/sections:
 
 - **Instructors:** List all, add new (select existing user -> promote to instructor role + create instructor profile), edit, remove
-- **Courses:** List all courses, create new, edit, cancel, view participants, remove participants
+- **Courses:** List all courses, create new (with searchable spot dropdown to link a spot), edit, cancel, view participants, remove participants
 - **Spots:** Full CMS for spots -- create, edit, delete. Form fields: name, description, season (summer/winter), area, wind directions (multi-select compass), map image upload, latitude/longitude, skill level, skill notes, water type (multi-select). DataTable with filters by season and area.
 - **Subscriptions:** View subscribers list
 - **Users:** View all users, change roles
@@ -558,7 +559,7 @@ Uses shadcn/ui `DataTable`, `Dialog`, `Form`, `Tabs` components.
 Protected by middleware (instructor or admin role):
 
 - **Profile:** Edit own bio, certifications, experience, photo, phone
-- **My Courses:** List own courses, create new, edit, view/remove participants
+- **My Courses:** List own courses, create new (with searchable spot dropdown), edit, view/remove participants
 
 ### 5g. Auth Pages
 
@@ -588,7 +589,7 @@ No application-level authorization checks needed -- RLS handles it. If a non-adm
 
 Query functions used by Server Components and Server Actions. Each returns typed data from Supabase SDK:
 
-- `src/lib/queries/courses.ts` -- `supabase.from('courses').select('*, instructors(*)')`, with filters for status, date, etc.
+- `src/lib/queries/courses.ts` -- `supabase.from('courses').select('*, instructors(*), spots(*)')`, with filters for status, date, etc.
 - `src/lib/queries/instructors.ts` -- `supabase.from('instructors').select('*, users(*)')`
 - `src/lib/queries/messages.ts` -- `supabase.from('messages').select('*, users(name, avatar_url)').eq('course_id', id).order('created_at')`
 - `src/lib/queries/subscriptions.ts` -- check if current user has a subscription row
@@ -654,9 +655,9 @@ sequenceDiagram
 ### Implementation (`src/lib/actions/courses.ts`)
 
 The `publishCourse` Server Action:
-1. Inserts the course via Supabase server client (RLS verifies the user is an instructor)
-2. On success, fetches all subscriber emails from `subscriptions` table
-3. Sends a batch email via Resend with course details (title, date, description, link to enroll)
+1. Inserts the course (with `spotId`) via Supabase server client (RLS verifies the user is an instructor)
+2. On success, fetches the linked spot data and all subscriber emails from `subscriptions` table
+3. Sends a batch email via Resend with course details (title, date, description, spot name + link to `/spots/[spotId]`, and a "Meld deg på" enroll link)
 4. Returns the course data + whether the notification was sent successfully
 
 If the email send fails, the course is still created -- the action returns a warning about the notification failure rather than rolling back.
@@ -664,7 +665,7 @@ If the email send fails, the course is still created -- the action returns a war
 ### Email Setup
 
 - **`src/lib/email/resend.ts`** -- Resend client initialized with `RESEND_API_KEY`
-- **`src/lib/email/templates/new-course.tsx`** -- React Email template for new course notification (rendered server-side by Resend). Includes course title, date, instructor name, price, and a "Meld deg på" link.
+- **`src/lib/email/templates/new-course.tsx`** -- React Email template for new course notification (rendered server-side by Resend). Includes course title, date, instructor name, price, a link to the spot page (`/spots/[spotId]`), and a "Meld deg på" link.
 - **Sending domain** -- must be verified in the Resend dashboard (or use `onboarding@resend.dev` for testing)
 
 ---
@@ -678,7 +679,7 @@ All in `src/components/`, using shadcn/ui as the base:
 - **Courses:** `CourseCard`, `CourseList`, `EnrollButton`, `ParticipantList`
 - **Chat:** `ChatWindow`, `MessageBubble`, `MessageInput`
 - **Spots:** `SpotGuideDropdown` (multi-level nav dropdown), `WindCompass` (visual compass rose), `SpotDetailPage` sections
-- **Admin:** `InstructorForm`, `CourseForm`, `SpotForm` (with map image upload, compass direction picker, multi-select water type), `DataTable`
+- **Admin:** `InstructorForm`, `CourseForm` (with searchable spot dropdown via shadcn `Combobox`), `SpotForm` (with map image upload, compass direction picker, multi-select water type), `DataTable`
 - **Subscription:** `SubscribeDialog`
 
 ---

@@ -325,7 +325,7 @@ export const courses = pgTable('courses', {
 
 - SELECT: Own row (`id = auth.uid()`). Admins can read all.
 - INSERT: Via DB trigger (see below).
-- UPDATE: Own row. Admins can update any.
+- UPDATE: No self-update. User data comes from Google OAuth (synced by trigger). All modifications (including role changes) are done by admins via service role client, which bypasses RLS entirely.
 
 **Instructors table:**
 

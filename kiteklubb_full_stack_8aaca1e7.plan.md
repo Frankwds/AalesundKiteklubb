@@ -213,7 +213,6 @@ Synced from Supabase Auth on first login via auth callback.
 | maxParticipants | integer       | nullable = unlimited                  |
 | instructorId    | uuid FK       | -> instructors.id                     |
 | spotId          | uuid FK       | -> spots.id, nullable                 |
-| status          | enum          | `scheduled`, `completed`, `cancelled` |
 | createdAt       | timestamp     |                                       |
 
 
@@ -264,7 +263,7 @@ Enrollment is handled via a Postgres RPC function (not a direct insert) to preve
 | name           | text NOT NULL |                                                            |
 | description    | text          | "Om spotten" text                                          |
 | season         | enum          | `summer`, `winter` (SommerSpotter / VinterSpotter)         |
-| area           | text NOT NULL | Grouping for dropdown level 2 (e.g. "Giske", "Ålesund")   |
+| area           | text NOT NULL | Grouping for dropdown level 2 (e.g. "Giske", "Ålesund"). Free text. Admin form uses a Combobox that suggests existing area values from other spots (typed text filters the list). Selecting autofills the field; typing a new value uses it as-is. |
 | windDirections | text[]        | Array of compass strings: "N","NE","E","SE","S","SW","W","NW" |
 | mapImageUrl    | text          | Admin-uploaded annotated map/satellite image of the spot   |
 | latitude       | numeric       | For Yr link and Google Maps link                           |
@@ -590,9 +589,9 @@ Protected by middleware (admin role only). One page with shadcn/ui `Tabs` to swi
 - Row actions: Edit (opens Dialog with profile form), Remove (atomically deletes profile and resets role to `user`)
 
 **Tab: Kurs**
-- DataTable listing all courses (title, date, spot, instructor, status, participant count / max)
+- DataTable listing all courses sorted by date (title, date with "Kommende"/"Tidligere" tag derived from date vs now, spot, instructor, participant count / max)
 - "Nytt kurs" button → Dialog with course form (title, description, price, date, max participants, searchable spot dropdown, instructor select)
-- Row actions: Edit, Cancel, View participants (expandable row or Dialog showing participant list with remove buttons)
+- Row actions: Edit, Delete, View participants (expandable row or Dialog showing participant list with remove buttons)
 
 **Tab: Spotter**
 - DataTable listing all spots (name, season, area, skill level, water type)
@@ -648,7 +647,7 @@ No application-level authorization checks needed -- RLS handles it. If a non-adm
 
 Query functions used by Server Components and Server Actions. Each returns typed data from Supabase SDK:
 
-- `src/lib/queries/courses.ts` -- `supabase.from('courses').select('*, instructors(*), spots(*)')`, with filters for status, date, etc.
+- `src/lib/queries/courses.ts` -- `supabase.from('courses').select('*, instructors(*), spots(*)')`. Public page filters to future courses only (`.gte('date', new Date().toISOString())`). Admin dashboard shows all courses.
 - `src/lib/queries/instructors.ts` -- `supabase.from('instructors').select('*, users(*)')`
 - `src/lib/queries/messages.ts` -- `supabase.from('messages').select('*, users(name, avatar_url)').eq('course_id', id).order('created_at')`
 - `src/lib/queries/subscriptions.ts` -- check if current user has a subscription row

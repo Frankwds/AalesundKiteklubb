@@ -133,8 +133,8 @@ npx create-next-app@latest . --typescript --tailwind --app --src-dir --use-pnpm
 Install core dependencies:
 
 ```bash
-# Runtime: Supabase SDK for all data access
-pnpm add @supabase/supabase-js @supabase/ssr
+# Runtime: Supabase SDK for all data access + Resend for email
+pnpm add @supabase/supabase-js @supabase/ssr resend
 
 # Dev-time only: Drizzle for schema definitions and migrations
 pnpm add -D drizzle-orm drizzle-kit postgres
@@ -160,6 +160,7 @@ Environment variables needed:
 - `NEXT_PUBLIC_SUPABASE_URL` -- Supabase project URL (used by Supabase SDK at runtime)
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` -- Supabase anon key (used by Supabase SDK at runtime)
 - `SUPABASE_SERVICE_ROLE_KEY` -- Service role key (server-only, bypasses RLS for admin operations like role changes)
+- `RESEND_API_KEY` -- Resend API key (server-only, for sending subscriber notification emails)
 
 ---
 
@@ -574,7 +575,7 @@ All data access uses the Supabase SDK. Server Actions use the server-side Supaba
 
 Server Actions (`"use server"`) for mutations. Each creates a Supabase server client and calls SDK methods:
 
-- `src/lib/actions/courses.ts` -- `supabase.from('courses').insert(...)`, `.update(...)`, `.delete(...)`; enrollment via `supabase.from('course_participants').insert(...)`
+- `src/lib/actions/courses.ts` -- `supabase.from('courses').insert(...)`, `.update(...)`, `.delete(...)`; enrollment via `supabase.from('course_participants').insert(...)`. The `publishCourse` action inserts the course AND sends notification emails to all subscribers in one server-side request (see section 7).
 - `src/lib/actions/instructors.ts` -- CRUD on `instructors` table + updating user role to `instructor`
 - `src/lib/actions/messages.ts` -- `supabase.from('messages').insert(...)`
 - `src/lib/actions/subscriptions.ts` -- insert/delete on `subscriptions`
@@ -624,6 +625,47 @@ A server-only Supabase client using `SUPABASE_SERVICE_ROLE_KEY` that bypasses RL
 - The DB trigger approach handles user creation, but fallback upsert uses this
 
 This key is NEVER exposed to the client. Environment variable: `SUPABASE_SERVICE_ROLE_KEY` (server-only, not `NEXT_PUBLIC_`).
+
+---
+
+## 7. Email Notifications (Resend)
+
+When an instructor publishes a new course, all subscribers receive an email notification. This is handled in a single Server Action to avoid gaps where the course is published but the email fails silently.
+
+### Flow
+
+```mermaid
+sequenceDiagram
+  participant I as Instructor
+  participant SA as Server Action
+  participant DB as Supabase DB
+  participant R as Resend API
+
+  I->>SA: publishCourse(formData)
+  SA->>DB: insert course (RLS: instructor check)
+  DB-->>SA: course data
+  SA->>DB: select all subscribers
+  DB-->>SA: subscriber emails
+  SA->>R: send batch email
+  R-->>SA: success/failure
+  SA-->>I: return course + notification status
+```
+
+### Implementation (`src/lib/actions/courses.ts`)
+
+The `publishCourse` Server Action:
+1. Inserts the course via Supabase server client (RLS verifies the user is an instructor)
+2. On success, fetches all subscriber emails from `subscriptions` table
+3. Sends a batch email via Resend with course details (title, date, description, link to enroll)
+4. Returns the course data + whether the notification was sent successfully
+
+If the email send fails, the course is still created -- the action returns a warning about the notification failure rather than rolling back.
+
+### Email Setup
+
+- **`src/lib/email/resend.ts`** -- Resend client initialized with `RESEND_API_KEY`
+- **`src/lib/email/templates/new-course.tsx`** -- React Email template for new course notification (rendered server-side by Resend). Includes course title, date, instructor name, price, and a "Meld deg på" link.
+- **Sending domain** -- must be verified in the Resend dashboard (or use `onboarding@resend.dev` for testing)
 
 ---
 
@@ -709,7 +751,11 @@ src/
 │   │   └── middleware.ts           # Session refresh helper
 │   ├── auth/index.ts               # getCurrentUser() helper via Supabase SDK
 │   ├── actions/                    # Server actions (mutations via Supabase SDK)
-│   └── queries/                    # Query functions (reads via Supabase SDK)
+│   ├── queries/                    # Query functions (reads via Supabase SDK)
+│   └── email/
+│       ├── resend.ts               # Resend client instance
+│       └── templates/
+│           └── new-course.tsx      # React Email template for new course notification
 ├── types/
 │   └── database.ts                 # Generated types from Supabase (npx supabase gen types)
 └── middleware.ts                    # Next.js middleware (session refresh + route protection)

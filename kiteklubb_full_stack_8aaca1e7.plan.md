@@ -197,6 +197,8 @@ Synced from Supabase Auth on first login via auth callback.
 | photoUrl        | text      |                         |
 | createdAt       | timestamp |                         |
 
+**Sync invariant:** A user is an instructor if and only if BOTH `users.role = 'instructor'` AND they have a row in `instructors`. These are always created and removed together via a single atomic admin action (see section 6). The JWT claim (`user_role`) handles fast permission checks (middleware, UI). The `instructors` table holds profile data and provides the FK for `courses.instructorId`.
+
 
 ### 2c. Courses (`src/lib/db/schema/courses.ts`)
 
@@ -374,6 +376,7 @@ pgPolicy("Admin full access", {
   for: "all",
   to: authenticatedRole,
   using: isAdmin,
+  withCheck: isAdmin,
 })
 ```
 
@@ -581,7 +584,7 @@ Sections:
 
 Protected by middleware (admin role only). Tabs/sections:
 
-- **Instructors:** List all, add new (select existing user -> promote to instructor role + create instructor profile), edit, remove
+- **Instructors:** List all instructors. Add new: select an existing user, which atomically creates their `instructors` profile row and sets `users.role = 'instructor'` (single action, always in sync). Remove: atomically deletes profile and resets role to `user`. Edit: admin can edit any instructor profile.
 - **Courses:** List all courses, create new (with searchable spot dropdown to link a spot), edit, cancel, view participants, remove participants
 - **Spots:** Full CMS for spots -- create, edit, delete. Form fields: name, description, season (summer/winter), area, wind directions (multi-select compass), map image upload, latitude/longitude, skill level, skill notes, water type (multi-select). DataTable with filters by season and area.
 - **Subscriptions:** View subscribers list
@@ -612,7 +615,10 @@ All data access uses the Supabase SDK. Server Actions use the server-side Supaba
 Server Actions (`"use server"`) for mutations. Each creates a Supabase server client and calls SDK methods:
 
 - `src/lib/actions/courses.ts` -- `supabase.from('courses').insert(...)`, `.update(...)`, `.delete(...)`; enrollment via `supabase.rpc('enroll_in_course', { p_course_id })` (atomic capacity check, no overbooking); unenrollment via `supabase.from('course_participants').delete().match({ user_id, course_id })` (RLS allows own deletion). On successful enrollment, sends a confirmation email to the user (see section 7). The `publishCourse` action inserts the course AND sends notification emails to all subscribers in one server-side request.
-- `src/lib/actions/instructors.ts` -- CRUD on `instructors` table + updating user role to `instructor`
+- `src/lib/actions/instructors.ts` -- **Atomic admin actions to keep `users.role` and `instructors` table in sync:**
+  - `promoteToInstructor(userId)`: Creates `instructors` profile row AND sets `users.role = 'instructor'` in one action (uses service role client). Both always exist together.
+  - `removeInstructor(userId)`: Deletes `instructors` row AND resets `users.role = 'user'` in one action.
+  - `updateInstructorProfile(...)`: Instructor edits their own profile (bio, certs, photo, etc.) -- RLS allows self-update.
 - `src/lib/actions/messages.ts` -- `supabase.from('messages').insert(...)`
 - `src/lib/actions/subscriptions.ts` -- insert/delete on `subscriptions`
 - `src/lib/actions/spots.ts` -- CRUD on `spots` + image upload to Supabase Storage (map image for each spot)

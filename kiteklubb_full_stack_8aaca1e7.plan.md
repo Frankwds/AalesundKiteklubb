@@ -197,7 +197,7 @@ Synced from Supabase Auth on first login via auth callback.
 | photoUrl        | text      |                         |
 | createdAt       | timestamp |                         |
 
-**Sync invariant:** A user is an instructor if and only if BOTH `users.role = 'instructor'` AND they have a row in `instructors`. These are always created and removed together via a single atomic admin action (see section 6). The JWT claim (`user_role`) handles fast permission checks (middleware, UI). The `instructors` table holds profile data and provides the FK for `courses.instructorId`.
+**Sync invariant:** Users with `role = 'instructor'` or `role = 'admin'` always have a row in `instructors`. Admins automatically get an instructor profile when promoted (so they can create courses using the same UI). These are created atomically via admin actions (see section 6). The JWT claim (`user_role`) handles fast permission checks (middleware, UI). The `instructors` table holds profile data and provides the FK for `courses.instructorId`.
 
 
 ### 2c. Courses (`src/lib/db/schema/courses.ts`)
@@ -590,7 +590,7 @@ Protected by middleware (admin role only). One page with shadcn/ui `Tabs` to swi
 
 **Tab: Kurs**
 - DataTable listing all courses sorted by date (title, date with "Kommende"/"Tidligere" tag derived from date vs now, spot, instructor, participant count / max)
-- "Nytt kurs" button → Dialog with course form (title, description, price, date, max participants, searchable spot dropdown, instructor select)
+- No create button here — course creation uses the shared Instructor dashboard (see 5f). Admins see the Instructor nav item and use the same "Nytt kurs" flow there.
 - Row actions: Edit, Delete, View participants (expandable row or Dialog showing participant list with remove buttons)
 
 **Tab: Spotter**
@@ -605,16 +605,16 @@ Protected by middleware (admin role only). One page with shadcn/ui `Tabs` to swi
 
 **Tab: Brukere**
 - DataTable listing all users (name, email, role, created date)
-- Row action: Change role (dropdown to set user/instructor/admin). Changing to instructor triggers the atomic promote action.
+- Row action: Change role (dropdown to set user/instructor/admin). Changing to instructor or admin atomically creates `instructors` profile row (if missing) and sets `users.role`. Admins always have an instructor profile so they can create courses via the Instructor dashboard.
 
 Uses shadcn/ui `Tabs`, `DataTable`, `Dialog`, `Form`, `Combobox` components.
 
 ### 5f. Instructor Dashboard (`src/app/instructor/page.tsx`)
 
-Protected by middleware (instructor or admin role):
+Protected by middleware (instructor or admin role). **Shared by both** — admins see this panel in addition to the Admin dashboard, reusing the same UI for course creation.
 
 - **Profile:** Edit own bio, certifications, experience, photo, phone
-- **My Courses:** List own courses, create new (with searchable spot dropdown), edit, view/remove participants
+- **My Courses:** List own courses, create new (with searchable spot dropdown), edit, view/remove participants. Uses `publishCourse` which triggers subscriber emails regardless of whether the creator is instructor or admin.
 
 ### 5g. Auth Pages
 
@@ -633,9 +633,10 @@ Server Actions (`"use server"`) for mutations. Each creates a Supabase server cl
 
 - `src/lib/actions/courses.ts` -- `supabase.from('courses').insert(...)`, `.update(...)`, `.delete(...)`; enrollment via `supabase.rpc('enroll_in_course', { p_course_id })` (atomic capacity check, no overbooking); unenrollment via `supabase.from('course_participants').delete().match({ user_id, course_id })` (RLS allows own deletion). On successful enrollment, sends a confirmation email to the user (see section 7). The `publishCourse` action inserts the course AND sends notification emails to all subscribers in one server-side request.
 - `src/lib/actions/instructors.ts` -- **Atomic admin actions to keep `users.role` and `instructors` table in sync:**
-  - `promoteToInstructor(userId)`: Creates `instructors` profile row AND sets `users.role = 'instructor'` in one action (uses service role client). Both always exist together.
-  - `removeInstructor(userId)`: Deletes `instructors` row AND resets `users.role = 'user'` in one action.
-  - `updateInstructorProfile(...)`: Instructor edits their own profile (bio, certs, photo, etc.) -- RLS allows self-update.
+  - `promoteToInstructor(userId)`: Creates `instructors` profile row (if missing) AND sets `users.role = 'instructor'`.
+  - `promoteToAdmin(userId)`: Creates `instructors` profile row (if missing) AND sets `users.role = 'admin'`. Admins always have an instructor profile so they can create courses.
+  - `removeInstructor(userId)` / `demoteToUser(userId)`: Deletes `instructors` row AND resets `users.role = 'user'`.
+  - `updateInstructorProfile(...)`: Instructor or admin edits their own profile (bio, certs, photo, etc.) -- RLS allows self-update.
 - `src/lib/actions/messages.ts` -- `supabase.from('messages').insert(...)`
 - `src/lib/actions/subscriptions.ts` -- insert/delete on `subscriptions`
 - `src/lib/actions/spots.ts` -- CRUD on `spots` + image upload to Supabase Storage (map image for each spot)
@@ -705,31 +706,31 @@ This key is NEVER exposed to the client. Environment variable: `SUPABASE_SERVICE
 
 ## 7. Email Notifications (Resend)
 
-When an instructor publishes a new course, all subscribers receive an email notification. This is handled in a single Server Action to avoid gaps where the course is published but the email fails silently.
+When an instructor or admin publishes a new course, all subscribers receive an email notification. Both use the same `publishCourse` Server Action and the same flow. This is handled in a single Server Action to avoid gaps where the course is published but the email fails silently.
 
 ### Flow
 
 ```mermaid
 sequenceDiagram
-  participant I as Instructor
+  participant U as Instructor or Admin
   participant SA as Server Action
   participant DB as Supabase DB
   participant R as Resend API
 
-  I->>SA: publishCourse(formData)
+  U->>SA: publishCourse(formData)
   SA->>DB: insert course (RLS: instructor check)
   DB-->>SA: course data
   SA->>DB: select all subscribers
   DB-->>SA: subscriber emails
   SA->>R: send batch email
   R-->>SA: success/failure
-  SA-->>I: return course + notification status
+  SA-->>U: return course + notification status
 ```
 
 ### Implementation (`src/lib/actions/courses.ts`)
 
 The `publishCourse` Server Action:
-1. Inserts the course (with `spotId`) via Supabase server client (RLS verifies the user is an instructor)
+1. Inserts the course (with `spotId`) via Supabase server client (RLS verifies the user is an instructor or admin)
 2. On success, fetches the linked spot data and all subscriber emails from `subscriptions` table
 3. Sends a batch email via Resend with course details (title, date, description, spot name + link to `/spots/[spotId]`, and a "Meld deg på" enroll link)
 4. Returns the course data + whether the notification was sent successfully

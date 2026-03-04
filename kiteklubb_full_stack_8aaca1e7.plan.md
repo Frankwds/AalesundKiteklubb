@@ -194,7 +194,7 @@ Synced from Supabase Auth on first login via auth callback.
 | certifications  | text      | e.g. "IKO Level 2"      |
 | yearsExperience | integer   |                         |
 | phone           | text      |                         |
-| photoUrl        | text      |                         |
+| photoUrl        | text      | Supabase Storage public URL from `instructor-photos` bucket |
 | createdAt       | timestamp |                         |
 
 **Sync invariant:** Users with `role = 'instructor'` or `role = 'admin'` always have a row in `instructors`. Admins automatically get an instructor profile when promoted (so they can create courses using the same UI). These are created atomically via admin actions (see section 6). The JWT claim (`user_role`) handles fast permission checks (middleware, UI). The `instructors` table holds profile data and provides the FK for `courses.instructorId`.
@@ -265,7 +265,7 @@ Enrollment is handled via a Postgres RPC function (not a direct insert) to preve
 | season         | enum          | `summer`, `winter` (SommerSpotter / VinterSpotter)         |
 | area           | text NOT NULL | Grouping for dropdown level 2 (e.g. "Giske", "Ålesund"). Free text. Admin form uses a Combobox that suggests existing area values from other spots (typed text filters the list). Selecting autofills the field; typing a new value uses it as-is. |
 | windDirections | text[]        | Array of compass strings: "N","NE","E","SE","S","SW","W","NW" |
-| mapImageUrl    | text          | Admin-uploaded annotated map/satellite image of the spot   |
+| mapImageUrl    | text          | Supabase Storage public URL from `spot-maps` bucket         |
 | latitude       | numeric       | For Yr link and Google Maps link                           |
 | longitude      | numeric       | For Yr link and Google Maps link                           |
 | skillLevel     | enum          | `beginner`, `experienced`                                  |
@@ -274,6 +274,30 @@ Enrollment is handled via a Postgres RPC function (not a direct insert) to preve
 | createdAt      | timestamp     |                                                            |
 
 Yr and Google Maps links are generated dynamically from `latitude`/`longitude` (no stored URLs needed).
+
+
+### 2h. Supabase Storage (buckets + RLS)
+
+Image uploads use two public buckets. Buckets and `storage.objects` RLS policies are defined in migration `0005` (Drizzle does not manage the `storage` schema).
+
+**Bucket: `spot-maps`**
+- **Purpose:** Admin-uploaded annotated map/satellite images for spots
+- **Path:** `{spotId}/{filename}` (e.g. `abc-123/map.jpg`)
+- **RLS on storage.objects:**
+  - SELECT: Public (allow all for `bucket_id = 'spot-maps'`)
+  - INSERT/UPDATE/DELETE: Admin only (`(current_setting('request.jwt.claims', true)::jsonb)->>'user_role' = 'admin'`)
+
+**Bucket: `instructor-photos`**
+- **Purpose:** Instructor profile photos (instructors and admins upload their own)
+- **Path:** `{userId}/{filename}` (e.g. `abc-123/photo.jpg`) — first path segment must match `auth.uid()`
+- **RLS on storage.objects:**
+  - SELECT: Public (allow all for `bucket_id = 'instructor-photos'`)
+  - INSERT: Authenticated with role instructor or admin, and `(storage.foldername(name))[1] = auth.uid()::text`
+  - UPDATE/DELETE: Same path constraint (own folder only)
+
+**Migration `0005`** creates the buckets via `INSERT INTO storage.buckets` (id, name, public, file_size_limit, allowed_mime_types) and adds the `storage.objects` RLS policies above. Both buckets are public (served via CDN). Recommend 5MB limit for spot-maps, 2MB for instructor-photos; allow jpeg, png, webp.
+
+**Upload flow:** Server Actions call `supabase.storage.from(bucket).upload(path, file)`, then `getPublicUrl(path)` to obtain the URL stored in `instructors.photoUrl` or `spots.mapImageUrl`.
 
 
 ### RLS Policies (native Drizzle `pgPolicy` -- defined alongside tables)
@@ -641,10 +665,10 @@ Server Actions (`"use server"`) for mutations. Each creates a Supabase server cl
   - `promoteToInstructor(userId)`: Creates `instructors` profile row (if missing) AND sets `users.role = 'instructor'`.
   - `promoteToAdmin(userId)`: Creates `instructors` profile row (if missing) AND sets `users.role = 'admin'`. Admins always have an instructor profile so they can create courses.
   - `removeInstructor(userId)` / `demoteToUser(userId)`: Deletes `instructors` row AND resets `users.role = 'user'`.
-  - `updateInstructorProfile(...)`: Instructor or admin edits their own profile (bio, certs, photo, etc.) -- RLS allows self-update.
+  - `updateInstructorProfile(...)`: Instructor or admin edits their own profile (bio, certs, photo, etc.) -- RLS allows self-update. Photo upload goes to `instructor-photos/{userId}/` bucket, URL stored in `instructors.photoUrl`.
 - `src/lib/actions/messages.ts` -- `supabase.from('messages').insert(...)`
 - `src/lib/actions/subscriptions.ts` -- insert/delete on `subscriptions`
-- `src/lib/actions/spots.ts` -- CRUD on `spots` + image upload to Supabase Storage (map image for each spot)
+- `src/lib/actions/spots.ts` -- CRUD on `spots` + upload to `spot-maps` bucket (`{spotId}/{filename}`), store public URL in `mapImageUrl`
 - `src/lib/actions/users.ts` -- admin-only role updates (admin uses service role client for this specific operation)
 
 No application-level authorization checks needed -- RLS handles it. If a non-admin tries to insert an instructor, Postgres returns an error.
@@ -854,7 +878,8 @@ supabase/
     ├── 0001_user_sync_trigger.sql   # Manual: trigger on auth.users to auto-create public.users
     ├── 0002_custom_jwt_hook.sql     # Manual: auth hook function to inject role into JWT claims
     ├── 0003_realtime_messages.sql   # Manual: ALTER PUBLICATION supabase_realtime ADD TABLE messages;
-    └── 0004_enroll_function.sql    # Manual: atomic enroll_in_course() RPC function
+    ├── 0004_enroll_function.sql    # Manual: atomic enroll_in_course() RPC function
+    └── 0005_storage_buckets.sql    # Manual: create spot-maps + instructor-photos buckets, storage.objects RLS
 ```
 
 ### Type Generation and Dev Scripts

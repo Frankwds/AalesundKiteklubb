@@ -189,7 +189,7 @@ Synced from Supabase Auth on first login via auth callback.
 | Column          | Type      | Notes                   |
 | --------------- | --------- | ----------------------- |
 | id              | uuid PK   | default gen_random_uuid |
-| userId          | uuid FK   | -> users.id, unique     |
+| userId          | uuid FK   | -> users.id, unique, ON DELETE CASCADE |
 | bio             | text      |                         |
 | certifications  | text      | e.g. "IKO Level 2"      |
 | yearsExperience | integer   |                         |
@@ -211,8 +211,8 @@ Synced from Supabase Auth on first login via auth callback.
 | price           | integer       | In NOK ( 500 kr)                      |
 | date            | timestamp     |                                       |
 | maxParticipants | integer       | nullable = unlimited                  |
-| instructorId    | uuid FK       | -> instructors.id                     |
-| spotId          | uuid FK       | -> spots.id, nullable                 |
+| instructorId    | uuid FK       | -> instructors.id, nullable, ON DELETE SET NULL |
+| spotId          | uuid FK       | -> spots.id, nullable, ON DELETE SET NULL |
 | createdAt       | timestamp     |                                       |
 
 
@@ -222,8 +222,8 @@ Synced from Supabase Auth on first login via auth callback.
 | Column     | Type      | Notes         |
 | ---------- | --------- | ------------- |
 | id         | uuid PK   |               |
-| userId     | uuid FK   | -> users.id   |
-| courseId   | uuid FK   | -> courses.id |
+| userId     | uuid FK   | -> users.id, ON DELETE CASCADE   |
+| courseId   | uuid FK   | -> courses.id, ON DELETE CASCADE |
 | enrolledAt | timestamp | default now() |
 
 
@@ -237,8 +237,8 @@ Enrollment is handled via a Postgres RPC function (not a direct insert) to preve
 | Column    | Type          | Notes         |
 | --------- | ------------- | ------------- |
 | id        | uuid PK       |               |
-| userId    | uuid FK       | -> users.id   |
-| courseId  | uuid FK       | -> courses.id |
+| userId    | uuid FK       | -> users.id, nullable, ON DELETE SET NULL (shows "Slettet bruker" in chat) |
+| courseId  | uuid FK       | -> courses.id, ON DELETE CASCADE |
 | content   | text NOT NULL |               |
 | createdAt | timestamp     | default now() |
 
@@ -249,7 +249,7 @@ Enrollment is handled via a Postgres RPC function (not a direct insert) to preve
 | Column    | Type          | Notes                |
 | --------- | ------------- | -------------------- |
 | id        | uuid PK       |                      |
-| userId    | uuid FK       | -> users.id          |
+| userId    | uuid FK       | -> users.id, ON DELETE CASCADE |
 | email     | text NOT NULL | Autofilled, editable |
 | createdAt | timestamp     | default now()        |
 
@@ -629,7 +629,7 @@ All data access uses the Supabase SDK. Server Actions use the server-side Supaba
 
 ### Server Actions (`src/lib/actions/`)
 
-Server Actions (`"use server"`) for mutations. Each creates a Supabase server client and calls SDK methods:
+Server Actions (`"use server"`) for mutations. Each creates a Supabase server client, calls SDK methods, and logs success/failure via `src/lib/logger.ts`.
 
 - `src/lib/actions/courses.ts` -- `supabase.from('courses').insert(...)`, `.update(...)`, `.delete(...)`; enrollment via `supabase.rpc('enroll_in_course', { p_course_id })` (atomic capacity check, no overbooking); unenrollment via `supabase.from('course_participants').delete().match({ user_id, course_id })` (RLS allows own deletion). On successful enrollment, sends a confirmation email to the user (see section 7). The `publishCourse` action inserts the course AND sends notification emails to all subscribers in one server-side request.
 - `src/lib/actions/instructors.ts` -- **Atomic admin actions to keep `users.role` and `instructors` table in sync:**
@@ -642,6 +642,22 @@ Server Actions (`"use server"`) for mutations. Each creates a Supabase server cl
 - `src/lib/actions/users.ts` -- admin-only role updates (admin uses service role client for this specific operation)
 
 No application-level authorization checks needed -- RLS handles it. If a non-admin tries to insert an instructor, Postgres returns an error.
+
+### Database Mutation Logging (`src/lib/logger.ts`)
+
+All server-side database mutations (insert, update, delete, rpc) log success and failure. Vercel captures `console` output, so structured logs are searchable in the deployment dashboard.
+
+**On success:** Log operation, table/entity, affected IDs, user ID (from auth). Example:
+```json
+{"event":"db_mutation","op":"insert","table":"courses","id":"...","userId":"..."}
+```
+
+**On failure:** Log operation, table/entity, error message, and context. Use `console.error` so failures are easy to filter:
+```json
+{"event":"db_mutation_failed","op":"insert","table":"courses","error":"...","context":{...}}
+```
+
+Each Server Action wraps Supabase calls and logs before returning. No PII in logs (no emails, names) -- only IDs and operation metadata.
 
 ### Data Queries (`src/lib/queries/`)
 
@@ -813,6 +829,7 @@ src/
 │   │   ├── admin.ts                # Service role client (bypasses RLS, server-only)
 │   │   └── middleware.ts           # Session refresh helper
 │   ├── auth/index.ts               # getCurrentUser() helper via Supabase SDK
+│   ├── logger.ts                   # DB mutation logging (success/failure, no PII)
 │   ├── actions/                    # Server actions (mutations via Supabase SDK)
 │   ├── queries/                    # Query functions (reads via Supabase SDK)
 │   └── email/

@@ -580,17 +580,35 @@ Sections:
 - Initial messages loaded server-side; participant user profiles cached client-side to enrich Realtime payloads (which don't include joined data)
 - Messages show user avatar, name, timestamp
 
-### 5e. Admin Dashboard (`src/app/admin/page.tsx` + sub-routes)
+### 5e. Admin Dashboard (`src/app/admin/page.tsx`) -- Single page, tabbed
 
-Protected by middleware (admin role only). Tabs/sections:
+Protected by middleware (admin role only). One page with shadcn/ui `Tabs` to switch between sections. No sub-routes -- everything lives on `/admin`.
 
-- **Instructors:** List all instructors. Add new: select an existing user, which atomically creates their `instructors` profile row and sets `users.role = 'instructor'` (single action, always in sync). Remove: atomically deletes profile and resets role to `user`. Edit: admin can edit any instructor profile.
-- **Courses:** List all courses, create new (with searchable spot dropdown to link a spot), edit, cancel, view participants, remove participants
-- **Spots:** Full CMS for spots -- create, edit, delete. Form fields: name, description, season (summer/winter), area, wind directions (multi-select compass), map image upload, latitude/longitude, skill level, skill notes, water type (multi-select). DataTable with filters by season and area.
-- **Subscriptions:** View subscribers list
-- **Users:** View all users, change roles
+**Tab: Instruktører**
+- DataTable listing all instructors (name, email, certifications, created date)
+- "Legg til instruktør" button → Dialog with a user search/select field. On submit, atomically creates `instructors` profile row and sets `users.role = 'instructor'`.
+- Row actions: Edit (opens Dialog with profile form), Remove (atomically deletes profile and resets role to `user`)
 
-Uses shadcn/ui `DataTable`, `Dialog`, `Form`, `Tabs` components.
+**Tab: Kurs**
+- DataTable listing all courses (title, date, spot, instructor, status, participant count / max)
+- "Nytt kurs" button → Dialog with course form (title, description, price, date, max participants, searchable spot dropdown, instructor select)
+- Row actions: Edit, Cancel, View participants (expandable row or Dialog showing participant list with remove buttons)
+
+**Tab: Spotter**
+- DataTable listing all spots (name, season, area, skill level, water type)
+- Filters by season and area
+- "Ny spot" button → Dialog with full spot form (name, description, season, area, wind directions multi-select compass, map image upload, latitude/longitude, skill level, skill notes, water type multi-select)
+- Row actions: Edit, Delete
+
+**Tab: Abonnenter**
+- DataTable listing all subscribers (email, user name, subscribed date)
+- Read-only view
+
+**Tab: Brukere**
+- DataTable listing all users (name, email, role, created date)
+- Row action: Change role (dropdown to set user/instructor/admin). Changing to instructor triggers the atomic promote action.
+
+Uses shadcn/ui `Tabs`, `DataTable`, `Dialog`, `Form`, `Combobox` components.
 
 ### 5f. Instructor Dashboard (`src/app/instructor/page.tsx`)
 
@@ -767,11 +785,7 @@ src/
 │   │   ├── page.tsx                # Courses single-page
 │   │   └── [id]/chat/page.tsx      # Per-course chat
 │   ├── admin/
-│   │   ├── page.tsx                # Admin dashboard
-│   │   ├── instructors/page.tsx    # Manage instructors
-│   │   ├── courses/page.tsx        # Manage courses
-│   │   ├── spots/page.tsx          # Manage spots
-│   │   └── users/page.tsx          # Manage users
+│   │   └── page.tsx                # Admin dashboard (single tabbed page)
 │   └── instructor/
 │       ├── page.tsx                # Instructor dashboard
 │       └── courses/page.tsx        # Instructor's courses

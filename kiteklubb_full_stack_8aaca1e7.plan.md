@@ -150,7 +150,7 @@ Key config files to create:
 - `drizzle.config.ts` -- Drizzle Kit config pointing to `DATABASE_URL` (Supabase direct connection string)
 - `src/lib/db/schema/` -- Drizzle schema files (used by drizzle-kit, not imported at runtime)
 - `src/lib/supabase/client.ts` -- Browser Supabase client (createBrowserClient)
-- `src/lib/supabase/server.ts` -- Server Supabase client (createServerClient with cookies)
+- `src/lib/supabase/server.ts` -- Server Supabase client (createServerClient with cookies). **Next.js 15 breaking change:** `cookies()` is now async -- `createClient()` must be an `async` function that `await`s `cookies()` before passing them to `createServerClient`.
 - `src/lib/supabase/middleware.ts` -- Auth session refresh
 - `.env.local.example` -- Template for required env vars
 

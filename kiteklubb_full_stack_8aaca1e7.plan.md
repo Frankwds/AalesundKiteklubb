@@ -21,7 +21,7 @@ todos:
     content: "Build front page: hero section with Giske panorama, about the club section, links to Facebook/chat."
     status: pending
   - id: spots-page
-    content: "Build spot guide page: list/grid of spots from DB, detail view with wind direction, Yr + Maps links."
+    content: "Build spot guide: multi-level navbar dropdown (season > area > spot), spot detail page with wind compass, Om spotten, map image, Yr/Maps links, skill level, water type. Full admin CMS for spots with image upload."
     status: pending
   - id: courses-page
     content: "Build courses page: intro sections, instructor profiles, pricing, scheduled courses list with enroll button, subscribe section, Yr weather widget."
@@ -258,18 +258,23 @@ Unique constraint on (userId, courseId).
 ### 2g. Spots (`src/lib/db/schema/spots.ts`)
 
 
-| Column         | Type          | Notes               |
-| -------------- | ------------- | ------------------- |
-| id             | uuid PK       |                     |
-| name           | text NOT NULL |                     |
-| description    | text          |                     |
-| windDirections | text[]        | Array of directions |
-| imageUrl       | text          |                     |
-| yrLink         | text          |                     |
-| googleMapsUrl  | text          |                     |
-| latitude       | numeric       |                     |
-| longitude      | numeric       |                     |
-| createdAt      | timestamp     |                     |
+| Column         | Type          | Notes                                                      |
+| -------------- | ------------- | ---------------------------------------------------------- |
+| id             | uuid PK       |                                                            |
+| name           | text NOT NULL |                                                            |
+| description    | text          | "Om spotten" text                                          |
+| season         | enum          | `summer`, `winter` (SommerSpotter / VinterSpotter)         |
+| area           | text NOT NULL | Grouping for dropdown level 2 (e.g. "Giske", "Ålesund")   |
+| windDirections | text[]        | Array of compass strings: "N","NE","E","SE","S","SW","W","NW" |
+| mapImageUrl    | text          | Admin-uploaded annotated map/satellite image of the spot   |
+| latitude       | numeric       | For Yr link and Google Maps link                           |
+| longitude      | numeric       | For Yr link and Google Maps link                           |
+| skillLevel     | enum          | `beginner`, `experienced`                                  |
+| skillNotes     | text          | e.g. "Du må kunne ta høyde, ikke veldig langgrunt"         |
+| waterType      | text[]        | Array: "chop", "flat", "waves"                             |
+| createdAt      | timestamp     |                                                            |
+
+Yr and Google Maps links are generated dynamically from `latitude`/`longitude` (no stored URLs needed).
 
 
 ### RLS Policies (native Drizzle `pgPolicy` -- defined alongside tables)
@@ -468,16 +473,49 @@ Single-page scroll layout with sections:
 
 - **Hero:** Panorama image of Giske beach with kites, overlaid club name
 - **Om klubben:** About text with links to Facebook and group chat
-- **Nav bar:** Fixed top nav, full-width, centered items. Scrolls to sections or navigates to `/spots`, `/courses`
+- **Nav bar:** Fixed top nav, full-width, centered items. Scrolls to sections or navigates to `/courses`. Includes Spot Guide mega-dropdown (see 5b).
 
 Design: Off-white content card floating over the panorama background. Shades of blue accents. Black text.
 
-### 5b. Spot Guide (`src/app/spots/page.tsx`)
+### 5b. Spot Guide (navbar dropdown, no listing page)
 
-- Grid/list of spots fetched from DB (server component)
-- Each spot card: name, description, wind direction indicators, image
-- Expand to see details + buttons to open Yr and Google Maps in new tab
-- Admin can manage spots from admin dashboard
+Spots are accessed exclusively through a multi-level dropdown in the navbar -- there is no `/spots` listing page.
+
+**Dropdown structure:**
+
+```
+Spot Guide (nav item)
+├── SommerSpotter (hover/click)
+│   ├── Giske (area, hover/click)
+│   │   ├── Alnes → /spots/[id]
+│   │   └── Gjøsund → /spots/[id]
+│   └── Ålesund (area)
+│       └── Tueneset → /spots/[id]
+└── VinterSpotter (hover/click)
+    ├── Vigra (area)
+    │   └── Blindheim → /spots/[id]
+    └── ...
+```
+
+- **Level 1:** "SommerSpotter" and "VinterSpotter" (mapped from `spots.season`)
+- **Level 2:** Areas within each season (mapped from `spots.area`, grouped)
+- **Level 3:** Spot names (clicking navigates to `/spots/[id]`)
+
+The dropdown data is fetched server-side in the layout and passed to the navbar component.
+
+### 5b-ii. Spot Detail Page (`src/app/spots/[id]/page.tsx`)
+
+A dedicated page for each spot with these sections:
+
+- **Wind compass** -- visual compass rose highlighting the favorable `windDirections` (e.g. "SW", "NE")
+- **Om spotten** -- `description` text
+- **Kart** -- the admin-uploaded `mapImageUrl` (annotated satellite/map image showing the spot area)
+- **Værmelding** -- link to Yr.no using `latitude`/`longitude` (opens in new tab): `https://www.yr.no/nb/v%C3%A6rvarsel/daglig-tabell/{lat},{lon}`
+- **Veibeskrivelse** -- "Vis i Google Maps" button using `latitude`/`longitude` (opens in new tab): `https://www.google.com/maps?q={lat},{lon}`
+- **Nødvendige kiteskills** -- `skillLevel` displayed as "Erfaren" or "Nybegynner" badge, plus `skillNotes` text
+- **Type** -- `waterType` tags displayed as badges: "Chop", "Flatt vann", "Bølger"
+
+All content is CMS-managed by admins.
 
 ### 5c. Courses (`src/app/courses/page.tsx`) -- Single-page scroll
 
@@ -507,7 +545,7 @@ Protected by middleware (admin role only). Tabs/sections:
 
 - **Instructors:** List all, add new (select existing user -> promote to instructor role + create instructor profile), edit, remove
 - **Courses:** List all courses, create new, edit, cancel, view participants, remove participants
-- **Spots:** CRUD spot entries
+- **Spots:** Full CMS for spots -- create, edit, delete. Form fields: name, description, season (summer/winter), area, wind directions (multi-select compass), map image upload, latitude/longitude, skill level, skill notes, water type (multi-select). DataTable with filters by season and area.
 - **Subscriptions:** View subscribers list
 - **Users:** View all users, change roles
 
@@ -539,7 +577,7 @@ Server Actions (`"use server"`) for mutations. Each creates a Supabase server cl
 - `src/lib/actions/instructors.ts` -- CRUD on `instructors` table + updating user role to `instructor`
 - `src/lib/actions/messages.ts` -- `supabase.from('messages').insert(...)`
 - `src/lib/actions/subscriptions.ts` -- insert/delete on `subscriptions`
-- `src/lib/actions/spots.ts` -- CRUD on `spots`
+- `src/lib/actions/spots.ts` -- CRUD on `spots` + image upload to Supabase Storage (map image for each spot)
 - `src/lib/actions/users.ts` -- admin-only role updates (admin uses service role client for this specific operation)
 
 No application-level authorization checks needed -- RLS handles it. If a non-admin tries to insert an instructor, Postgres returns an error.
@@ -552,7 +590,7 @@ Query functions used by Server Components and Server Actions. Each returns typed
 - `src/lib/queries/instructors.ts` -- `supabase.from('instructors').select('*, users(*)')`
 - `src/lib/queries/messages.ts` -- `supabase.from('messages').select('*, users(name, avatar_url)').eq('course_id', id).order('created_at')`
 - `src/lib/queries/subscriptions.ts` -- check if current user has a subscription row
-- `src/lib/queries/spots.ts` -- `supabase.from('spots').select('*')`
+- `src/lib/queries/spots.ts` -- `supabase.from('spots').select('*')`; also a `getSpotsGrouped()` that fetches all spots and groups them by `season` then `area` for the navbar dropdown
 - `src/lib/queries/users.ts` -- admin queries with service role client for user management
 
 ### Client-side Queries
@@ -578,8 +616,8 @@ All in `src/components/`, using shadcn/ui as the base:
 - **Auth:** `LoginButton`, `UserMenu` (avatar dropdown with role badge)
 - **Courses:** `CourseCard`, `CourseList`, `EnrollButton`, `ParticipantList`
 - **Chat:** `ChatWindow`, `MessageBubble`, `MessageInput`
-- **Spots:** `SpotCard`, `SpotDetail`, `WindDirectionIndicator`
-- **Admin:** `InstructorForm`, `CourseForm`, `SpotForm`, `DataTable`
+- **Spots:** `SpotGuideDropdown` (multi-level nav dropdown), `WindCompass` (visual compass rose), `SpotDetailPage` sections
+- **Admin:** `InstructorForm`, `CourseForm`, `SpotForm` (with map image upload, compass direction picker, multi-select water type), `DataTable`
 - **Weather:** `YrWeatherWidget`, `ConditionBar` (red/green)
 - **Subscription:** `SubscribeDialog`
 
@@ -623,7 +661,7 @@ src/
 │   ├── layout.tsx                  # Root layout (nav, bg, fonts)
 │   ├── login/page.tsx              # Login page
 │   ├── auth/callback/route.ts      # OAuth callback
-│   ├── spots/page.tsx              # Spot guide
+│   ├── spots/[id]/page.tsx          # Individual spot detail page (no listing page)
 │   ├── courses/
 │   │   ├── page.tsx                # Courses single-page
 │   │   └── [id]/chat/page.tsx      # Per-course chat

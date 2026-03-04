@@ -325,7 +325,7 @@ export const courses = pgTable('courses', {
 **Instructors table:**
 
 - SELECT: Public (everyone can see profiles).
-- INSERT/DELETE: Admin only (check `role = 'admin'` in users table).
+- INSERT/DELETE: Admin only (checked via JWT claim, not DB query).
 - UPDATE: Own profile (`user_id = auth.uid()`) or admin.
 
 **Courses table:**
@@ -353,19 +353,27 @@ export const courses = pgTable('courses', {
 - SELECT: Public.
 - INSERT/UPDATE/DELETE: Admin only.
 
-### Admin "bypass" policies
+### Reading roles from JWT in RLS policies (no subqueries)
 
-For tables where admins need full access, add a separate policy:
+Since the Custom JWT Claims Hook (migration `0002`) injects `user_role` into the token, all RLS policies that check roles should read directly from the JWT instead of querying the `users` table. This is instant -- no table access needed.
+
+```typescript
+// Helper SQL fragment (reuse across all policies that check role)
+const isAdmin = sql`(current_setting('request.jwt.claims', true)::jsonb)->>'user_role' = 'admin'`;
+const isInstructor = sql`(current_setting('request.jwt.claims', true)::jsonb)->>'user_role' = 'instructor'`;
+```
+
+Admin bypass policy (added to every table where admins need full access):
 
 ```typescript
 pgPolicy("Admin full access", {
   for: "all",
   to: authenticatedRole,
-  using: sql`EXISTS (
-    SELECT 1 FROM users WHERE id = auth.uid() AND role = 'admin'
-  )`,
+  using: isAdmin,
 })
 ```
+
+Same for instructor-scoped policies -- use `isInstructor` instead of a subquery to `users`.
 
 ### Supabase DB Trigger for User Sync
 

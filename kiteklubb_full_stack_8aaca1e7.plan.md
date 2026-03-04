@@ -24,7 +24,7 @@ todos:
     content: "Build spot guide: multi-level navbar dropdown (season > area > spot), spot detail page with wind compass, Om spotten, map image, Yr/Maps links, skill level, water type. Full admin CMS for spots with image upload."
     status: pending
   - id: courses-page
-    content: "Build courses page: intro sections, instructor profiles, pricing, scheduled courses list with enroll button, subscribe section, Yr weather widget."
+    content: "Build courses page: intro sections, instructor profiles, pricing, scheduled courses list with enroll button, subscribe section."
     status: pending
   - id: course-chat
     content: "Build per-course chat: enrollment-gated access, append-only message log, nav integration showing 'Chat kurs dd/mm' for enrolled users."
@@ -37,9 +37,6 @@ todos:
     status: pending
   - id: server-actions
     content: Implement all server actions using Supabase SDK (not Drizzle) for data access. RLS enforces authorization at DB level; actions handle session passing.
-    status: pending
-  - id: weather-integration
-    content: "Integrate Yr.no locationforecast API: client-side fetch for Giske, parse wind/conditions, render weather table with condition bars."
     status: pending
   - id: polish-deploy
     content: "Final polish: responsive design, loading states, error handling, SEO meta tags. Configure Vercel deployment with env vars."
@@ -58,7 +55,6 @@ isProject: false
 - **Auth:** Supabase Auth (Google OAuth provider)
 - **Styling:** Tailwind CSS v4 + shadcn/ui
 - **Deployment:** Vercel
-- **Weather:** Yr.no API (met.no locationforecast)
 
 ### Key Architectural Principle
 
@@ -104,7 +100,6 @@ graph TB
 
   subgraph external [External]
     Google[Google OAuth]
-    YrAPI[Yr.no API]
   end
 
   DrizzleSchema --> DrizzleKit
@@ -120,7 +115,6 @@ graph TB
 
   SupabaseAPI -->|"RLS enforced"| SupabasePG
   SupabaseAuth --> Google
-  CoursePage --> YrAPI
   Middleware --> SupabaseAuth
 ```
 
@@ -528,8 +522,6 @@ Sections (anchor-linked from top nav):
 - **Subscribe** -- requires login, autofills email, stores in subscriptions table
 - **Scheduled Courses** -- list from DB, each with "Meld på" button (requires login)
   - When no courses: explanatory text + Subscribe button
-- **Weather widget** -- Yr.no locationforecast API for Giske, rendered client-side
-  - Red/green bars for instructor availability + good conditions
 
 ### 5d. Course Chat (`src/app/courses/[id]/chat/page.tsx`)
 
@@ -618,21 +610,11 @@ All in `src/components/`, using shadcn/ui as the base:
 - **Chat:** `ChatWindow`, `MessageBubble`, `MessageInput`
 - **Spots:** `SpotGuideDropdown` (multi-level nav dropdown), `WindCompass` (visual compass rose), `SpotDetailPage` sections
 - **Admin:** `InstructorForm`, `CourseForm`, `SpotForm` (with map image upload, compass direction picker, multi-select water type), `DataTable`
-- **Weather:** `YrWeatherWidget`, `ConditionBar` (red/green)
 - **Subscription:** `SubscribeDialog`
 
 ---
 
-## 9. Weather Integration (Yr.no)
-
-- Client-side fetch to `https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=62.49&lon=6.02` (Giske coordinates)
-- Must set `User-Agent` header per Yr.no API terms
-- Parse wind speed, direction, precipitation to show kite-friendly conditions
-- Render as a table with colored bars (green = good, red = bad)
-
----
-
-## 10. Design System
+## 9. Design System
 
 - **Background:** Full-viewport panorama of Giske beach, fixed position
 - **Content:** Off-white (`#FAFAF8`) content window scrolling over the background
@@ -643,7 +625,7 @@ All in `src/components/`, using shadcn/ui as the base:
 
 ---
 
-## 11. Deployment
+## 10. Deployment
 
 - **Vercel:** Connect GitHub repo, auto-deploy on push
 - **Supabase:** Separate hosted Supabase project (free tier to start)
@@ -680,9 +662,8 @@ src/
 │   ├── auth/                       # LoginButton, UserMenu
 │   ├── courses/                    # CourseCard, EnrollButton, etc.
 │   ├── chat/                       # ChatWindow, MessageBubble
-│   ├── spots/                      # SpotCard, SpotDetail
-│   ├── admin/                      # Forms, DataTables
-│   └── weather/                    # YrWeatherWidget
+│   ├── spots/                      # SpotGuideDropdown, WindCompass, SpotDetail
+│   └── admin/                      # Forms, DataTables
 ├── lib/
 │   ├── db/
 │   │   └── schema/                 # Drizzle schemas (dev-time only, consumed by drizzle-kit)

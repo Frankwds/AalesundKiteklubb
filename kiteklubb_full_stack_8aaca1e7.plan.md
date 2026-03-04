@@ -564,7 +564,11 @@ Sections (anchor-linked from top nav):
 - **Instructor intro** -- pulled from instructor profiles in DB
 - **Pris og regler** -- pricing (500 kr/person, 250 kr/t)
 - **Subscribe** -- requires login, autofills email, stores in subscriptions table
-- **Scheduled Courses** -- list from DB, each showing spot name (linked to `/spots/[spotId]`), date, instructor, and "Meld på" button (requires login)
+- **Scheduled Courses** -- list of course cards from DB. Each card shows course info (title, date, spot name linked to `/spots/[spotId]`, instructor, price). The card has stateful buttons depending on the user's enrollment:
+  - **Not logged in:** "Logg inn for å melde på" (links to login)
+  - **Logged in, not enrolled:** "Meld på" button (calls `enroll_in_course` RPC)
+  - **Logged in, enrolled:** "Meld av" button (deletes from `course_participants`, RLS allows own deletion) + "Chat" button (links to `/courses/[id]/chat`)
+  - On successful enrollment, a confirmation email is sent to the user (see section 7)
   - When no courses: explanatory text + Subscribe button
 
 ### 5d. Course Chat (`src/app/courses/[id]/chat/page.tsx`)
@@ -610,7 +614,7 @@ All data access uses the Supabase SDK. Server Actions use the server-side Supaba
 
 Server Actions (`"use server"`) for mutations. Each creates a Supabase server client and calls SDK methods:
 
-- `src/lib/actions/courses.ts` -- `supabase.from('courses').insert(...)`, `.update(...)`, `.delete(...)`; enrollment via `supabase.rpc('enroll_in_course', { p_course_id })` (atomic capacity check, no overbooking). The `publishCourse` action inserts the course AND sends notification emails to all subscribers in one server-side request (see section 7).
+- `src/lib/actions/courses.ts` -- `supabase.from('courses').insert(...)`, `.update(...)`, `.delete(...)`; enrollment via `supabase.rpc('enroll_in_course', { p_course_id })` (atomic capacity check, no overbooking); unenrollment via `supabase.from('course_participants').delete().match({ user_id, course_id })` (RLS allows own deletion). On successful enrollment, sends a confirmation email to the user (see section 7). The `publishCourse` action inserts the course AND sends notification emails to all subscribers in one server-side request.
 - `src/lib/actions/instructors.ts` -- CRUD on `instructors` table + updating user role to `instructor`
 - `src/lib/actions/messages.ts` -- `supabase.from('messages').insert(...)`
 - `src/lib/actions/subscriptions.ts` -- insert/delete on `subscriptions`
@@ -696,10 +700,18 @@ The `publishCourse` Server Action:
 
 If the email send fails, the course is still created -- the action returns a warning about the notification failure rather than rolling back.
 
+### Enrollment Confirmation Email
+
+When a user successfully enrolls in a course, a confirmation email is sent to them. The `enrollInCourse` Server Action:
+1. Calls `supabase.rpc('enroll_in_course', { p_course_id })` (atomic enrollment)
+2. On success, fetches course + spot details
+3. Sends a confirmation email to the user with: course title, date, instructor, spot name + link, price, and a note that they can unenroll at `/courses`
+
 ### Email Setup
 
 - **`src/lib/email/resend.ts`** -- Resend client initialized with `RESEND_API_KEY`
-- **`src/lib/email/templates/new-course.tsx`** -- React Email template for new course notification (rendered server-side by Resend). Includes course title, date, instructor name, price, a link to the spot page (`/spots/[spotId]`), and a "Meld deg på" link.
+- **`src/lib/email/templates/new-course.tsx`** -- Subscriber notification: new course available. Includes course title, date, instructor name, price, spot link, and "Meld deg på" link.
+- **`src/lib/email/templates/enrollment-confirmation.tsx`** -- Sent to user on enrollment. Includes course details, spot link, and note about unenrolling at `/courses`.
 - **Sending domain** -- must be verified in the Resend dashboard (or use `onboarding@resend.dev` for testing)
 
 ---
@@ -710,7 +722,7 @@ All in `src/components/`, using shadcn/ui as the base:
 
 - **Layout:** `Navbar`, `Footer`, `ContentCard` (off-white card over panorama BG)
 - **Auth:** `LoginButton`, `UserMenu` (avatar dropdown with role badge)
-- **Courses:** `CourseCard`, `CourseList`, `EnrollButton`, `ParticipantList`
+- **Courses:** `CourseCard` (stateful: shows "Meld på" / "Meld av" + "Chat" based on enrollment), `CourseList`, `ParticipantList`
 - **Chat:** `ChatWindow`, `MessageBubble`, `MessageInput`
 - **Spots:** `SpotGuideDropdown` (multi-level nav dropdown), `WindCompass` (visual compass rose), `SpotDetailPage` sections
 - **Admin:** `InstructorForm`, `CourseForm` (with searchable spot dropdown via shadcn `Combobox`), `SpotForm` (with map image upload, compass direction picker, multi-select water type), `DataTable`
@@ -790,7 +802,8 @@ src/
 │   └── email/
 │       ├── resend.ts               # Resend client instance
 │       └── templates/
-│           └── new-course.tsx      # React Email template for new course notification
+│           ├── new-course.tsx      # Subscriber notification: new course available
+│           └── enrollment-confirmation.tsx  # Sent to user on enrollment
 ├── types/
 │   └── database.ts                 # Generated types from Supabase (npx supabase gen types)
 └── middleware.ts                    # Next.js middleware (session refresh + route protection)

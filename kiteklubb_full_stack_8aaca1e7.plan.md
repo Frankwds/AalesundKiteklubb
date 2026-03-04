@@ -574,7 +574,7 @@ Sections:
 ### 5d. Course Chat (`src/app/courses/[id]/chat/page.tsx`)
 
 - Only visible to enrolled participants (middleware-protected)
-- Appears in nav as "Chat kurs dd/mm" for enrolled users
+- Accessed via the "Chat" button on the course card in `/courses` (no nav item)
 - Append-only message log, newest at bottom
 - Auto-scroll, live updates via **Supabase Realtime** -- client subscribes to `postgres_changes` on the `messages` table filtered by `course_id`. New messages appear instantly without polling.
 - Initial messages loaded server-side; participant user profiles cached client-side to enrich Realtime payloads (which don't include joined data)

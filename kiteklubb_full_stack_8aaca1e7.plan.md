@@ -716,6 +716,17 @@ supabase/
     └── 0003_realtime_messages.sql   # Manual: ALTER PUBLICATION supabase_realtime ADD TABLE messages;
 ```
 
-### Type Generation
+### Type Generation and Dev Scripts
 
-Run `npx supabase gen types typescript --project-id <ref> > src/types/database.ts` to generate TypeScript types from the live Supabase schema. These types are used with the Supabase SDK for type-safe queries at runtime (replacing Drizzle's inferred types).
+Supabase-generated TypeScript types are used with the Supabase SDK for type-safe queries at runtime. To keep types in sync with schema changes, add these scripts to `package.json`:
+
+```json
+"scripts": {
+  "db:push": "drizzle-kit push",
+  "db:generate": "drizzle-kit generate",
+  "db:types": "supabase gen types typescript --project-id <ref> > src/types/database.ts",
+  "db:sync": "pnpm db:push && pnpm db:types"
+}
+```
+
+**Workflow:** After changing any Drizzle schema file, run `pnpm db:sync` to push the schema to Supabase and regenerate the runtime types in one step. This prevents stale types from causing silent bugs in Supabase SDK queries.

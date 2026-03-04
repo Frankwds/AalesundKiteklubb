@@ -557,19 +557,16 @@ All content is CMS-managed by admins.
 
 ### 5c. Courses (`src/app/courses/page.tsx`) -- Single-page scroll
 
-Sections (anchor-linked from top nav):
+Sections:
 
-- **Intro Giske** -- about the main spot
-- **Intro kurs** -- what courses are about
-- **Instructor intro** -- pulled from instructor profiles in DB
-- **Pris og regler** -- pricing (500 kr/person, 250 kr/t)
-- **Subscribe** -- requires login, autofills email, stores in subscriptions table
+- **Intro kurs** -- what courses are about, who the instructors are, general info text
 - **Scheduled Courses** -- list of course cards from DB. Each card shows course info (title, date, spot name linked to `/spots/[spotId]`, instructor, price). The card has stateful buttons depending on the user's enrollment:
   - **Not logged in:** "Logg inn for å melde på" (links to login)
   - **Logged in, not enrolled:** "Meld på" button (calls `enroll_in_course` RPC)
   - **Logged in, enrolled:** "Meld av" button (deletes from `course_participants`, RLS allows own deletion) + "Chat" button (links to `/courses/[id]/chat`)
   - On successful enrollment, a confirmation email is sent to the user (see section 7)
-  - When no courses: explanatory text + Subscribe button
+  - When no courses: semi-grayed placeholder text explaining that courses are posted when conditions look promising and not far in advance, prompting the user to subscribe to get notified. Includes a Subscribe button/link that scrolls to the Subscribe section.
+- **Subscribe** -- requires login, autofills email, stores in subscriptions table. Notifies user by email when new courses are published.
 
 ### 5d. Course Chat (`src/app/courses/[id]/chat/page.tsx`)
 

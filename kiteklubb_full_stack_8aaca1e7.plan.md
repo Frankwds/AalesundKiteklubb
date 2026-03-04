@@ -609,12 +609,17 @@ Protected by middleware (admin role only). One page with shadcn/ui `Tabs` to swi
 
 Uses shadcn/ui `Tabs`, `DataTable`, `Dialog`, `Form`, `Combobox` components.
 
-### 5f. Instructor Dashboard (`src/app/instructor/page.tsx`)
+### 5f. Instructor Dashboard (`src/app/instructor/page.tsx`) -- Single page, tabbed
 
-Protected by middleware (instructor or admin role). **Shared by both** — admins see this panel in addition to the Admin dashboard, reusing the same UI for course creation.
+Protected by middleware (instructor or admin role). **Shared by both** — admins see this panel in addition to the Admin dashboard, reusing the same UI for course creation. One page with shadcn/ui `Tabs`, no sub-routes.
 
-- **Profile:** Edit own bio, certifications, experience, photo, phone
-- **My Courses:** List own courses, create new (with searchable spot dropdown), edit, view/remove participants. Uses `publishCourse` which triggers subscriber emails regardless of whether the creator is instructor or admin.
+**Tab: Profil**
+- Edit own bio, certifications, years experience, phone, photo
+
+**Tab: Mine Kurs**
+- DataTable listing own courses sorted by date
+- "Nytt kurs" button → Dialog with course form (title, description, price, date, max participants, searchable spot dropdown). Uses `publishCourse` which triggers subscriber emails.
+- Row actions: Edit, Delete, View participants (expandable row or Dialog with remove buttons)
 
 ### 5g. Auth Pages
 
@@ -803,8 +808,7 @@ src/
 │   ├── admin/
 │   │   └── page.tsx                # Admin dashboard (single tabbed page)
 │   └── instructor/
-│       ├── page.tsx                # Instructor dashboard
-│       └── courses/page.tsx        # Instructor's courses
+│       └── page.tsx                # Instructor dashboard (single tabbed page: Profil, Mine Kurs)
 ├── components/
 │   ├── ui/                         # shadcn/ui primitives
 │   ├── layout/                     # Navbar, Footer, ContentCard

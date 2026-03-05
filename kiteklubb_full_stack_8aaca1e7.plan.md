@@ -731,6 +731,7 @@ Server Actions (`"use server"`) for mutations. Each creates a Supabase server cl
 - `src/lib/actions/subscriptions.ts` -- insert/delete on `subscriptions`
 - `src/lib/actions/spots.ts` -- CRUD on `spots` + upload to `spot-maps` bucket (`{spotId}/{filename}`), store public URL in `mapImageUrl`
 - `src/lib/actions/users.ts` -- admin-only role updates (admin uses service role client for this specific operation)
+- `src/lib/actions/auth.ts` -- `signOut()`: calls `supabase.auth.signOut()`, then `redirect('/')`
 
 No application-level authorization checks needed -- RLS handles it. If a non-admin tries to insert an instructor, Postgres returns an error.
 
@@ -852,7 +853,7 @@ When a user successfully enrolls in a course, a confirmation email is sent to th
 All in `src/components/`, using shadcn/ui as the base:
 
 - **Layout:** `Navbar` (hamburger + full-screen overlay on mobile, horizontal nav on desktop), `Footer`, `ContentCard` (off-white card over panorama BG)
-- **Auth:** `LoginButton`, `UserMenu` (avatar dropdown with role badge)
+- **Auth:** `LoginButton`, `UserMenu` (avatar dropdown with role badge, "Logg ut" item that calls the `signOut` server action)
 - **Courses:** `CourseCard` (stateful: shows "Meld på" / "Meld av" based on enrollment; "Chat" button **only when enrolled**), `CourseList`, `ParticipantList`
 - **Chat:** `ChatWindow`, `MessageBubble`, `MessageInput`
 - **Spots:** `SpotCard`, `SpotList`, `SpotFilters` (listing page with season/area/wind filters), `WindCompass` (visual compass rose), `SpotDetailPage` sections

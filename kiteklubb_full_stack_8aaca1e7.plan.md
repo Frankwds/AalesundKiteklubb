@@ -348,7 +348,7 @@ export const courses = pgTable('courses', {
 
 **Users table:**
 
-- SELECT: Own row (`id = auth.uid()`). Admins can read all.
+- SELECT: Own row (`id = auth.uid()`). Admins can read all. **Co-participants:** Authenticated users can read `id, name, avatar_url` for users who share at least one course with them (required for chat message enrichment; see 5d and Client-side Realtime).
 - INSERT: Via DB trigger (see below).
 - UPDATE: No self-update. User data comes from Google OAuth (synced by trigger). All modifications (including role changes) are done by admins via service role client, which bypasses RLS entirely.
 
@@ -366,7 +366,7 @@ export const courses = pgTable('courses', {
 
 **Course Participants table:**
 
-- SELECT: Own enrollments, course's instructor, or admin.
+- SELECT: Own enrollments, course's instructor, or admin. **Participant list:** Authenticated users can also SELECT any row where the course is one they're enrolled in (enables pre-fetching participant profiles for chat; see 5d and Client-side Realtime).
 - INSERT: Authenticated user enrolling themselves (`user_id = auth.uid()`).
 - DELETE: Own enrollment, course's instructor, or admin.
 
@@ -405,6 +405,40 @@ pgPolicy("Admin full access", {
 ```
 
 Same for instructor-scoped policies -- use `isInstructor` instead of a subquery to `users`.
+
+### Chat-related RLS (users and course_participants)
+
+Chat needs to display other participants' names and avatars. Add these policies:
+
+**Users** — co-participant read (for chat profile enrichment):
+
+```typescript
+pgPolicy("Co-participants can read profile fields", {
+  for: "select",
+  to: authenticatedRole,
+  using: sql` EXISTS (
+    SELECT 1 FROM course_participants cp1
+    WHERE cp1.user_id = auth.uid()
+    AND EXISTS (
+      SELECT 1 FROM course_participants cp2
+      WHERE cp2.course_id = cp1.course_id AND cp2.user_id = ${table.id}
+    )
+  )`,
+})
+```
+
+**Course participants** — participant list read (enables pre-fetch for chat):
+
+```typescript
+pgPolicy("Participants can see co-participants in same course", {
+  for: "select",
+  to: authenticatedRole,
+  using: sql` EXISTS (
+    SELECT 1 FROM course_participants my
+    WHERE my.user_id = auth.uid() AND my.course_id = ${table.courseId}
+  )`,
+})
+```
 
 ### Supabase DB Trigger for User Sync
 
@@ -615,7 +649,8 @@ Sections:
 - Accessed via the "Chat" button on the course card in `/courses` (no nav item) — only visible on the card when the user is enrolled (see 5c)
 - Append-only message log, newest at bottom
 - Auto-scroll, live updates via **Supabase Realtime** -- client subscribes to `postgres_changes` on the `messages` table filtered by `course_id`. New messages appear instantly without polling.
-- Initial messages loaded server-side; participant user profiles cached client-side to enrich Realtime payloads (which don't include joined data)
+- **Realtime profile enrichment:** Realtime payloads include raw message data only (no joined user data). Strategy: (1) Pre-fetch all course participants (from `course_participants` joined with `users`) at chat load to populate the profile cache. (2) When a Realtime INSERT arrives for an unknown `user_id`, fetch that user's profile on demand (`users(id, name, avatar_url)`), add to cache, and render. Show a short-lived placeholder (generic avatar or "...") while the fetch is in progress. RLS policies on `users` and `course_participants` must allow this (see section 2 RLS).
+- Initial messages loaded server-side with joined user data; cache is seeded from that plus the pre-fetched participant list.
 - Messages show user avatar, name, timestamp
 
 ### 5e. Admin Dashboard (`src/app/admin/page.tsx`) -- Single page, tabbed
@@ -728,12 +763,14 @@ const channel = supabase
     table: 'messages',
     filter: `course_id=eq.${courseId}`,
   }, (payload) => {
-    // Enrich with cached participant profile, append to messages
+    // If payload.new.user_id in profile cache: enrich and append. Else: fetch user on demand, add to cache, then append (show placeholder until fetch completes).
   })
   .subscribe();
 ```
 
 RLS applies to Realtime events -- users only receive inserts for courses they're enrolled in. The channel is cleaned up on unmount via `supabase.removeChannel(channel)`.
+
+**Profile cache:** Populate at load from (a) initial messages (joined user data) and (b) pre-fetch of `course_participants` joined with `users` for the course. On Realtime insert with unknown sender, fetch on demand. Requires RLS on `users` (co-participant read) and `course_participants` (participant-list read) -- see section 2.
 
 **Requires a custom migration** to add `messages` to the Realtime publication (see migration `0003`).
 

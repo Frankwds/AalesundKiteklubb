@@ -346,44 +346,62 @@ export const courses = pgTable('courses', {
 ]);
 ```
 
-**Per-table policy summary:**
+**Per-table policy checklist:**
 
-**Users table:**
+Every policy below MUST be implemented as a `pgPolicy` in the corresponding Drizzle schema file. Use the `isAdmin` / `isInstructor` JWT helpers (see below) for role checks — never subquery `users` for role. The "Admin full access" policy (for: `"all"`, using: `isAdmin`, withCheck: `isAdmin`) should be added to every table where admin access is listed.
 
-- SELECT: Own row (`id = auth.uid()`). Admins can read all. **Co-participants:** Authenticated users can read `id, name, avatar_url` for users who share at least one course with them (required for chat message enrichment; see 5d and Client-side Realtime).
-- INSERT: Via DB trigger (see below).
-- UPDATE: No self-update. User data comes from Google OAuth (synced by trigger). All modifications (including role changes) are done by admins via service role client, which bypasses RLS entirely.
+**Users table** (`src/lib/db/schema/users.ts`) — 4 policies:
 
-**Instructors table:**
+1. `"Users can read own profile"` — SELECT, `authenticatedRole`, using: `id = auth.uid()`
+2. `"Co-participants can read profile fields"` — SELECT, `authenticatedRole`, using: EXISTS subquery on `course_participants` (see Chat-related RLS section below for SQL)
+3. `"Admin full access"` — ALL, `authenticatedRole`, using/withCheck: `isAdmin`
+4. No INSERT/UPDATE/DELETE policies for non-admins. INSERT happens via DB trigger. UPDATE/DELETE by admins uses service role (bypasses RLS).
 
-- SELECT: Public (everyone can see profiles).
-- INSERT/DELETE: Admin only (checked via JWT claim, not DB query).
-- UPDATE: Own profile (`user_id = auth.uid()`) or admin.
+**Instructors table** (`src/lib/db/schema/instructors.ts`) — 4 policies:
 
-**Courses table:**
+1. `"Public can view instructor profiles"` — SELECT, `anonRole`, using: `true`
+2. `"Authenticated can view instructor profiles"` — SELECT, `authenticatedRole`, using: `true`
+3. `"Instructors can update own profile"` — UPDATE, `authenticatedRole`, using: `user_id = auth.uid()`
+4. `"Admin full access"` — ALL, `authenticatedRole`, using/withCheck: `isAdmin`
 
-- SELECT: Public.
-- INSERT: Authenticated users whose instructor record matches.
-- UPDATE/DELETE: Course's own instructor or admin.
+**Courses table** (`src/lib/db/schema/courses.ts`) — 6 policies:
 
-**Course Participants table:**
+1. `"Public can view courses"` — SELECT, `anonRole`, using: `true`
+2. `"Authenticated can view courses"` — SELECT, `authenticatedRole`, using: `true`
+3. `"Instructors can insert own courses"` — INSERT, `authenticatedRole`, withCheck: `instructorId IN (SELECT id FROM instructors WHERE user_id = auth.uid())`
+4. `"Instructors can update own courses"` — UPDATE, `authenticatedRole`, using: same instructor subquery
+5. `"Instructors can delete own courses"` — DELETE, `authenticatedRole`, using: same instructor subquery
+6. `"Admin full access"` — ALL, `authenticatedRole`, using/withCheck: `isAdmin`
 
-- SELECT: Own enrollments, course's instructor, or admin. **Participant list:** Authenticated users can also SELECT any row where the course is one they're enrolled in (enables pre-fetching participant profiles for chat; see 5d and Client-side Realtime).
-- INSERT: Authenticated user enrolling themselves (`user_id = auth.uid()`).
-- DELETE: Own enrollment, course's instructor, or admin.
+**Course Participants table** (`src/lib/db/schema/courseParticipants.ts`) — 6 policies:
 
-**Messages table:**
+1. `"Users can view own enrollments"` — SELECT, `authenticatedRole`, using: `user_id = auth.uid()`
+2. `"Instructors can view their course participants"` — SELECT, `authenticatedRole`, using: `course_id IN (SELECT id FROM courses WHERE instructor_id IN (SELECT id FROM instructors WHERE user_id = auth.uid()))`
+3. `"Participants can see co-participants in same course"` — SELECT, `authenticatedRole`, using: EXISTS subquery (see Chat-related RLS section below for SQL)
+4. `"Users can enroll themselves"` — INSERT, `authenticatedRole`, withCheck: `user_id = auth.uid()` (note: enrollment primarily goes through `enroll_in_course` RPC which uses `security definer`, but this policy is still needed as a safety net)
+5. `"Users can unenroll themselves"` — DELETE, `authenticatedRole`, using: `user_id = auth.uid()`
+6. `"Admin full access"` — ALL, `authenticatedRole`, using/withCheck: `isAdmin`
 
-- SELECT/INSERT: Only participants of that course (subquery on `course_participants`).
+**Messages table** (`src/lib/db/schema/messages.ts`) — 3 policies:
 
-**Subscriptions table:**
+1. `"Course participants can read messages"` — SELECT, `authenticatedRole`, using: `course_id IN (SELECT course_id FROM course_participants WHERE user_id = auth.uid())`
+2. `"Course participants can send messages"` — INSERT, `authenticatedRole`, withCheck: `user_id = auth.uid() AND course_id IN (SELECT course_id FROM course_participants WHERE user_id = auth.uid())`
+3. `"Admin full access"` — ALL, `authenticatedRole`, using/withCheck: `isAdmin`
 
-- SELECT/INSERT/DELETE: Own subscription only (`user_id = auth.uid()`).
+**Subscriptions table** (`src/lib/db/schema/subscriptions.ts`) — 4 policies:
 
-**Spots table:**
+1. `"Users can view own subscription"` — SELECT, `authenticatedRole`, using: `user_id = auth.uid()`
+2. `"Users can create own subscription"` — INSERT, `authenticatedRole`, withCheck: `user_id = auth.uid()`
+3. `"Users can delete own subscription"` — DELETE, `authenticatedRole`, using: `user_id = auth.uid()`
+4. `"Admin full access"` — ALL, `authenticatedRole`, using/withCheck: `isAdmin`
 
-- SELECT: Public.
-- INSERT/UPDATE/DELETE: Admin only.
+**Spots table** (`src/lib/db/schema/spots.ts`) — 3 policies:
+
+1. `"Public can view spots"` — SELECT, `anonRole`, using: `true`
+2. `"Authenticated can view spots"` — SELECT, `authenticatedRole`, using: `true`
+3. `"Admin full access"` — ALL, `authenticatedRole`, using/withCheck: `isAdmin`
+
+**Total: 30 policies** across 7 tables. All must be defined as `pgPolicy` calls in the schema files so `drizzle-kit generate` produces the corresponding `CREATE POLICY` SQL.
 
 ### Reading roles from JWT in RLS policies (no subqueries)
 

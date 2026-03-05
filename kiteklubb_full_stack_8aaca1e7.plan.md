@@ -252,7 +252,7 @@ Enrollment is handled via a Postgres RPC function (not a direct insert) to preve
 | Column    | Type          | Notes                |
 | --------- | ------------- | -------------------- |
 | id        | uuid PK       |                      |
-| userId    | uuid FK       | -> users.id, ON DELETE CASCADE |
+| userId    | uuid FK       | -> users.id, **unique**, ON DELETE CASCADE |
 | email     | text NOT NULL | Autofilled, editable |
 | createdAt | timestamp     | default now()        |
 

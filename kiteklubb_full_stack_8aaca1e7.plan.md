@@ -39,7 +39,7 @@ todos:
     content: Implement all server actions using Supabase SDK (not Drizzle) for data access. RLS enforces authorization at DB level; actions handle session passing.
     status: pending
   - id: polish-deploy
-    content: "Final polish: responsive design, loading states, error handling, SEO meta tags. Configure Vercel deployment with env vars."
+    content: "Final polish: mobile-first responsive design (touch-friendly, tap-based nav), loading states, error handling, SEO meta tags. Configure Vercel deployment with env vars."
     status: pending
 isProject: false
 ---
@@ -537,7 +537,7 @@ Single-page scroll layout with sections:
 
 - **Hero:** Panorama image of Giske beach with kites, overlaid club name
 - **Om klubben:** About text with links to Facebook and group chat
-- **Nav bar:** Fixed top nav, full-width, centered items. Scrolls to sections or navigates to `/courses`. Includes Spot Guide mega-dropdown (see 5b).
+- **Nav bar:** Fixed top nav, full-width, centered items. Scrolls to sections or navigates to `/courses`. Includes Spot Guide dropdown (see 5b). **On mobile:** collapses into a hamburger menu that opens a full-screen overlay.
 
 Design: Off-white content card floating over the panorama background. Shades of blue accents. Black text.
 
@@ -549,13 +549,13 @@ Spots are accessed exclusively through a multi-level dropdown in the navbar -- t
 
 ```
 Spot Guide (nav item)
-├── SommerSpotter (hover/click)
-│   ├── Giske (area, hover/click)
+├── SommerSpotter (tap/click to expand)
+│   ├── Giske (area, tap/click to expand)
 │   │   ├── Alnes → /spots/[id]
 │   │   └── Gjøsund → /spots/[id]
 │   └── Ålesund (area)
 │       └── Tueneset → /spots/[id]
-└── VinterSpotter (hover/click)
+└── VinterSpotter (tap/click to expand)
     ├── Vigra (area)
     │   └── Blindheim → /spots/[id]
     └── ...
@@ -563,9 +563,13 @@ Spot Guide (nav item)
 
 - **Level 1:** "SommerSpotter" and "VinterSpotter" (mapped from `spots.season`)
 - **Level 2:** Areas within each season (mapped from `spots.area`, grouped)
-- **Level 3:** Spot names (clicking navigates to `/spots/[id]`)
+- **Level 3:** Spot names (tap/click navigates to `/spots/[id]`)
 
 The dropdown data is fetched server-side in the layout and passed to the navbar component.
+
+**Mobile (< breakpoint):** Hamburger icon in header. Tap to open a full-screen overlay with nav items stacked vertically. Spot Guide expands in-place (tap season → areas appear, tap area → spots appear). Tap an expanded item again to collapse it. **Close overlay:** Close button only (full screen leaves no "outside" to tap). Desktop can show horizontal nav; below breakpoint, use hamburger.
+
+**Desktop:** Horizontal nav or dropdown. Close dropdown: tap outside or on close button. Tap expanded item again to collapse that submenu.
 
 ### 5b-ii. Spot Detail Page (`src/app/spots/[id]/page.tsx`)
 
@@ -786,7 +790,7 @@ When a user successfully enrolls in a course, a confirmation email is sent to th
 
 All in `src/components/`, using shadcn/ui as the base:
 
-- **Layout:** `Navbar`, `Footer`, `ContentCard` (off-white card over panorama BG)
+- **Layout:** `Navbar` (hamburger + full-screen overlay on mobile, horizontal nav on desktop), `Footer`, `ContentCard` (off-white card over panorama BG)
 - **Auth:** `LoginButton`, `UserMenu` (avatar dropdown with role badge)
 - **Courses:** `CourseCard` (stateful: shows "Meld på" / "Meld av" + "Chat" based on enrollment), `CourseList`, `ParticipantList`
 - **Chat:** `ChatWindow`, `MessageBubble`, `MessageInput`
@@ -798,12 +802,14 @@ All in `src/components/`, using shadcn/ui as the base:
 
 ## 9. Design System
 
+**Mobile-first.** Mobile UX is the priority; desktop should look good but mobile devices must have a smooth experience. All interactions (nav dropdown, forms, cards) work correctly on touch with tap/click; hover is optional for desktop.
+
 - **Background:** Full-viewport panorama of Giske beach, fixed position
 - **Content:** Off-white (`#FAFAF8`) content window scrolling over the background
 - **Colors:** Shades of blue (`sky-600`/`sky-800` for accents), black text
-- **Nav:** Full-width bar, items centered matching content width, sticky top
+- **Nav:** Full-width bar, items centered, sticky top. Touch-friendly tap targets. **Mobile:** Hamburger opens full-screen overlay; close via close button. **Desktop:** Horizontal nav; dropdowns close on tap-outside or close button. Tap expanded item again to collapse submenu.
 - **Typography:** Clean sans-serif (Inter via next/font)
-- **Responsive:** Mobile-first, content card is full-width on mobile with padding
+- **Responsive:** Default layout for small screens; larger breakpoints refine spacing and layout. Content card full-width with padding on mobile.
 
 ---
 

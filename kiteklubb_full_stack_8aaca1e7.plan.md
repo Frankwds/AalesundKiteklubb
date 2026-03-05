@@ -161,6 +161,7 @@ Environment variables needed:
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` -- Supabase anon key (used by Supabase SDK at runtime)
 - `SUPABASE_SERVICE_ROLE_KEY` -- Service role key (server-only, bypasses RLS for admin operations like role changes)
 - `RESEND_API_KEY` -- Resend API key (server-only, for sending subscriber notification emails)
+- `NEXT_PUBLIC_SITE_URL` -- Full origin of the app (e.g. `https://aalesundkiteklubb.no` in production, `http://localhost:3000` in dev). Used for OAuth redirect URLs in Supabase dashboard: add `{NEXT_PUBLIC_SITE_URL}/auth/callback` as an authorized redirect for Google OAuth.
 
 ---
 
@@ -407,7 +408,9 @@ Same for instructor-scoped policies -- use `isInstructor` instead of a subquery 
 
 ### Supabase DB Trigger for User Sync
 
-A Postgres trigger function on `auth.users` (after insert) automatically creates a row in `public.users` with `role = 'user'`. This is defined in a custom SQL migration alongside the Drizzle-generated migrations (Drizzle does not generate triggers, so this one SQL file is written manually).
+A Postgres trigger function on `auth.users` (AFTER INSERT) automatically creates a row in `public.users` with `role = 'user'`. This is defined in migration `0001`.
+
+**Timing:** The trigger runs synchronously in the same transaction as the `auth.users` insert. When Supabase commits the new user, both `auth.users` and `public.users` exist. The redirect to our callback happens after that commit, so when our callback runs, the trigger has already completed.
 
 ### Custom JWT Claims (Auth Hook)
 
@@ -475,13 +478,15 @@ Called via `supabase.rpc('enroll_in_course', { p_course_id: courseId })` instead
 In the Supabase dashboard (manual step):
 
 - Enable Google OAuth provider
-- Set redirect URL to `{SITE_URL}/auth/callback`
+- Add redirect URL `{NEXT_PUBLIC_SITE_URL}/auth/callback` (e.g. `https://aalesundkiteklubb.no/auth/callback`) in the Google OAuth provider settings
 
 ### 3b. Auth Callback Route (`src/app/auth/callback/route.ts`)
 
-- Exchanges the OAuth code for a session via `supabase.auth.exchangeCodeForSession(code)`
-- User row creation in `public.users` is handled automatically by the Postgres trigger (see section 2)
-- Redirects to `/`
+1. Exchange the OAuth code for a session via `supabase.auth.exchangeCodeForSession(code)`.
+2. **Upsert into `public.users`** using the service role client: `INSERT ... ON CONFLICT (id) DO UPDATE SET email=..., name=..., avatar_url=...`. Do NOT overwrite `role` on conflict (admin-managed).
+3. Redirect to `/`.
+
+**Why upsert in the callback?** The trigger creates the row first (same transaction as `auth.users`), so normally the row already exists when the callback runs. The callback upsert is a safety net: if the trigger failed, if the user was created outside our flow, or if there's any edge case, the callback ensures `public.users` has the row. It also refreshes `email`/`name`/`avatar_url` from the latest Google profile on every login. Idempotent — no race: upsert handles both "row missing" and "row exists" correctly.
 
 ### 3c. Middleware (`src/middleware.ts`)
 
@@ -730,8 +735,9 @@ RLS applies to Realtime events -- users only receive inserts for courses they're
 
 A server-only Supabase client using `SUPABASE_SERVICE_ROLE_KEY` that bypasses RLS. Used ONLY for:
 
-- Admin operations that need to update other users' roles
-- The DB trigger approach handles user creation, but fallback upsert uses this
+- **Auth callback upsert:** `INSERT ... ON CONFLICT` into `public.users` after `exchangeCodeForSession`. Service role is required because the callback runs before the user's RLS context is fully established, and we need to write to `public.users` regardless of existing policies.
+- **Admin role changes:** Promoting/demoting users (update `users.role`), which RLS restricts to admins but the admin is acting on another user's row.
+- **Admin instructor promote/demote:** Creating/deleting `instructors` rows and updating roles atomically.
 
 This key is NEVER exposed to the client. Environment variable: `SUPABASE_SERVICE_ROLE_KEY` (server-only, not `NEXT_PUBLIC_`).
 

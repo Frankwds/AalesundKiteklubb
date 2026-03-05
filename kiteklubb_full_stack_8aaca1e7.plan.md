@@ -597,11 +597,11 @@ Sections:
 - **Intro kurs** -- what courses are about, who the instructors are, general info text
 - **Scheduled Courses** -- list of course cards from DB. Each card shows course info (title, date, spot name linked to `/spots/[spotId]`, instructor, price). The card has stateful buttons depending on the user's enrollment:
   - **Not logged in:** "Logg inn for å melde på" (links to login)
-  - **Logged in, not enrolled:** "Meld på" button (calls `enroll_in_course` RPC)
-  - **Logged in, enrolled:** "Meld av" button (deletes from `course_participants`, RLS allows own deletion) + "Chat" button (links to `/courses/[id]/chat`)
+  - **Logged in, not enrolled:** "Meld på" button opens a confirmation dialog (description of action, prefilled editable email, "Avbryt" + "Meld på" buttons). On confirm, calls `enroll_in_course` RPC.
+  - **Logged in, enrolled:** "Meld av" button opens a confirmation dialog (description of action, "Avbryt" + "Meld av" buttons). On confirm, deletes from `course_participants`. "Chat" button links to `/courses/[id]/chat`.
   - On successful enrollment, a confirmation email is sent to the user (see section 7)
   - When no courses: semi-grayed placeholder text explaining that courses are posted when conditions look promising and not far in advance, prompting the user to subscribe to get notified. Includes a Subscribe button/link that scrolls to the Subscribe section.
-- **Subscribe** -- requires login, autofills email, stores in subscriptions table. Notifies user by email when new courses are published.
+- **Subscribe** -- requires login. Clicking Subscribe opens a confirmation dialog with: description of the action (e.g. receive email when new courses are published), prefilled editable email field, "Avbryt" (cancel) and "Meld på" (confirm) buttons. On confirm, stores in subscriptions table. If already subscribed, "Meld av" opens a confirmation dialog (description, "Avbryt" + "Meld av"); on confirm, removes from subscriptions.
 
 ### 5d. Course Chat (`src/app/courses/[id]/chat/page.tsx`)
 
@@ -802,7 +802,8 @@ All in `src/components/`, using shadcn/ui as the base:
 - **Chat:** `ChatWindow`, `MessageBubble`, `MessageInput`
 - **Spots:** `SpotGuideDropdown` (multi-level nav dropdown), `WindCompass` (visual compass rose), `SpotDetailPage` sections
 - **Admin:** `InstructorForm`, `CourseForm` (with searchable spot dropdown via shadcn `Combobox`), `SpotForm` (with map image upload, compass direction picker, multi-select water type), `DataTable`
-- **Subscription:** `SubscribeDialog`
+- **Subscription:** `SubscribeDialog` (Meld på: action description, editable email, "Avbryt" + "Meld på"); `UnsubscribeDialog` (Meld av: action description, "Avbryt" + "Meld av")
+- **Enrollment:** `EnrollConfirmDialog` (Meld på: action description, editable email, "Avbryt" + "Meld på"); `UnenrollConfirmDialog` (Meld av: action description, "Avbryt" + "Meld av")
 
 ---
 

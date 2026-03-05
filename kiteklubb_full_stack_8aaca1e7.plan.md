@@ -692,7 +692,7 @@ Protected by middleware (instructor or admin role). **Shared by both** — admin
 
 **Tab: Mine Kurs**
 - DataTable listing own courses sorted by date
-- "Nytt kurs" button → Dialog with course form (title, description, price, date, max participants, searchable spot dropdown). Uses `publishCourse` which triggers subscriber emails.
+- "Nytt kurs" button → Dialog with course form (title, description, price, date, max participants, searchable spot dropdown). **`instructorId` is not in the form** — it is set automatically from the current user's instructor record when creating the course. Uses `publishCourse` which triggers subscriber emails.
 - Row actions: Edit, Delete, View participants (expandable row or Dialog with remove buttons)
 
 ### 5g. Auth Pages
@@ -710,7 +710,7 @@ All data access uses the Supabase SDK. Server Actions use the server-side Supaba
 
 Server Actions (`"use server"`) for mutations. Each creates a Supabase server client, calls SDK methods, and logs success/failure via `src/lib/logger.ts`.
 
-- `src/lib/actions/courses.ts` -- `supabase.from('courses').insert(...)`, `.update(...)`, `.delete(...)`; enrollment via `supabase.rpc('enroll_in_course', { p_course_id })` (atomic capacity check, no overbooking); unenrollment via `supabase.from('course_participants').delete().match({ user_id, course_id })` (RLS allows own deletion). On successful enrollment, sends a confirmation email to the user (see section 7). The `publishCourse` action inserts the course AND sends notification emails to all subscribers in one server-side request.
+- `src/lib/actions/courses.ts` -- `supabase.from('courses').insert(...)`, `.update(...)`, `.delete(...)`; enrollment via `supabase.rpc('enroll_in_course', { p_course_id })` (atomic capacity check, no overbooking); unenrollment via `supabase.from('course_participants').delete().match({ user_id, course_id })` (RLS allows own deletion). On successful enrollment, sends a confirmation email to the user (see section 7). The `publishCourse` action inserts the course with `instructorId` set from the current user's instructor record (not from the form) and sends notification emails to all subscribers in one server-side request.
 - `src/lib/actions/instructors.ts` -- **Atomic admin actions to keep `users.role` and `instructors` table in sync:**
   - `promoteToInstructor(userId)`: Creates `instructors` profile row (if missing) AND sets `users.role = 'instructor'`.
   - `promoteToAdmin(userId)`: Creates `instructors` profile row (if missing) AND sets `users.role = 'admin'`. Admins always have an instructor profile so they can create courses.

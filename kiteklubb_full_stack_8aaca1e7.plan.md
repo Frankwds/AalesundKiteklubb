@@ -475,10 +475,14 @@ Called via `supabase.rpc('enroll_in_course', { p_course_id: courseId })` instead
 
 ### 3a. Supabase Auth Setup
 
-In the Supabase dashboard (manual step):
+Manual configuration in two places:
 
+**Supabase Dashboard:**
 - Enable Google OAuth provider
 - Add redirect URL `{NEXT_PUBLIC_SITE_URL}/auth/callback` (e.g. `https://aalesundkiteklubb.no/auth/callback`) in the Google OAuth provider settings
+
+**Google Cloud Console:**
+- Add your Supabase project's callback URL to Authorized redirect URIs in the OAuth 2.0 Client (APIs & Services > Credentials). The exact URL (e.g. `https://<project-ref>.supabase.co/auth/v1/callback`) is shown on the Supabase Dashboard > Authentication > Providers > Google page.
 
 ### 3b. Auth Callback Route (`src/app/auth/callback/route.ts`)
 

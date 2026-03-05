@@ -27,7 +27,7 @@ todos:
     content: "Build courses page: intro sections, instructor profiles, pricing, scheduled courses list with enroll button, subscribe section."
     status: pending
   - id: course-chat
-    content: "Build per-course chat: enrollment-gated access, append-only message log, nav integration showing 'Chat kurs dd/mm' for enrolled users."
+    content: "Build per-course chat: enrollment-gated access, append-only message log. Accessed only via the Chat button on the course card and the enrollment confirmation email (no nav item)."
     status: pending
   - id: admin-dashboard
     content: "Build admin dashboard: manage instructors (CRUD + role assignment), manage all courses (CRUD + participants), manage spots, view subscribers, manage users/roles."
@@ -627,7 +627,7 @@ Sections:
 ### 5d. Course Chat (`src/app/courses/[id]/chat/page.tsx`)
 
 - **Enrollment-gated access.** Middleware only checks authentication for `/courses/*/chat` — a logged-in user who is not enrolled could otherwise reach the page. Add an explicit **page-level check** before rendering: verify the user is in `course_participants` for that course. If not, redirect to `/courses` or show: "Du må være meldt på kurset for å se chatten."
-- Accessed via the "Chat" button on the course card in `/courses` (no nav item) — only visible on the card when the user is enrolled (see 5c)
+- **Not in nav.** Accessed only via the "Chat" button on the course card in `/courses` and links in the enrollment confirmation email — only visible on the card when the user is enrolled (see 5c). No navbar or mobile menu entry for chat.
 - Append-only message log, newest at bottom
 - Auto-scroll, live updates via **Supabase Realtime** -- client subscribes to `postgres_changes` on the `messages` table filtered by `course_id`. New messages appear instantly without polling.
 - **Realtime profile enrichment:** Realtime payloads include raw message data only (no joined user data). Strategy: (1) Pre-fetch all course participants (from `course_participants` joined with `users`) at chat load to populate the profile cache. (2) When a Realtime INSERT arrives for an unknown `user_id`, fetch that user's profile on demand (`users(id, name, avatar_url)`), add to cache, and render. Show a short-lived placeholder (generic avatar or "...") while the fetch is in progress. RLS policies on `users` and `course_participants` must allow this (see section 2 RLS).
@@ -806,13 +806,13 @@ If the email send fails, the course is still created -- the action returns a war
 When a user successfully enrolls in a course, a confirmation email is sent to them. The `enrollInCourse` Server Action:
 1. Calls `supabase.rpc('enroll_in_course', { p_course_id })` (atomic enrollment)
 2. On success, fetches course + spot details
-3. Sends a confirmation email to the user with: course title, date, instructor, spot name + link, price, and a note that they can unenroll at `/courses`
+3. Sends a confirmation email to the user with: course title, date, instructor, spot name + link, price, link to course chat (`/courses/[id]/chat`), and a note that they can unenroll at `/courses` — with a link to that page
 
 ### Email Setup
 
 - **`src/lib/email/resend.ts`** -- Resend client initialized with `RESEND_API_KEY`
 - **`src/lib/email/templates/new-course.tsx`** -- Subscriber notification: new course available. Includes course title, date, instructor name, price, spot link, and "Meld deg på" link.
-- **`src/lib/email/templates/enrollment-confirmation.tsx`** -- Sent to user on enrollment. Includes course details, spot link, and note about unenrolling at `/courses`.
+- **`src/lib/email/templates/enrollment-confirmation.tsx`** -- Sent to user on enrollment. Includes course details, spot link, link to course chat, and note about unenrolling at `/courses` with a link to that page.
 - **Sending domain** -- must be verified in the Resend dashboard (or use `onboarding@resend.dev` for testing)
 
 ---

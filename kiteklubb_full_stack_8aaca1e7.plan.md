@@ -934,3 +934,29 @@ pnpm db:types         # 3. Regenerate types
 ```
 
 **Schema changes:** Update Drizzle schema files, then run `pnpm db:push`. Custom SQL rarely changes; add new `supabase/migrations/*.sql` only when adding triggers, functions, or storage config.
+
+---
+
+## Manual Setup Steps (Checklist)
+
+Steps that must be completed manually in external dashboards and consoles before or during deployment:
+
+1. **Supabase project** – Create a hosted Supabase project (supabase.com). Note the project URL, anon key, service role key, and direct Postgres connection string.
+
+2. **Supabase Auth – Google OAuth (Supabase Dashboard)** – Authentication > Providers > Google:
+   - Enable the Google OAuth provider
+   - Add redirect URL `{NEXT_PUBLIC_SITE_URL}/auth/callback` (e.g. `https://aalesundkiteklubb.no/auth/callback` for production, `http://localhost:3000/auth/callback` for local dev)
+   - Paste Client ID and Client Secret from Google Cloud Console
+
+3. **Google Cloud Console – OAuth credentials** – APIs & Services > Credentials:
+   - Create an OAuth 2.0 Client ID (Web application)
+   - Add the Supabase project callback URL to Authorized redirect URIs (exact URL from Supabase Dashboard > Authentication > Providers > Google, typically `https://<project-ref>.supabase.co/auth/v1/callback`)
+   - Copy Client ID and Client Secret into Supabase (step 2)
+
+4. **Resend** – Verify the sending domain in the Resend dashboard, or use `onboarding@resend.dev` for testing. Obtain an API key.
+
+5. **Environment variables – local** – Create `.env.local` with `DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, `NEXT_PUBLIC_SITE_URL`.
+
+6. **Supabase CLI link** – Run `supabase link` to link the local project to the hosted Supabase project (required for `supabase db push`).
+
+7. **Vercel** – Connect the GitHub repo, configure the project, and set all environment variables in the Vercel dashboard.

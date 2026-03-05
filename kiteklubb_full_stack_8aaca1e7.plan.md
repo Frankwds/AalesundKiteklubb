@@ -133,8 +133,8 @@ npx create-next-app@latest . --typescript --tailwind --app --src-dir --use-pnpm
 Install core dependencies:
 
 ```bash
-# Runtime: Supabase SDK for all data access + Resend for email
-pnpm add @supabase/supabase-js @supabase/ssr resend
+# Runtime: Supabase SDK for all data access + Resend for email + Sonner for toast notifications
+pnpm add @supabase/supabase-js @supabase/ssr resend sonner
 
 # Drizzle for schema definitions and migrations
 # drizzle-orm is a regular dep so schema files under src/ pass type-checking during next build
@@ -861,6 +861,28 @@ All in `src/components/`, using shadcn/ui as the base:
 - **Subscription:** `SubscribeDialog` (Meld på: action description, editable email, "Avbryt" + "Meld på"); `UnsubscribeDialog` (Meld av: action description, "Avbryt" + "Meld av")
 - **Enrollment:** `EnrollConfirmDialog` (Meld på: action description, editable email, "Avbryt" + "Meld på"); `UnenrollConfirmDialog` (Meld av: action description, "Avbryt" + "Meld av")
 
+### Loading, Error & Toast UI
+
+**Loading states** — use Next.js App Router `loading.tsx` convention:
+- `src/app/loading.tsx` — global fallback with a centered spinner (reuse across all routes)
+- `src/app/courses/loading.tsx` — skeleton cards for the course list
+- `src/app/admin/loading.tsx` — skeleton table for admin dashboard
+- `src/app/spots/loading.tsx` — skeleton cards for spots listing
+
+**Error boundaries** — use Next.js `error.tsx` convention:
+- `src/app/error.tsx` — global error boundary (`"use client"`) showing "Noe gikk galt" message with a retry button (`reset()`)
+- `src/app/not-found.tsx` — custom 404 page ("Siden finnes ikke" with link back to home)
+
+**Toast notifications** — `sonner` (shadcn/ui's recommended toast library):
+- Add `<Sonner />` component in `src/app/layout.tsx` (root layout, inside `<body>`, after `{children}`)
+- Use `toast.success()` / `toast.error()` in client components after server action responses. Examples:
+  - Enrollment: `toast.success('Du er påmeldt!')` / `toast.error('Kurset er fullt')`
+  - Unenrollment: `toast.success('Du er avmeldt')`
+  - Course save: `toast.success('Kurs lagret')`
+  - Subscription: `toast.success('Du vil få varsler om nye kurs')`
+  - Chat error: `toast.error('Kunne ikke sende melding')`
+- Server actions return `{ success: boolean; error?: string }` so the calling client component can show the appropriate toast
+
 ---
 
 ## 9. Design System
@@ -891,7 +913,10 @@ All in `src/components/`, using shadcn/ui as the base:
 src/
 ├── app/
 │   ├── page.tsx                    # Front page
-│   ├── layout.tsx                  # Root layout (nav, bg, fonts)
+│   ├── layout.tsx                  # Root layout (nav, bg, fonts, <Sonner />)
+│   ├── loading.tsx                 # Global loading spinner
+│   ├── error.tsx                   # Global error boundary ("use client")
+│   ├── not-found.tsx               # Custom 404 page
 │   ├── login/page.tsx              # Login page
 │   ├── auth/callback/route.ts      # OAuth callback
 │   ├── spots/

@@ -490,6 +490,8 @@ In the Supabase dashboard (manual step):
 
 ### 3c. Middleware (`src/middleware.ts`)
 
+**Location:** With `src/` enabled, Next.js middleware lives at `src/middleware.ts` (not at project root). The Supabase session-refresh helper lives at `src/lib/supabase/middleware.ts` and is imported by the main middleware.
+
 - Refreshes Supabase auth session on every request
 - Reads user role directly from the JWT claims (`user.app_metadata.user_role`) -- **no DB query needed**
 - Protects `/admin/*` routes (requires `admin` role)

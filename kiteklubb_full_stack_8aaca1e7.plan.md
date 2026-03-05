@@ -21,7 +21,7 @@ todos:
     content: "Build front page: hero section with Giske panorama, about the club section, links to Facebook/chat."
     status: pending
   - id: spots-page
-    content: "Build spot guide: multi-level navbar dropdown (season > area > spot), spot detail page with wind compass, Om spotten, map image, Yr/Maps links, skill level, water type. Full admin CMS for spots with image upload."
+    content: "Build spots listing page (/spots) with cards and filters (season, area, wind direction). Spot detail page with wind compass, Om spotten, map image, Yr/Maps links, skill level, water type. Full admin CMS for spots with image upload."
     status: pending
   - id: courses-page
     content: "Build courses page: intro sections, instructor profiles, pricing, scheduled courses list with enroll button, subscribe section."
@@ -77,7 +77,7 @@ graph TB
 
   subgraph client [Client - Browser]
     FrontPage[Front Page]
-    SpotGuide[Spot Guide]
+    SpotsPage[Spots Page]
     CoursePage[Course Page]
     CourseChat[Course Chat]
     AdminDash[Admin Dashboard]
@@ -264,7 +264,7 @@ Enrollment is handled via a Postgres RPC function (not a direct insert) to preve
 | name           | text NOT NULL |                                                            |
 | description    | text          | "Om spotten" text                                          |
 | season         | enum          | `summer`, `winter` (SommerSpotter / VinterSpotter)         |
-| area           | text NOT NULL | Grouping for dropdown level 2 (e.g. "Giske", "Ålesund"). Free text. Admin form uses a Combobox that suggests existing area values from other spots (typed text filters the list). Selecting autofills the field; typing a new value uses it as-is. |
+| area           | text NOT NULL | Grouping for filtering (e.g. "Giske", "Ålesund"). Free text. Admin form uses a Combobox that suggests existing area values from other spots (typed text filters the list). Selecting autofills the field; typing a new value uses it as-is. Used for area filter on listing page. |
 | windDirections | text[]        | Array of compass strings: "N","NE","E","SE","S","SW","W","NW" |
 | mapImageUrl    | text          | Supabase Storage public URL from `spot-maps` bucket         |
 | latitude       | numeric       | For Yr link and Google Maps link                           |
@@ -582,39 +582,20 @@ Single-page scroll layout with sections:
 
 - **Hero:** Panorama image of Giske beach with kites, overlaid club name
 - **Om klubben:** About text with links to Facebook and group chat
-- **Nav bar:** Fixed top nav, full-width, centered items. Scrolls to sections or navigates to `/courses`. Includes Spot Guide dropdown (see 5b). **On mobile:** collapses into a hamburger menu that opens a full-screen overlay.
+- **Nav bar:** Fixed top nav, full-width, centered items. Scrolls to sections or navigates to `/courses` and `/spots`. **On mobile:** collapses into a hamburger menu that opens a full-screen overlay.
 
 Design: Off-white content card floating over the panorama background. Shades of blue accents. Black text.
 
-### 5b. Spot Guide (navbar dropdown, no listing page)
+### 5b. Spots Listing Page (`src/app/spots/page.tsx`)
 
-Spots are accessed exclusively through a multi-level dropdown in the navbar -- there is no `/spots` listing page.
+Spots are accessed via a direct nav link to `/spots`. One nav item "Spotter" links to the listing page.
 
-**Dropdown structure:**
+**Layout:**
+- **Filters:** Placed in a drawer at the top of the page (same on mobile and desktop). Season (SommerSpotter / VinterSpotter), Area (e.g. Giske, Ålesund), Wind direction (N, NE, E, SE, S, SW, W, NW — multi-select). Filters are applied client-side or via URL params for shareable links. Drawer can be collapsed/expanded.
+- **Spot cards:** Grid of cards below the filter drawer, each showing spot name, area, season badge, skill level, wind compass (or favorable wind badges). Tap/click navigates to `/spots/[id]`.
+- **Empty state:** If no spots match filters, show clear message and option to clear filters.
 
-```
-Spot Guide (nav item)
-├── SommerSpotter (tap/click to expand)
-│   ├── Giske (area, tap/click to expand)
-│   │   ├── Alnes → /spots/[id]
-│   │   └── Gjøsund → /spots/[id]
-│   └── Ålesund (area)
-│       └── Tueneset → /spots/[id]
-└── VinterSpotter (tap/click to expand)
-    ├── Vigra (area)
-    │   └── Blindheim → /spots/[id]
-    └── ...
-```
-
-- **Level 1:** "SommerSpotter" and "VinterSpotter" (mapped from `spots.season`)
-- **Level 2:** Areas within each season (mapped from `spots.area`, grouped)
-- **Level 3:** Spot names (tap/click navigates to `/spots/[id]`)
-
-The dropdown data is fetched server-side in the layout and passed to the navbar component.
-
-**Mobile (< breakpoint):** Hamburger icon in header. Tap to open a full-screen overlay with nav items stacked vertically. Spot Guide expands in-place (tap season → areas appear, tap area → spots appear). Tap an expanded item again to collapse it. **Close overlay:** Close button only (full screen leaves no "outside" to tap). Desktop can show horizontal nav; below breakpoint, use hamburger.
-
-**Desktop:** Horizontal nav or dropdown. Close dropdown: tap outside or on close button. Tap expanded item again to collapse that submenu.
+**Responsive:** Cards stack in a single column on mobile; grid on larger screens.
 
 ### 5b-ii. Spot Detail Page (`src/app/spots/[id]/page.tsx`)
 
@@ -747,7 +728,7 @@ Query functions used by Server Components and Server Actions. Each returns typed
 - `src/lib/queries/instructors.ts` -- `supabase.from('instructors').select('*, users(*)')`
 - `src/lib/queries/messages.ts` -- `supabase.from('messages').select('*, users(name, avatar_url)').eq('course_id', id).order('created_at')`
 - `src/lib/queries/subscriptions.ts` -- check if current user has a subscription row
-- `src/lib/queries/spots.ts` -- `supabase.from('spots').select('*')`; also a `getSpotsGrouped()` that fetches all spots and groups them by `season` then `area` for the navbar dropdown
+- `src/lib/queries/spots.ts` -- `supabase.from('spots').select('*')`; fetches all spots for the listing page. Filtering by season, area, wind direction is done client-side or via query params.
 - `src/lib/queries/users.ts` -- admin queries with service role client for user management
 
 ### Client-side Queries and Realtime
@@ -844,7 +825,7 @@ All in `src/components/`, using shadcn/ui as the base:
 - **Auth:** `LoginButton`, `UserMenu` (avatar dropdown with role badge)
 - **Courses:** `CourseCard` (stateful: shows "Meld på" / "Meld av" based on enrollment; "Chat" button **only when enrolled**), `CourseList`, `ParticipantList`
 - **Chat:** `ChatWindow`, `MessageBubble`, `MessageInput`
-- **Spots:** `SpotGuideDropdown` (multi-level nav dropdown), `WindCompass` (visual compass rose), `SpotDetailPage` sections
+- **Spots:** `SpotCard`, `SpotList`, `SpotFilters` (listing page with season/area/wind filters), `WindCompass` (visual compass rose), `SpotDetailPage` sections
 - **Admin:** `InstructorForm`, `CourseForm` (with searchable spot dropdown via shadcn `Combobox`), `SpotForm` (with map image upload, compass direction picker, multi-select water type), `DataTable`
 - **Subscription:** `SubscribeDialog` (Meld på: action description, editable email, "Avbryt" + "Meld på"); `UnsubscribeDialog` (Meld av: action description, "Avbryt" + "Meld av")
 - **Enrollment:** `EnrollConfirmDialog` (Meld på: action description, editable email, "Avbryt" + "Meld på"); `UnenrollConfirmDialog` (Meld av: action description, "Avbryt" + "Meld av")
@@ -882,7 +863,10 @@ src/
 │   ├── layout.tsx                  # Root layout (nav, bg, fonts)
 │   ├── login/page.tsx              # Login page
 │   ├── auth/callback/route.ts      # OAuth callback
-│   ├── spots/[id]/page.tsx          # Individual spot detail page (no listing page)
+│   ├── spots/
+│   │   ├── page.tsx                 # Spots listing with cards and filters
+│   │   └── [id]/
+│   │       └── page.tsx             # Individual spot detail page
 │   ├── courses/
 │   │   ├── page.tsx                # Courses single-page
 │   │   └── [id]/chat/page.tsx      # Per-course chat
@@ -896,7 +880,7 @@ src/
 │   ├── auth/                       # LoginButton, UserMenu
 │   ├── courses/                    # CourseCard, EnrollButton, etc.
 │   ├── chat/                       # ChatWindow, MessageBubble
-│   ├── spots/                      # SpotGuideDropdown, WindCompass, SpotDetail
+│   ├── spots/                      # SpotCard, SpotList, SpotFilters, WindCompass, SpotDetail
 │   └── admin/                      # Forms, DataTables
 ├── lib/
 │   ├── db/

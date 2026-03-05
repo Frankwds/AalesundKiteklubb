@@ -467,7 +467,17 @@ end;
 $$;
 ```
 
-After this, `supabase.auth.getUser()` returns the role at `user.app_metadata.user_role` -- no DB query needed. This is enabled in the Supabase Dashboard under Authentication > Hooks.
+After this, every access token issued by Supabase contains `user_role` as a top-level JWT claim. **Important:** this claim is NOT in `user.app_metadata` — it lives in the raw JWT payload. To read it on the JS side, decode the access token from the session:
+
+```typescript
+const { data: { session } } = await supabase.auth.getSession();
+const jwt = JSON.parse(atob(session.access_token.split('.')[1]));
+const role = jwt.user_role; // 'user' | 'instructor' | 'admin'
+```
+
+`supabase.auth.getUser()` returns the user object from the Auth API — it does **not** include custom JWT claims injected by hooks. Always use `getSession()` + token decode for role checks.
+
+This is enabled in the Supabase Dashboard under Authentication > Hooks.
 
 **Trade-off:** When an admin changes a user's role, the JWT updates on next token refresh (~1 hour) or on re-login. For rare admin operations this is acceptable.
 
@@ -531,14 +541,14 @@ Manual configuration in two places:
 **Location:** With `src/` enabled, Next.js middleware lives at `src/middleware.ts` (not at project root). The Supabase session-refresh helper lives at `src/lib/supabase/middleware.ts` and is imported by the main middleware.
 
 - Refreshes Supabase auth session on every request
-- Reads user role directly from the JWT claims (`user.app_metadata.user_role`) -- **no DB query needed**
+- Reads user role by decoding the access token from `supabase.auth.getSession()` (`jwt.user_role`) -- **no DB query needed** (the custom access token hook injects `user_role` as a top-level JWT claim, not in `app_metadata`)
 - Protects `/admin/*` routes (requires `admin` role)
 - Protects `/instructor/*` routes (requires `instructor` or `admin` role)
 - Protects `/courses/*/chat` routes (requires authentication only — enrollment must be enforced at page level; see 5d)
 
 ### 3d. Auth Helpers
 
-- `src/lib/auth/index.ts` -- `getCurrentUser()` helper that calls `supabase.auth.getUser()` and reads the role from JWT claims (`user.app_metadata.user_role`). No database query needed. Used for UI-level decisions (showing admin nav, edit buttons, etc.), but NOT for security -- RLS handles that.
+- `src/lib/auth/index.ts` -- `getCurrentUser()` helper that calls `supabase.auth.getSession()`, decodes the access token JWT, and reads `user_role` from the token payload. No database query needed. Also extracts user info (id, email, etc.) from the same token or from `session.user`. Used for UI-level decisions (showing admin nav, edit buttons, etc.), but NOT for security -- RLS handles that.
 
 ---
 

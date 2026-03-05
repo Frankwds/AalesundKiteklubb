@@ -136,14 +136,16 @@ Install core dependencies:
 # Runtime: Supabase SDK for all data access + Resend for email
 pnpm add @supabase/supabase-js @supabase/ssr resend
 
-# Dev-time only: Drizzle for schema definitions and migrations
-pnpm add -D drizzle-orm drizzle-kit postgres
+# Drizzle for schema definitions and migrations
+# drizzle-orm is a regular dep so schema files under src/ pass type-checking during next build
+pnpm add drizzle-orm
+pnpm add -D drizzle-kit postgres
 
 # UI
 pnpm dlx shadcn@latest init
 ```
 
-Note: `drizzle-orm` and `postgres` are dev dependencies. They are only used by `drizzle-kit` to generate and push migrations. The application runtime never imports Drizzle -- all data access goes through the Supabase SDK.
+Note: `drizzle-orm` is a regular dependency because schema files under `src/` must pass TypeScript type-checking during `next build` (even though no runtime code imports them). It adds zero client bundle weight. `drizzle-kit` and `postgres` remain dev dependencies -- they are only used to generate and push migrations.
 
 Key config files to create:
 

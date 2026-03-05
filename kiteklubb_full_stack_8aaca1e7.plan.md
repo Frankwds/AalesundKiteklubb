@@ -738,6 +738,7 @@ A server-only Supabase client using `SUPABASE_SERVICE_ROLE_KEY` that bypasses RL
 - **Auth callback upsert:** `INSERT ... ON CONFLICT` into `public.users` after `exchangeCodeForSession`. Service role is required because the callback runs before the user's RLS context is fully established, and we need to write to `public.users` regardless of existing policies.
 - **Admin role changes:** Promoting/demoting users (update `users.role`), which RLS restricts to admins but the admin is acting on another user's row.
 - **Admin instructor promote/demote:** Creating/deleting `instructors` rows and updating roles atomically.
+- **publishCourse subscriber fetch:** The instructor's Supabase client has RLS that limits `subscriptions` to their own row. To send notification emails, we need all subscriber emails. Use the service role client for this single query: `adminClient.from('subscriptions').select('email')`.
 
 This key is NEVER exposed to the client. Environment variable: `SUPABASE_SERVICE_ROLE_KEY` (server-only, not `NEXT_PUBLIC_`).
 
@@ -770,7 +771,7 @@ sequenceDiagram
 
 The `publishCourse` Server Action:
 1. Inserts the course (with `spotId`) via Supabase server client (RLS verifies the user is an instructor or admin)
-2. On success, fetches the linked spot data and all subscriber emails from `subscriptions` table
+2. On success, fetches the linked spot data and all subscriber emails. Subscriber list uses the **service role client** (instructor's client is restricted by RLS to their own subscription only)
 3. Sends a batch email via Resend with course details (title, date, description, spot name + link to `/spots/[spotId]`, and a "Meld deg på" enroll link)
 4. Returns the course data + whether the notification was sent successfully
 

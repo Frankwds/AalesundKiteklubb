@@ -494,7 +494,7 @@ In the Supabase dashboard (manual step):
 - Reads user role directly from the JWT claims (`user.app_metadata.user_role`) -- **no DB query needed**
 - Protects `/admin/*` routes (requires `admin` role)
 - Protects `/instructor/*` routes (requires `instructor` or `admin` role)
-- Protects `/courses/*/chat` routes (requires authentication)
+- Protects `/courses/*/chat` routes (requires authentication only — enrollment must be enforced at page level; see 5d)
 
 ### 3d. Auth Helpers
 
@@ -597,7 +597,7 @@ Sections:
 - **Intro kurs** -- what courses are about, who the instructors are, general info text
 - **Scheduled Courses** -- list of course cards from DB. Each card shows course info (title, date, spot name linked to `/spots/[spotId]`, instructor, price). The card has stateful buttons depending on the user's enrollment:
   - **Not logged in:** "Logg inn for å melde på" (links to login)
-  - **Logged in, not enrolled:** "Meld på" button opens a confirmation dialog (description of action, prefilled editable email, "Avbryt" + "Meld på" buttons). On confirm, calls `enroll_in_course` RPC.
+  - **Logged in, not enrolled:** "Meld på" button opens a confirmation dialog (description of action, prefilled editable email, "Avbryt" + "Meld på" buttons). On confirm, calls `enroll_in_course` RPC. **Do not show "Chat"** — only enrolled users see it.
   - **Logged in, enrolled:** "Meld av" button opens a confirmation dialog (description of action, "Avbryt" + "Meld av" buttons). On confirm, deletes from `course_participants`. "Chat" button links to `/courses/[id]/chat`.
   - On successful enrollment, a confirmation email is sent to the user (see section 7)
   - When no courses: semi-grayed placeholder text explaining that courses are posted when conditions look promising and not far in advance, prompting the user to subscribe to get notified. Includes a Subscribe button/link that scrolls to the Subscribe section.
@@ -605,8 +605,8 @@ Sections:
 
 ### 5d. Course Chat (`src/app/courses/[id]/chat/page.tsx`)
 
-- Only visible to enrolled participants (middleware-protected)
-- Accessed via the "Chat" button on the course card in `/courses` (no nav item)
+- **Enrollment-gated access.** Middleware only checks authentication for `/courses/*/chat` — a logged-in user who is not enrolled could otherwise reach the page. Add an explicit **page-level check** before rendering: verify the user is in `course_participants` for that course. If not, redirect to `/courses` or show: "Du må være meldt på kurset for å se chatten."
+- Accessed via the "Chat" button on the course card in `/courses` (no nav item) — only visible on the card when the user is enrolled (see 5c)
 - Append-only message log, newest at bottom
 - Auto-scroll, live updates via **Supabase Realtime** -- client subscribes to `postgres_changes` on the `messages` table filtered by `course_id`. New messages appear instantly without polling.
 - Initial messages loaded server-side; participant user profiles cached client-side to enrich Realtime payloads (which don't include joined data)
@@ -799,7 +799,7 @@ All in `src/components/`, using shadcn/ui as the base:
 
 - **Layout:** `Navbar` (hamburger + full-screen overlay on mobile, horizontal nav on desktop), `Footer`, `ContentCard` (off-white card over panorama BG)
 - **Auth:** `LoginButton`, `UserMenu` (avatar dropdown with role badge)
-- **Courses:** `CourseCard` (stateful: shows "Meld på" / "Meld av" + "Chat" based on enrollment), `CourseList`, `ParticipantList`
+- **Courses:** `CourseCard` (stateful: shows "Meld på" / "Meld av" based on enrollment; "Chat" button **only when enrolled**), `CourseList`, `ParticipantList`
 - **Chat:** `ChatWindow`, `MessageBubble`, `MessageInput`
 - **Spots:** `SpotGuideDropdown` (multi-level nav dropdown), `WindCompass` (visual compass rose), `SpotDetailPage` sections
 - **Admin:** `InstructorForm`, `CourseForm` (with searchable spot dropdown via shadcn `Combobox`), `SpotForm` (with map image upload, compass direction picker, multi-select water type), `DataTable`

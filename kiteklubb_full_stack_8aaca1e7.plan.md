@@ -763,11 +763,11 @@ Server Actions (`"use server"`) for mutations. Each creates a Supabase server cl
 - `src/lib/actions/instructors.ts` -- **Atomic admin actions to keep `users.role` and `instructors` table in sync:**
   - `promoteToInstructor(userId)`: Creates `instructors` profile row (if missing) AND sets `users.role = 'instructor'`.
   - `promoteToAdmin(userId)`: Creates `instructors` profile row (if missing) AND sets `users.role = 'admin'`. Admins always have an instructor profile so they can create courses.
-  - `removeInstructor(userId)` / `demoteToUser(userId)`: Deletes `instructors` row AND resets `users.role = 'user'`.
+  - `demoteToUser(userId)`: Deletes `instructors` row AND resets `users.role = 'user'`. Single action used for both removing an instructor from the Instructors tab and demoting a user in the Brukere tab.
   - `updateInstructorProfile(...)`: Instructor or admin edits their own profile (bio, certs, photo, etc.) -- RLS allows self-update. Photo upload goes to `instructor-photos/{userId}/` bucket, URL stored in `instructors.photoUrl`.
 - `src/lib/actions/messages.ts` -- `supabase.from('messages').insert(...)`
 - `src/lib/actions/subscriptions.ts` -- insert/delete on `subscriptions`. **Email verification logic:** If the submitted email matches the user's Google auth email, insert with `verified = true` (already verified by OAuth). If email differs, insert with `verified = false` + generate a random UUID `verificationToken`, then send a verification email via Resend with a link to `/api/verify-subscription?token=xxx`.
-- `src/lib/actions/spots.ts` -- CRUD on `spots` + upload to `spot-maps` bucket (`{spotId}/{filename}`), store public URL in `mapImageUrl`
+- `src/lib/actions/spots.ts` -- CRUD on `spots` + upload to `spot-maps` bucket (`{spotId}/{filename}`), store public URL in `mapImageUrl`. See Section 2h for new-spot creation flow (create → upload → update) and error handling (rollback on failure).
 - `src/lib/actions/users.ts` -- admin-only role updates (admin uses service role client for this specific operation)
 - `src/lib/actions/auth.ts` -- `signOut()`: calls `supabase.auth.signOut()`, then `redirect('/')`
 
@@ -793,7 +793,7 @@ Each Server Action wraps Supabase calls and logs before returning. No PII in log
 
 Query functions used by Server Components and Server Actions. Each returns typed data from Supabase SDK:
 
-- `src/lib/queries/courses.ts` -- `supabase.from('courses').select('*, instructors(*), spots(*)')`. Public page filters to future courses only (`.gte('date', new Date().toISOString())`). Admin dashboard shows all courses.
+- `src/lib/queries/courses.ts` -- Export two functions: `getCoursesForPublicPage()` (applies `.gte('date', new Date().toISOString())` to show future courses only) and `getCoursesForAdmin()` (returns all courses, no date filter). Both use `supabase.from('courses').select('*, instructors(*), spots(*)')`.
 - `src/lib/queries/instructors.ts` -- `supabase.from('instructors').select('*, users(*)')`
 - `src/lib/queries/messages.ts` -- `supabase.from('messages').select('*, users(name, avatar_url)').eq('course_id', id).order('created_at')`
 - `src/lib/queries/subscriptions.ts` -- check if current user has a subscription row (returns `verified` status for UI). For notification sends, filter to `verified = true` only.

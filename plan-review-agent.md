@@ -49,4 +49,11 @@ Example:
 If you find no issues in a category, omit that category. Return an empty array only if the plan has no improvable items.
 
 Focus on actionable, concrete items. Prefer many specific items over a few vague ones.
+
+## Skipped items (do not re-suggest)
+
+The following improvement IDs were evaluated by the plan-editor and intentionally skipped. Do NOT include them in future improvement outputs:
+
+- **ERR-002**: File structure already correctly shows `middleware.ts` under `src/` (as `└── middleware.ts` in the tree). The structure is correct.
+- **CLAR-002**: Overlay styling (backdrop, animation, z-index, focus trap, escape key) — implementation detail beyond plan scope; current spec ("close via close button") is sufficient.
 ```

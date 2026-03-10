@@ -6,7 +6,7 @@ todos:
     content: Scaffold Next.js 15 project with TypeScript, Tailwind, pnpm. Install Drizzle, Supabase, shadcn/ui dependencies.
     status: pending
   - id: env-config
-    content: Create drizzle.config.ts, .env.local.example, and Supabase client setup files (client.ts, server.ts, middleware.ts).
+    content: Create drizzle.config.ts, .env.local.example, and Supabase client setup files (client.ts, server.ts in lib/supabase/, plus middleware.ts for session refresh in lib/supabase/). The auth-flow todo covers creating src/middleware.ts that imports the Supabase helper.
     status: pending
   - id: db-schema
     content: Define all Drizzle schemas with native pgPolicy RLS (using authenticatedRole, authUid, etc.) for users, instructors, courses, courseParticipants, messages, subscriptions, spots. Generate and apply migrations via drizzle-kit (generate + migrate; push has RLS issues).
@@ -305,7 +305,7 @@ Image uploads use two public buckets. Buckets and `storage.objects` RLS policies
 
 **Upload flow:** Server Actions call `supabase.storage.from(bucket).upload(path, file)`, then `getPublicUrl(path)` to obtain the URL stored in `instructors.photoUrl` or `spots.mapImageUrl`.
 
-**New spot creation with map:** Since the bucket path requires `spotId`, for a new spot: (1) Create the spot row first (without `mapImageUrl`), (2) Upload image to `spot-maps/{newSpotId}/{filename}`, (3) Update the spot with `mapImageUrl`. For edits, use the existing `spotId` directly. **Error handling:** If step 2 or 3 fails (e.g. upload error, network failure), delete the newly created spot row and return an error — do not leave a spot without a map in a partial state. Alternatively, document that partial creation is acceptable and the admin can retry the map upload later via Edit.
+**New spot creation with map:** Since the bucket path requires `spotId`, for a new spot: (1) Create the spot row first (without `mapImageUrl`), (2) Upload image to `spot-maps/{newSpotId}/{filename}`, (3) Update the spot with `mapImageUrl`. For edits, use the existing `spotId` directly. **Error handling:** If step 2 or 3 fails (e.g. upload error, network failure), delete the newly created spot row and return an error to the admin. Do not leave a spot without a map in a partial state.
 
 
 ### RLS Policies (native Drizzle `pgPolicy` -- defined alongside tables)
@@ -751,6 +751,8 @@ All data access uses the Supabase SDK. **Supabase SDK uses snake_case for column
 
 Server Actions (`"use server"`) for mutations. Each creates a Supabase server client, calls SDK methods, and logs success/failure via `src/lib/logger.ts`.
 
+**Return convention:** For user-facing mutations (enroll, subscribe, unenroll, etc.), return `{ success: boolean; error?: string }` so the client can show appropriate toasts. For create/update actions (e.g. `publishCourse`), return the entity on success plus optional metadata (e.g. `notificationSent`); on failure, return `{ success: false, error }` or throw.
+
 - `src/lib/actions/courses.ts` -- `supabase.from('courses').insert(...)`, `.update(...)`, `.delete(...)`; enrollment via `supabase.rpc('enroll_in_course', { p_course_id })` (atomic capacity check, no overbooking); unenrollment via `supabase.from('course_participants').delete().match({ user_id, course_id })` (RLS allows own deletion). On successful enrollment, sends a confirmation email to the user (see section 7). The `publishCourse` action looks up the instructor ID via `supabase.from('instructors').select('id').eq('user_id', currentUserId).single()` before inserting the course (not from the form) and sends notification emails to all subscribers in one server-side request.
 - `src/lib/actions/instructors.ts` -- **Atomic admin actions to keep `users.role` and `instructors` table in sync:**
   - `promoteToInstructor(userId)`: Creates `instructors` profile row (if missing) AND sets `users.role = 'instructor'`.
@@ -824,7 +826,7 @@ A server-only Supabase client using `SUPABASE_SERVICE_ROLE_KEY` that bypasses RL
 - **Admin role changes:** Promoting/demoting users (update `users.role`). Service role is used to avoid edge cases with JWT/RLS evaluation when the admin acts on another user's row, and to ensure the operation succeeds regardless of RLS.
 - **Admin instructor promote/demote:** Creating/deleting `instructors` rows and updating roles atomically.
 - **publishCourse subscriber fetch:** The instructor's Supabase client has RLS that limits `subscriptions` to their own row. To send notification emails, we need all subscriber emails. Use the service role client for this single query: `adminClient.from('subscriptions').select('email').eq('verified', true)` — only verified emails receive notifications.
-- **Subscription email verification:** `src/app/api/verify-subscription/route.ts` — GET handler that reads `token` from search params, looks up the subscription by `verificationToken` using the service role client, sets `verified = true` and clears the token, then redirects to `/courses?verified=true` (the courses page can show a success toast based on the query param). Service role needed because the request is unauthenticated (user clicking an email link).
+- **Subscription email verification:** `src/app/api/verify-subscription/route.ts` — GET handler that reads `token` from search params, looks up the subscription by `verificationToken` using the service role client. If valid: sets `verified = true` and clears the token, then redirects to `/courses?verified=true` (the courses page can show a success toast based on the query param). If token is invalid or already used, redirect to `/courses?error=invalid_token`; optionally show an error toast on the courses page when this param is present. Service role needed because the request is unauthenticated (user clicking an email link).
 
 This key is NEVER exposed to the client. Environment variable: `SUPABASE_SERVICE_ROLE_KEY` (server-only, not `NEXT_PUBLIC_`).
 
@@ -913,7 +915,7 @@ All in `src/components/`, using shadcn/ui as the base:
   - Course save: `toast.success('Kurs lagret')`
   - Subscription: `toast.success('Du vil få varsler om nye kurs')`
   - Chat error: `toast.error('Kunne ikke sende melding')`
-- Server actions return `{ success: boolean; error?: string }` so the calling client component can show the appropriate toast
+- Server actions follow the return convention in Section 6: user-facing mutations return `{ success: boolean; error?: string }`; create/update actions may return the entity plus metadata on success
 
 ---
 
@@ -1015,7 +1017,7 @@ supabase/
 
 ### Migration Workflow
 
-**Prerequisites:** See Manual Setup Steps — in particular, run `supabase link` before `supabase db push`.
+**Prerequisites:** See Manual Setup Steps — in particular, run `supabase link` before `supabase db push`. For a new project, run `supabase init` to create the `supabase/` directory and config; then add migration files to `supabase/migrations/`.
 
 Migration numbers **0001–0005** refer to `supabase/migrations/` (custom SQL only). Drizzle migrations in `drizzle/` use their own numbering (e.g. `0000_*`, `0001_*`). Two systems, run in order:
 
@@ -1028,6 +1030,8 @@ Migration numbers **0001–0005** refer to `supabase/migrations/` (custom SQL on
 - Triggers, auth hooks, Realtime publication, RPC functions, storage buckets.  
 - Stored in `supabase/migrations/` and applied with `supabase db push` (Supabase CLI).  
 - Run second, after schema is applied.
+
+**Initial setup sequence:** (1) Manual Setup steps 1–5: project, OAuth, Resend, env vars. (2) Run Drizzle generate + migrate. (3) Manual Setup step 6: `supabase link`. (4) Run `supabase db push`. (5) Manual Setup step 7: configure Auth Hook in Dashboard. (6) Manual Setup step 8: Vercel when deploying.
 
 **Run order (initial setup or schema change):**
 
@@ -1058,7 +1062,9 @@ pnpm db:types         # 4. Regenerate types
 
 Steps that must be completed manually in external dashboards and consoles before or during deployment:
 
-1. **Supabase project** – Create a hosted Supabase project (supabase.com). Note the project URL, anon key, service role key, and direct Postgres connection string.
+**Prerequisites:** Install Supabase CLI — `pnpm add -D supabase` or `npm install -g supabase`. Required for `supabase link`, `supabase db push`, and `supabase gen types` (used by `db:types` script).
+
+1. **Supabase project** – Create a hosted Supabase project (supabase.com). Note the project URL, anon key, service role key, and direct Postgres connection string. Find the connection string in Supabase Dashboard > Project Settings > Database, under Connection string. Use the URI format with port 5432 (direct connection, not transaction pooler).
 
 2. **Supabase Auth – Google OAuth (Supabase Dashboard)** – Authentication > Providers > Google:
    - Enable the Google OAuth provider

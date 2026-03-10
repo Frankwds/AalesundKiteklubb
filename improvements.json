@@ -1,1 +1,73 @@
-[]
+[
+  {
+    "id": "MISS-001",
+    "category": "missing_info",
+    "location": "Migration Workflow, Manual Setup",
+    "description": "The plan requires `supabase link` and `supabase db push` but never mentions installing the Supabase CLI. The `db:types` script also uses `supabase gen types`.",
+    "suggestion": "Add to Manual Setup (e.g. as step 0 or in Prerequisites): 'Install Supabase CLI: pnpm add -D supabase, or npm install -g supabase. Required for supabase link, supabase db push, and supabase gen types.'",
+    "confidence": "high"
+  },
+  {
+    "id": "MISS-002",
+    "category": "missing_info",
+    "location": "Manual Setup step 1",
+    "description": "Step 1 tells the user to note the 'direct Postgres connection string' but does not specify where to find it in the Supabase Dashboard.",
+    "suggestion": "Add: 'Find it in Supabase Dashboard > Project Settings > Database, under Connection string. Use the URI format with port 5432 (direct connection, not transaction pooler).'",
+    "confidence": "high"
+  },
+  {
+    "id": "MISS-003",
+    "category": "missing_info",
+    "location": "Migration Workflow, File Structure",
+    "description": "The file structure shows supabase/migrations/ but does not explain how to create the supabase/ directory. For a new project, supabase init is typically needed.",
+    "suggestion": "Add to Migration Workflow or Manual Setup: 'For a new project, run supabase init to create the supabase/ directory and config. Then add migration files to supabase/migrations/.'",
+    "confidence": "medium"
+  },
+  {
+    "id": "AMBIG-001",
+    "category": "ambiguous",
+    "location": "Section 2h, New spot creation with map (line ~279)",
+    "description": "Two conflicting approaches are proposed: (1) delete the spot on upload failure and return an error, vs (2) allow partial creation and let admin retry map upload later. The plan does not specify which to implement.",
+    "suggestion": "Choose one approach explicitly. Recommend: 'On failure in step 2 or 3, delete the newly created spot row and return an error to the admin. Do not leave a spot without a map in a partial state.'",
+    "confidence": "high"
+  },
+  {
+    "id": "INCONSIST-001",
+    "category": "inconsistency",
+    "location": "Section 8 Toast UI vs Section 6/7 publishCourse, enrollInCourse",
+    "description": "Section 8 states 'Server actions return { success: boolean; error?: string }' for toast handling, but publishCourse returns { course, notificationSent: boolean } and enrollment/other actions may return different shapes.",
+    "suggestion": "Clarify the return convention: 'For user-facing mutations (enroll, subscribe, etc.), return { success, error? }. For create/update actions (publishCourse), return the entity on success plus optional metadata (e.g. notificationSent); on failure, return { success: false, error } or throw.'",
+    "confidence": "high"
+  },
+  {
+    "id": "CLAR-001",
+    "category": "clarity",
+    "location": "Todos frontmatter, env-config todo",
+    "description": "The env-config todo lists 'middleware.ts' as a Supabase client setup file. The plan has both src/middleware.ts (Next.js) and src/lib/supabase/middleware.ts (session refresh helper); it is unclear which the todo refers to.",
+    "suggestion": "Clarify the env-config todo: 'Create ... and Supabase client setup files (client.ts, server.ts in lib/supabase/, plus middleware.ts for session refresh in lib/supabase/).' The auth-flow todo covers creating src/middleware.ts that imports the Supabase helper.",
+    "confidence": "medium"
+  },
+  {
+    "id": "STRUCT-001",
+    "category": "structural",
+    "location": "Migration Workflow, Manual Setup Steps",
+    "description": "The Migration Workflow references Manual Setup steps 6–7 but does not integrate them into a clear sequence. A new implementer may run db commands before completing prerequisites (OAuth, env vars, supabase link).",
+    "suggestion": "Add a short 'Initial setup sequence' before the run order: '(1) Manual Setup steps 1–5: project, OAuth, Resend, env vars. (2) Run Drizzle generate + migrate. (3) Manual Setup step 6: supabase link. (4) Run supabase db push. (5) Manual Setup step 7: configure Auth Hook in Dashboard. (6) Manual Setup step 8: Vercel when deploying.'",
+    "confidence": "medium"
+  },
+  {
+    "id": "MISS-004",
+    "category": "missing_info",
+    "location": "Section 6, verify-subscription API route",
+    "description": "The plan describes the success path (token valid → set verified, redirect to /courses?verified=true) but not the failure path when the token is invalid or already used.",
+    "suggestion": "Add: 'If token is invalid or already used, redirect to /courses?error=invalid_token. Optionally show an error toast on the courses page when this param is present.'",
+    "confidence": "medium"
+  },
+  {
+    "id": "_planEditorSummary",
+    "applied": 8,
+    "skipped": 0,
+    "modified": 0,
+    "notes": "All 8 items applied. MISS-001: Supabase CLI in Prerequisites. MISS-002: Connection string location. MISS-003: supabase init. AMBIG-001: Delete-on-failure for spot creation. INCONSIST-001: Return convention. CLAR-001: env-config todo. STRUCT-001: Initial setup sequence. MISS-004: verify-subscription failure path."
+  }
+]

@@ -6,7 +6,7 @@ todos:
     content: Scaffold Next.js 15 project with TypeScript, Tailwind, pnpm. Install Drizzle, Supabase, shadcn/ui dependencies.
     status: pending
   - id: env-config
-    content: Create drizzle.config.ts, .env.local.example, and Supabase client setup files (client.ts, server.ts in lib/supabase/, plus middleware.ts for session refresh in lib/supabase/). The auth-flow todo covers creating src/middleware.ts that imports the Supabase helper.
+    content: Create drizzle.config.ts, .env.local.example, and Supabase client setup files (client.ts, server.ts, and lib/supabase/middleware.ts for session refresh — all in lib/supabase/). The auth-flow todo covers creating src/middleware.ts that imports this helper.
     status: pending
   - id: db-schema
     content: Define all Drizzle schemas with native pgPolicy RLS (using authenticatedRole, authUid, etc.) for users, instructors, courses, courseParticipants, messages, subscriptions, spots. Generate and apply migrations via drizzle-kit (generate + migrate; push has RLS issues).
@@ -301,7 +301,48 @@ Image uploads use two public buckets. Buckets and `storage.objects` RLS policies
   - INSERT: Authenticated with role instructor or admin, and `(storage.foldername(name))[1] = auth.uid()::text`
   - UPDATE/DELETE: Same path constraint (own folder only)
 
-**Migration `0005`** creates the buckets via `INSERT INTO storage.buckets` (id, name, public, file_size_limit, allowed_mime_types) and adds the `storage.objects` RLS policies above. Both buckets are public (served via CDN). Recommend 5MB limit for spot-maps, 2MB for instructor-photos; allow jpeg, png, webp.
+**Migration `0005`** creates the buckets and RLS policies. Full SQL:
+
+```sql
+-- Create buckets (5MB for spot-maps, 2MB for instructor-photos; jpeg, png, webp)
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types) VALUES
+  ('spot-maps', 'spot-maps', true, 5242880, ARRAY['image/jpeg','image/png','image/webp']),
+  ('instructor-photos', 'instructor-photos', true, 2097152, ARRAY['image/jpeg','image/png','image/webp']);
+
+-- spot-maps: public read; admin-only write
+CREATE POLICY "spot-maps public read" ON storage.objects
+  FOR SELECT TO public USING (bucket_id = 'spot-maps');
+CREATE POLICY "spot-maps admin write" ON storage.objects
+  FOR ALL TO authenticated USING (
+    bucket_id = 'spot-maps' AND
+    (current_setting('request.jwt.claims', true)::jsonb)->>'user_role' = 'admin'
+  )
+  WITH CHECK (
+    bucket_id = 'spot-maps' AND
+    (current_setting('request.jwt.claims', true)::jsonb)->>'user_role' = 'admin'
+  );
+
+-- instructor-photos: public read; instructor/admin upload to own folder; update/delete own folder only
+CREATE POLICY "instructor-photos public read" ON storage.objects
+  FOR SELECT TO public USING (bucket_id = 'instructor-photos');
+CREATE POLICY "instructor-photos authenticated upload" ON storage.objects
+  FOR INSERT TO authenticated WITH CHECK (
+    bucket_id = 'instructor-photos' AND
+    (current_setting('request.jwt.claims', true)::jsonb)->>'user_role' IN ('instructor','admin') AND
+    (storage.foldername(name))[1] = auth.uid()::text
+  );
+CREATE POLICY "instructor-photos own folder update delete" ON storage.objects
+  FOR UPDATE TO authenticated USING (
+    bucket_id = 'instructor-photos' AND (storage.foldername(name))[1] = auth.uid()::text
+  )
+  WITH CHECK (
+    bucket_id = 'instructor-photos' AND (storage.foldername(name))[1] = auth.uid()::text
+  );
+CREATE POLICY "instructor-photos own folder delete" ON storage.objects
+  FOR DELETE TO authenticated USING (
+    bucket_id = 'instructor-photos' AND (storage.foldername(name))[1] = auth.uid()::text
+  );
+```
 
 **Upload flow:** Server Actions call `supabase.storage.from(bucket).upload(path, file)`, then `getPublicUrl(path)` to obtain the URL stored in `instructors.photoUrl` or `spots.mapImageUrl`.
 
@@ -532,6 +573,16 @@ const role = jwt.user_role; // 'user' | 'instructor' | 'admin'
 In Supabase Dashboard > Authentication > Hooks, add a Custom Access Token hook and configure it to invoke `public.custom_access_token_hook` (the function is created by migration 0002). See Manual Setup step 7.
 
 **Trade-off:** When an admin changes a user's role, the JWT updates on next token refresh (~1 hour) or on re-login. For rare admin operations this is acceptable.
+
+### Realtime Publication (migration 0003)
+
+Add the `messages` table to the Supabase Realtime publication so the course chat receives live inserts:
+
+```sql
+ALTER PUBLICATION supabase_realtime ADD TABLE public.messages;
+```
+
+**Note:** The publication name `supabase_realtime` is the default for hosted Supabase projects. If your project uses a different publication, verify in Supabase Dashboard > Database > Replication.
 
 ### Atomic Enrollment Function (RPC)
 
@@ -793,7 +844,7 @@ Each Server Action wraps Supabase calls and logs before returning. No PII in log
 
 Query functions used by Server Components and Server Actions. Each returns typed data from Supabase SDK:
 
-- `src/lib/queries/courses.ts` -- Export two functions: `getCoursesForPublicPage()` (applies `.gte('date', new Date().toISOString())` to show future courses only) and `getCoursesForAdmin()` (returns all courses, no date filter). Both use `supabase.from('courses').select('*, instructors(*), spots(*)')`.
+- `src/lib/queries/courses.ts` -- Export three functions: `getCoursesForPublicPage()`, `getCoursesForAdmin()`, and `getCoursesForInstructor()`. `getCoursesForPublicPage()` applies `.gte('date', new Date().toISOString())` to show future courses only; store course dates in UTC in the DB and ensure the date filter accounts for timezone (e.g. for Europe/Oslo, a course at 18:00 local on day D should not be excluded by a UTC comparison earlier that same day — compare against start-of-day in the course's display timezone or use a timezone-aware cutoff). `getCoursesForAdmin()` returns all courses, no date filter. `getCoursesForInstructor()` uses `supabase.from('courses').select('*, instructors(*), spots(*)').order('date')`; RLS on `courses` automatically restricts results to the instructor's own courses when using the server client with their session. All three use the same select shape.
 - `src/lib/queries/instructors.ts` -- `supabase.from('instructors').select('*, users(*)')`
 - `src/lib/queries/messages.ts` -- `supabase.from('messages').select('*, users(name, avatar_url)').eq('course_id', id).order('created_at')`
 - `src/lib/queries/subscriptions.ts` -- check if current user has a subscription row (returns `verified` status for UI). For notification sends, filter to `verified = true` only.
@@ -832,7 +883,7 @@ A server-only Supabase client using `SUPABASE_SERVICE_ROLE_KEY` that bypasses RL
 - **Admin role changes:** Promoting/demoting users (update `users.role`). Service role is used to avoid edge cases with JWT/RLS evaluation when the admin acts on another user's row, and to ensure the operation succeeds regardless of RLS.
 - **Admin instructor promote/demote:** Creating/deleting `instructors` rows and updating roles atomically.
 - **publishCourse subscriber fetch:** The instructor's Supabase client has RLS that limits `subscriptions` to their own row. To send notification emails, we need all subscriber emails. Use the service role client for this single query: `adminClient.from('subscriptions').select('email').eq('verified', true)` — only verified emails receive notifications.
-- **Subscription email verification:** `src/app/api/verify-subscription/route.ts` — GET handler that reads `token` from search params, looks up the subscription by `verificationToken` using the service role client. If valid: sets `verified = true` and clears the token, then redirects to `/courses?verified=true` (the courses page can show a success toast based on the query param). If token is invalid or already used, redirect to `/courses?error=invalid_token`; optionally show an error toast on the courses page when this param is present. Service role needed because the request is unauthenticated (user clicking an email link).
+- **Subscription email verification:** `src/app/api/verify-subscription/route.ts` — GET handler that reads `token` from search params, looks up the subscription by `verificationToken` using the service role client. If valid: sets `verified = true` and clears the token, then redirects to `/courses?verified=true` (the courses page can show a success toast based on the query param). If token is invalid or already used, redirect to `/courses?error=invalid_token`; the courses page reads the error query param and shows a toast when `error=invalid_token`. Service role needed because the request is unauthenticated (user clicking an email link).
 
 This key is NEVER exposed to the client. Environment variable: `SUPABASE_SERVICE_ROLE_KEY` (server-only, not `NEXT_PUBLIC_`).
 

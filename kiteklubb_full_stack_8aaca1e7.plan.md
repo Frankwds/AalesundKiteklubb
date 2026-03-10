@@ -427,7 +427,7 @@ Every policy below MUST be implemented as a `pgPolicy` in the corresponding Driz
 2. `"Co-participants can read profile fields"` — SELECT, `authenticatedRole`, using: EXISTS subquery on `course_participants` (see Chat-related RLS section below for SQL)
 3. `"Admin full access"` — ALL, `authenticatedRole`, using/withCheck: `isAdmin`
 
-**Note:** INSERT is handled by DB trigger; UPDATE/DELETE by admins uses service role.
+**Note:** INSERT is handled by DB trigger; UPDATE/DELETE by admins via RPC (promote_to_instructor, etc.) using the admin's server client. Service role is not used for users table.
 
 **Instructors table** (`src/lib/db/schema/instructors.ts`) — 4 policies:
 

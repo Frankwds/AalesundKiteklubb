@@ -869,7 +869,7 @@ Server Actions (`"use server"`) for mutations. Each creates a Supabase server cl
 - `src/lib/actions/messages.ts` -- `supabase.from('messages').insert(...)`
 - `src/lib/actions/subscriptions.ts` -- insert/delete on `subscriptions`. **Email verification logic:** If the submitted email matches the user's Google auth email, insert with `verified = true` (already verified by OAuth). If email differs, insert with `verified = false` + generate a random UUID `verificationToken`, then send a verification email via Resend with a link to `/api/verify-subscription?token=xxx`.
 - `src/lib/actions/spots.ts` -- CRUD on `spots` + upload to `spot-maps` bucket (`{spotId}/{filename}`), store public URL in `mapImageUrl`. See Section 2h for new-spot creation flow (create → upload → update) and error handling (rollback on failure).
-- `src/lib/actions/users.ts` -- admin-only role updates (admin uses service role client for this specific operation)
+- `src/lib/actions/users.ts` -- re-exports or delegates to `instructors.ts` RPC actions (`promoteToInstructor`, `promoteToAdmin`, `demoteToUser`) for role changes in Brukere tab and Instruktører tab. Role changes must use these RPCs to keep `users.role` and `instructors` in sync atomically; direct service-role update of `users.role` would skip instructor row create/delete.
 - `src/lib/actions/auth.ts` -- `signOut()`: calls `supabase.auth.signOut()`, then `redirect('/')`
 
 No application-level authorization checks needed -- RLS handles it. If a non-admin tries to insert an instructor, Postgres returns an error.
@@ -936,8 +936,7 @@ RLS applies to Realtime events -- users only receive inserts for courses they're
 A server-only Supabase client using `SUPABASE_SERVICE_ROLE_KEY` that bypasses RLS. Used ONLY for:
 
 - **Auth callback upsert:** `INSERT ... ON CONFLICT` into `public.users` after `exchangeCodeForSession`. Service role is required because the callback runs before the user's RLS context is fully established, and we need to write to `public.users` regardless of existing policies.
-- **Admin role changes:** Promoting/demoting users (update `users.role`). Service role is used to avoid edge cases with JWT/RLS evaluation when the admin acts on another user's row, and to ensure the operation succeeds regardless of RLS.
-- **Admin instructor promote/demote:** Invoked via Postgres RPC functions (`promote_to_instructor`, `promote_to_admin`, `demote_to_user`) — admin's server client calls these RPCs; the RPCs perform both `instructors` and `users.role` updates atomically in Postgres.
+- **Admin role changes (promote/demote):** Must use Postgres RPC functions (`promote_to_instructor`, `promote_to_admin`, `demote_to_user`) via the admin's server client — never direct `users.role` update. The RPCs perform both `instructors` and `users.role` updates atomically in Postgres; direct service-role update would skip instructor sync and cause inconsistent state.
 - **publishCourse subscriber fetch:** The instructor's Supabase client has RLS that limits `subscriptions` to their own row. To send notification emails, we need all subscriber emails. Use the service role client for this single query: `adminClient.from('subscriptions').select('email').eq('verified', true)` — only verified emails receive notifications.
 - **Subscription email verification:** `src/app/api/verify-subscription/route.ts` — GET handler that reads `token` from search params, looks up the subscription by `verificationToken` using the service role client. If valid: sets `verified = true` and clears the token, then redirects to `/courses?verified=true` (the courses page can show a success toast based on the query param). If token is invalid or already used, redirect to `/courses?error=invalid_token`; the courses page reads the error query param and shows a toast when `error=invalid_token`. Service role needed because the request is unauthenticated (user clicking an email link).
 
@@ -1152,7 +1151,7 @@ supabase/
 | 9 | Manual: Configure Auth Hook in Supabase Dashboard |
 | 10 | Manual: Deploy to Vercel (connect repo, set env vars) |
 
-Migration numbers **0001–0005** refer to `supabase/migrations/` (custom SQL only). Drizzle migrations in `drizzle/` use their own numbering (e.g. `0000_*`, `0001_*`). Two systems, run in order:
+Migration numbers **0001–0006** refer to `supabase/migrations/` (custom SQL only). Drizzle migrations in `drizzle/` use their own numbering (e.g. `0000_*`, `0001_*`). Two systems, run in order:
 
 **1. Drizzle (schema + RLS)** — tables and `pgPolicy` from TypeScript schema  
 - **`drizzle-kit generate`** writes migration SQL to `./drizzle/` including RLS policies.  

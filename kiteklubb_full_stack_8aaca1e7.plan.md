@@ -9,7 +9,7 @@ todos:
     content: Create drizzle.config.ts, .env.local.example, and Supabase client setup files (client.ts, server.ts, middleware.ts).
     status: pending
   - id: db-schema
-    content: Define all Drizzle schemas with native pgPolicy RLS (using authenticatedRole, authUid, etc.) for users, instructors, courses, courseParticipants, messages, subscriptions, spots. Push with drizzle-kit.
+    content: Define all Drizzle schemas with native pgPolicy RLS (using authenticatedRole, authUid, etc.) for users, instructors, courses, courseParticipants, messages, subscriptions, spots. Generate and apply migrations via drizzle-kit (generate + migrate; push has RLS issues).
     status: pending
   - id: auth-flow
     content: "Implement Supabase Auth with Google OAuth: callback route, user sync/upsert, middleware for session refresh and route protection, auth helper functions."
@@ -60,7 +60,7 @@ isProject: false
 
 **Drizzle vs Supabase SDK -- separation of concerns:**
 
-- **Drizzle** is a build/dev-time tool. It defines table schemas AND RLS policies in TypeScript using native `pgPolicy`, `authenticatedRole`, `authUid` from `drizzle-orm/supabase`. `drizzle-kit generate` produces the SQL migrations including `CREATE POLICY` statements. It connects to Postgres directly via `DATABASE_URL` only during `drizzle-kit push`/`drizzle-kit migrate`.
+- **Drizzle** is a build/dev-time tool. It defines table schemas AND RLS policies in TypeScript using native `pgPolicy`, `authenticatedRole`, `authUid` from `drizzle-orm/supabase`. `drizzle-kit generate` produces the SQL migrations including `CREATE POLICY` statements. It connects to Postgres directly via `DATABASE_URL` during `drizzle-kit migrate` (use migrate, not push — push has known RLS policy issues).
 - **Supabase SDK** is the runtime data access layer. All queries (select, insert, update, delete) from both server and client components go through the Supabase client. This ensures RLS policies are enforced automatically, since the Supabase client passes the user's JWT to Postgres.
 
 ---
@@ -71,7 +71,7 @@ isProject: false
 graph TB
   subgraph buildTime [Build/Dev Time]
     DrizzleSchema[Drizzle Schema Definitions]
-    DrizzleKit[drizzle-kit push/migrate]
+    DrizzleKit[drizzle-kit generate/migrate]
     RLSPolicies[RLS Policy Definitions]
   end
 
@@ -145,11 +145,11 @@ pnpm add -D drizzle-kit postgres
 pnpm dlx shadcn@latest init
 ```
 
-Note: `drizzle-orm` is a regular dependency because schema files under `src/` must pass TypeScript type-checking during `next build` (even though no runtime code imports them). It adds zero client bundle weight. `drizzle-kit` and `postgres` remain dev dependencies -- they are only used to generate and push migrations.
+Note: `drizzle-orm` is a regular dependency because schema files under `src/` must pass TypeScript type-checking during `next build` (even though no runtime code imports them). It adds zero client bundle weight. `drizzle-kit` and `postgres` remain dev dependencies — they are only used to generate and apply migrations.
 
 Key config files to create:
 
-- `drizzle.config.ts` -- Drizzle Kit config. `schema`: `./src/lib/db/schema`. `out`: `./drizzle` (Drizzle's migration output; we use `push` for schema, so this is for `generate` only). `dbCredentials.url`: `DATABASE_URL`.
+- `drizzle.config.ts` -- Drizzle Kit config. `schema`: `./src/lib/db/schema`. `out`: `./drizzle` (Drizzle's migration output). `dbCredentials.url`: `DATABASE_URL`.
 - `src/lib/db/schema/` -- Drizzle schema files (used by drizzle-kit, not imported at runtime)
 - `src/lib/supabase/client.ts` -- Browser Supabase client (createBrowserClient)
 - `src/lib/supabase/server.ts` -- Server Supabase client (createServerClient with cookies). **Next.js 15 breaking change:** `cookies()` is now async -- `createClient()` must be an `async` function that `await`s `cookies()` before passing them to `createServerClient`.
@@ -211,7 +211,7 @@ Synced from Supabase Auth on first login via auth callback.
 | id              | uuid PK       |                                       |
 | title           | text NOT NULL |                                       |
 | description     | text          |                                       |
-| price           | integer       | In NOK ( 500 kr)                      |
+| price           | integer       | In NOK (e.g. 500 kr)                  |
 | date            | timestamp     |                                       |
 | maxParticipants | integer       | nullable = unlimited                  |
 | instructorId    | uuid FK       | -> instructors.id, nullable, ON DELETE SET NULL |
@@ -303,6 +303,8 @@ Image uploads use two public buckets. Buckets and `storage.objects` RLS policies
 **Migration `0005`** creates the buckets via `INSERT INTO storage.buckets` (id, name, public, file_size_limit, allowed_mime_types) and adds the `storage.objects` RLS policies above. Both buckets are public (served via CDN). Recommend 5MB limit for spot-maps, 2MB for instructor-photos; allow jpeg, png, webp.
 
 **Upload flow:** Server Actions call `supabase.storage.from(bucket).upload(path, file)`, then `getPublicUrl(path)` to obtain the URL stored in `instructors.photoUrl` or `spots.mapImageUrl`.
+
+**New spot creation with map:** Since the bucket path requires `spotId`, for a new spot: (1) Create the spot row first (without `mapImageUrl`), (2) Upload image to `spot-maps/{newSpotId}/{filename}`, (3) Update the spot with `mapImageUrl`. For edits, use the existing `spotId` directly.
 
 
 ### RLS Policies (native Drizzle `pgPolicy` -- defined alongside tables)
@@ -464,7 +466,28 @@ pgPolicy("Participants can see co-participants in same course", {
 
 ### Supabase DB Trigger for User Sync
 
-A Postgres trigger function on `auth.users` (AFTER INSERT) automatically creates a row in `public.users` with `role = 'user'`. This is defined in migration `0001`.
+A Postgres trigger function on `auth.users` (AFTER INSERT) automatically creates a row in `public.users` with `role = 'user'`. Migration `0001` contains:
+
+```sql
+create or replace function public.handle_new_user()
+returns trigger language plpgsql security definer as $$
+begin
+  insert into public.users (id, email, name, avatar_url, role)
+  values (
+    new.id,
+    new.email,
+    new.raw_user_meta_data->>'full_name',
+    new.raw_user_meta_data->>'avatar_url',
+    'user'
+  );
+  return new;
+end;
+$$;
+
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+```
 
 **Timing:** The trigger runs synchronously in the same transaction as the `auth.users` insert. When Supabase commits the new user, both `auth.users` and `public.users` exist. The redirect to our callback happens after that commit, so when our callback runs, the trigger has already completed.
 
@@ -553,7 +576,7 @@ Manual configuration in two places:
 ### 3b. Auth Callback Route (`src/app/auth/callback/route.ts`)
 
 1. Exchange the OAuth code for a session via `supabase.auth.exchangeCodeForSession(code)`.
-2. **Upsert into `public.users`** using the service role client: `INSERT ... ON CONFLICT (id) DO UPDATE SET email=..., name=..., avatar_url=...`. Do NOT overwrite `role` on conflict (admin-managed).
+2. **Upsert into `public.users`** using the service role client: `INSERT ... ON CONFLICT (id) DO UPDATE SET email=..., name=..., avatar_url=...`. Do NOT overwrite `role` on conflict (admin-managed). **Note:** Drizzle schemas use camelCase (mapped to snake_case in Postgres). Use snake_case for all raw SQL and Supabase SDK column names (e.g. `avatar_url`, not `avatarUrl`).
 3. Redirect to `/`.
 
 **Why upsert in the callback?** The trigger creates the row first (same transaction as `auth.users`), so normally the row already exists when the callback runs. The callback upsert is a safety net: if the trigger failed, if the user was created outside our flow, or if there's any edge case, the callback ensures `public.users` has the row. It also refreshes `email`/`name`/`avatar_url` from the latest Google profile on every login. Idempotent — no race: upsert handles both "row missing" and "row exists" correctly.
@@ -623,7 +646,7 @@ Design: Off-white content card floating over the panorama background. Shades of 
 Spots are accessed via a direct nav link to `/spots`. One nav item "Spotter" links to the listing page.
 
 **Layout:**
-- **Filters:** Placed in a drawer at the top of the page (same on mobile and desktop). Season (SommerSpotter / VinterSpotter), Area (e.g. Giske, Ålesund), Wind direction (N, NE, E, SE, S, SW, W, NW — multi-select). Filters are applied client-side or via URL params for shareable links. Drawer can be collapsed/expanded.
+- **Filters:** Placed in a drawer at the top of the page (same on mobile and desktop). Season (SommerSpotter / VinterSpotter), Area (e.g. Giske, Ålesund), Wind direction (N, NE, E, SE, S, SW, W, NW — multi-select). Filters sync to URL params (e.g. `?season=summer&area=Giske`); initial render reads params and filters client-side. Shareable links use URL params. Drawer can be collapsed/expanded.
 - **Spot cards:** Grid of cards below the filter drawer, each showing spot name, area, season badge, skill level, wind compass (or favorable wind badges). Tap/click navigates to `/spots/[id]`.
 - **Empty state:** If no spots match filters, show clear message and option to clear filters.
 
@@ -648,12 +671,12 @@ All content is CMS-managed by admins.
 Sections:
 
 - **Intro kurs** -- what courses are about, who the instructors are, general info text
-- **Scheduled Courses** -- list of course cards from DB. Each card shows course info (title, date, spot name linked to `/spots/[spotId]`, instructor, price). The card has stateful buttons depending on the user's enrollment:
+- **Scheduled Courses** -- list of course cards from DB. Each card shows course info (title, date, spot name linked to `/spots/[spotId]` when present — when `spotId` is null, show "TBD" or "Ikke bestemt" and omit the link — instructor, price). The card has stateful buttons depending on the user's enrollment:
   - **Not logged in:** "Logg inn for å melde på" (links to login)
-  - **Logged in, not enrolled:** "Meld på" button opens a confirmation dialog (description of action, prefilled editable email, "Avbryt" + "Meld på" buttons). On confirm, calls `enroll_in_course` RPC. **Do not show "Chat"** — only enrolled users see it.
+  - **Logged in, not enrolled:** "Meld på" button opens a confirmation dialog (description of action, prefilled email field showing where confirmation will be sent — read from auth, display-only — "Avbryt" + "Meld på" buttons). On confirm, calls `enroll_in_course` RPC. Confirmation email is sent to the user's auth email. **Do not show "Chat"** — only enrolled users see it.
   - **Logged in, enrolled:** "Meld av" button opens a confirmation dialog (description of action, "Avbryt" + "Meld av" buttons). On confirm, deletes from `course_participants`. "Chat" button links to `/courses/[id]/chat`.
   - On successful enrollment, a confirmation email is sent to the user (see section 7)
-  - When no courses: semi-grayed placeholder text explaining that courses are posted when conditions look promising and not far in advance, prompting the user to subscribe to get notified. Includes a Subscribe button/link that scrolls to the Subscribe section.
+  - When no courses: semi-grayed placeholder text, e.g. "Kurs legges ut når forholdene ser lovende ut, ikke langt i forkant. Meld deg på for å få varsler." plus Subscribe button/link that scrolls to the Subscribe section.
 - **Subscribe** -- requires login. Clicking Subscribe opens a confirmation dialog with: description of the action (e.g. receive email when new courses are published), prefilled editable email field, "Avbryt" (cancel) and "Meld på" (confirm) buttons. On confirm, stores in subscriptions table. If already subscribed, "Meld av" opens a confirmation dialog (description, "Avbryt" + "Meld av"); on confirm, removes from subscriptions.
 
 ### 5d. Course Chat (`src/app/courses/[id]/chat/page.tsx`)
@@ -717,7 +740,7 @@ Protected by middleware (instructor or admin role). **Shared by both** — admin
 
 ## 6. Server Actions and Data Access (all via Supabase SDK)
 
-All data access uses the Supabase SDK. Server Actions use the server-side Supabase client (which reads the user's session from cookies). Client components can also query directly via the browser Supabase client. RLS ensures security regardless of where the query originates.
+All data access uses the Supabase SDK. **Supabase SDK uses snake_case for column names** in `.select()`, `.insert()`, `.update()`, etc. (e.g. `instructor_id`, `user_id`). Map accordingly when using generated types or referencing Drizzle schema columns (which use camelCase). Server Actions use the server-side Supabase client (which reads the user's session from cookies). Client components can also query directly via the browser Supabase client. RLS ensures security regardless of where the query originates.
 
 ### Server Actions (`src/lib/actions/`)
 
@@ -793,7 +816,7 @@ RLS applies to Realtime events -- users only receive inserts for courses they're
 A server-only Supabase client using `SUPABASE_SERVICE_ROLE_KEY` that bypasses RLS. Used ONLY for:
 
 - **Auth callback upsert:** `INSERT ... ON CONFLICT` into `public.users` after `exchangeCodeForSession`. Service role is required because the callback runs before the user's RLS context is fully established, and we need to write to `public.users` regardless of existing policies.
-- **Admin role changes:** Promoting/demoting users (update `users.role`), which RLS restricts to admins but the admin is acting on another user's row.
+- **Admin role changes:** Promoting/demoting users (update `users.role`). Service role is used to avoid edge cases with JWT/RLS evaluation when the admin acts on another user's row, and to ensure the operation succeeds regardless of RLS.
 - **Admin instructor promote/demote:** Creating/deleting `instructors` rows and updating roles atomically.
 - **publishCourse subscriber fetch:** The instructor's Supabase client has RLS that limits `subscriptions` to their own row. To send notification emails, we need all subscriber emails. Use the service role client for this single query: `adminClient.from('subscriptions').select('email').eq('verified', true)` — only verified emails receive notifications.
 - **Subscription email verification:** `src/app/api/verify-subscription/route.ts` — GET handler that reads `token` from search params, looks up the subscription by `verificationToken` using the service role client, sets `verified = true` and clears the token, then redirects to `/courses?verified=true` (the courses page can show a success toast based on the query param). Service role needed because the request is unauthenticated (user clicking an email link).
@@ -905,7 +928,7 @@ All in `src/components/`, using shadcn/ui as the base:
 
 - **Vercel:** Connect GitHub repo, auto-deploy on push
 - **Supabase:** Separate hosted Supabase project (free tier to start)
-- **Migrations:** Run `drizzle-kit push` or `drizzle-kit migrate` as part of CI/CD or manually
+- **Migrations:** Run `drizzle-kit generate` then `drizzle-kit migrate` as part of CI/CD or manually (use migrate, not push — push has RLS policy issues)
 - **Environment:** Set env vars in Vercel dashboard
 
 ---
@@ -969,7 +992,7 @@ src/
 │           └── enrollment-confirmation.tsx  # Sent to user on enrollment
 ├── types/
 │   └── database.ts                 # Generated types from Supabase (npx supabase gen types)
-└── middleware.ts                    # Next.js middleware (session refresh + route protection)
+└── middleware.ts                   # Next.js middleware (session refresh + route protection)
 
 # Root-level (outside src/)
 drizzle.config.ts                    # Drizzle Kit config (points to DATABASE_URL)
@@ -988,8 +1011,8 @@ supabase/
 Two systems, run in order:
 
 **1. Drizzle (schema + RLS)** — tables and `pgPolicy` from TypeScript schema  
-- **`drizzle-kit push`** applies schema directly to the DB. No migration files used at runtime.  
-- **`drizzle-kit generate`** writes SQL to `./drizzle/` for reference or alternate workflows.  
+- **`drizzle-kit generate`** writes migration SQL to `./drizzle/` including RLS policies.  
+- **`drizzle-kit migrate`** applies migrations to the DB. **Note:** `drizzle-kit push` has known RLS policy bugs (GitHub #3504, #4078) — use generate + migrate, not push.  
 - Run first so tables exist before custom SQL.
 
 **2. Supabase custom SQL** — logic Drizzle does not generate  
@@ -999,22 +1022,23 @@ Two systems, run in order:
 
 **Run order (initial setup or schema change):**
 ```bash
-pnpm db:push          # 1. Apply schema via Drizzle
-supabase db push      # 2. Apply custom SQL (requires Supabase CLI, linked project)
-pnpm db:types         # 3. Regenerate types
+pnpm db:generate      # 1. Generate migration SQL from Drizzle schema
+pnpm db:migrate       # 2. Apply migrations (schema + RLS) to DB
+supabase db push      # 3. Apply custom SQL (requires Supabase CLI, linked project)
+pnpm db:types         # 4. Regenerate types
 ```
 
 **Scripts (`package.json`):**
 ```json
 "scripts": {
-  "db:push": "drizzle-kit push",
   "db:generate": "drizzle-kit generate",
-  "db:types": "supabase gen types typescript --project-id <ref> > src/types/database.ts",
-  "db:sync": "pnpm db:push && supabase db push && pnpm db:types"
+  "db:migrate": "drizzle-kit migrate",
+  "db:types": "supabase gen types typescript --linked > src/types/database.ts",
+  "db:sync": "pnpm db:generate && pnpm db:migrate && supabase db push && pnpm db:types"
 }
 ```
 
-**Schema changes:** Update Drizzle schema files, then run `pnpm db:push`. Custom SQL rarely changes; add new `supabase/migrations/*.sql` only when adding triggers, functions, or storage config.
+**Schema changes:** Update Drizzle schema files, then run `pnpm db:generate` and `pnpm db:migrate`. Use `--linked` for `db:types` when the project is linked via `supabase link` (Manual Setup step 6). Custom SQL rarely changes; add new `supabase/migrations/*.sql` only when adding triggers, functions, or storage config.
 
 ---
 

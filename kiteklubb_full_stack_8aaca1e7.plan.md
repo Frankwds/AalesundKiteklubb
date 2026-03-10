@@ -378,12 +378,13 @@ Same for instructor-scoped policies -- use `isInstructor` instead of a subquery 
 
 Every policy below MUST be implemented as a `pgPolicy` in the corresponding Drizzle schema file. Use the `isAdmin` / `isInstructor` JWT helpers (see above) for role checks — never subquery `users` for role. The "Admin full access" policy (for: `"all"`, using: `isAdmin`, withCheck: `isAdmin`) should be added to every table where admin access is listed.
 
-**Users table** (`src/lib/db/schema/users.ts`) — 4 policies:
+**Users table** (`src/lib/db/schema/users.ts`) — 3 policies:
 
 1. `"Users can read own profile"` — SELECT, `authenticatedRole`, using: `id = auth.uid()`
 2. `"Co-participants can read profile fields"` — SELECT, `authenticatedRole`, using: EXISTS subquery on `course_participants` (see Chat-related RLS section below for SQL)
 3. `"Admin full access"` — ALL, `authenticatedRole`, using/withCheck: `isAdmin`
-4. No INSERT/UPDATE/DELETE policies for non-admins. INSERT happens via DB trigger. UPDATE/DELETE by admins uses service role (bypasses RLS).
+
+**Note:** INSERT is handled by DB trigger; UPDATE/DELETE by admins uses service role.
 
 **Instructors table** (`src/lib/db/schema/instructors.ts`) — 4 policies:
 
@@ -432,7 +433,7 @@ Every policy below MUST be implemented as a `pgPolicy` in the corresponding Driz
 2. `"Authenticated can view spots"` — SELECT, `authenticatedRole`, using: `true`
 3. `"Admin full access"` — ALL, `authenticatedRole`, using/withCheck: `isAdmin`
 
-**Total: 31 policies** across 7 tables. All must be defined as `pgPolicy` calls in the schema files so `drizzle-kit generate` produces the corresponding `CREATE POLICY` SQL.
+**Total: 30 policies** across 7 tables. All must be defined as `pgPolicy` calls in the schema files so `drizzle-kit generate` produces the corresponding `CREATE POLICY` SQL.
 
 ### Chat-related RLS (users and course_participants)
 
@@ -677,7 +678,7 @@ All content is CMS-managed by admins.
 Sections:
 
 - **Intro kurs** -- what courses are about, who the instructors are, general info text
-- **Scheduled Courses** -- list of course cards from DB. Each card shows course info (title, date, spot name linked to `/spots/[spotId]` when present — when `spotId` is null, show "TBD" or "Ikke bestemt" and omit the link — instructor, price). The card has stateful buttons depending on the user's enrollment:
+- **Scheduled Courses** -- list of course cards from DB. Each card shows course info (title, date, spot name linked to `/spots/[spotId]` when present — when `spotId` is null, show "Ikke bestemt" and omit the link — instructor, price). The card has stateful buttons depending on the user's enrollment:
   - **Not logged in:** "Logg inn for å melde på" (links to login)
   - **Logged in, not enrolled:** "Meld på" button opens a confirmation dialog (description of action, prefilled email field showing where confirmation will be sent — read from auth, display-only — "Avbryt" + "Meld på" buttons). On confirm, calls `enroll_in_course` RPC. On successful enrollment, a confirmation email is sent to the user (see section 7). **Do not show "Chat"** — only enrolled users see it.
   - **Logged in, enrolled:** "Meld av" button opens a confirmation dialog (description of action, "Avbryt" + "Meld av" buttons). On confirm, deletes from `course_participants`. "Chat" button links to `/courses/[id]/chat`.
@@ -1031,7 +1032,7 @@ Migration numbers **0001–0005** refer to `supabase/migrations/` (custom SQL on
 - Stored in `supabase/migrations/` and applied with `supabase db push` (Supabase CLI).  
 - Run second, after schema is applied.
 
-**Initial setup sequence:** (1) Manual Setup steps 1–5: project, OAuth, Resend, env vars. (2) Run Drizzle generate + migrate. (3) Manual Setup step 6: `supabase link`. (4) Run `supabase db push`. (5) Manual Setup step 7: configure Auth Hook in Dashboard. (6) Manual Setup step 8: Vercel when deploying.
+**Initial setup sequence:** (1) Manual Setup steps 1–5: project, OAuth, Resend, env vars. (1a) For new projects: run `supabase init`, then add the 5 custom migration files to `supabase/migrations/`. (2) Run Drizzle generate + migrate. (3) Manual Setup step 6: `supabase link`. (4) Run `supabase db push`. (5) Manual Setup step 7: configure Auth Hook in Dashboard. (6) Manual Setup step 8: Vercel when deploying.
 
 **Run order (initial setup or schema change):**
 
@@ -1063,6 +1064,8 @@ pnpm db:types         # 4. Regenerate types
 Steps that must be completed manually in external dashboards and consoles before or during deployment:
 
 **Prerequisites:** Install Supabase CLI — `pnpm add -D supabase` or `npm install -g supabase`. Required for `supabase link`, `supabase db push`, and `supabase gen types` (used by `db:types` script).
+
+**0. New projects only:** Run `supabase init` to create the `supabase/` directory and config. Add migration files 0001–0005 to `supabase/migrations/` (content described in plan).
 
 1. **Supabase project** – Create a hosted Supabase project (supabase.com). Note the project URL, anon key, service role key, and direct Postgres connection string. Find the connection string in Supabase Dashboard > Project Settings > Database, under Connection string. Use the URI format with port 5432 (direct connection, not transaction pooler).
 

@@ -623,6 +623,49 @@ $$;
 
 Called via `supabase.rpc('enroll_in_course', { p_course_id: courseId })` instead of a direct insert. The `FOR UPDATE` lock on the course row serializes concurrent enrollments, making overbooking impossible.
 
+### Atomic Promote/Demote Functions (RPC)
+
+Postgres RPC functions that atomically update both `instructors` and `users.role` in a single transaction. The Supabase JS SDK has no client-side transaction API for multi-statement operations, so these RPCs are required. Defined in migration `0006`.
+
+```sql
+create or replace function public.promote_to_instructor(p_user_id uuid)
+returns void language plpgsql security invoker as $$
+begin
+  if (current_setting('request.jwt.claims', true)::jsonb)->>'user_role' != 'admin' then
+    raise exception 'Only admins can promote users';
+  end if;
+  insert into instructors (user_id) values (p_user_id)
+    on conflict (user_id) do nothing;
+  update users set role = 'instructor' where id = p_user_id;
+end;
+$$;
+
+create or replace function public.promote_to_admin(p_user_id uuid)
+returns void language plpgsql security invoker as $$
+begin
+  if (current_setting('request.jwt.claims', true)::jsonb)->>'user_role' != 'admin' then
+    raise exception 'Only admins can promote users';
+  end if;
+  insert into instructors (user_id) values (p_user_id)
+    on conflict (user_id) do nothing;
+  update users set role = 'admin' where id = p_user_id;
+end;
+$$;
+
+create or replace function public.demote_to_user(p_user_id uuid)
+returns void language plpgsql security invoker as $$
+begin
+  if (current_setting('request.jwt.claims', true)::jsonb)->>'user_role' != 'admin' then
+    raise exception 'Only admins can demote users';
+  end if;
+  delete from instructors where user_id = p_user_id;
+  update users set role = 'user' where id = p_user_id;
+end;
+$$;
+```
+
+Called via `supabase.rpc('promote_to_instructor', { p_user_id })`, `supabase.rpc('promote_to_admin', { p_user_id })`, and `supabase.rpc('demote_to_user', { p_user_id })` from the admin's server client. RLS "Admin full access" allows the updates; the JWT check provides defense in depth. **Note:** `instructors.user_id` must have a unique constraint for `ON CONFLICT (user_id)` to work — the schema already defines `userId` as unique.
+
 ---
 
 ## 3. Authentication
@@ -649,6 +692,11 @@ Manual configuration in two places:
 ### 3c. Middleware (`src/middleware.ts`)
 
 **Location:** With `src/` enabled, Next.js middleware lives at `src/middleware.ts` (not at project root). The Supabase session-refresh helper lives at `src/lib/supabase/middleware.ts` and is imported by the main middleware.
+
+Use a `config.matcher` so middleware runs only on protected and auth routes, reducing latency on public pages:
+```ts
+export const config = { matcher: ['/admin/:path*', '/instructor/:path*', '/courses/:path*/chat', '/auth/:path*'] }
+```
 
 - Refreshes Supabase auth session on every request
 - Reads user role by decoding the access token from `supabase.auth.getSession()` (`jwt.user_role`) -- **no DB query needed** (the custom access token hook injects `user_role` as a top-level JWT claim, not in `app_metadata`)
@@ -736,7 +784,7 @@ All content is CMS-managed by admins.
 Sections:
 
 - **Intro kurs** -- what courses are about, who the instructors are, general info text
-- **Scheduled Courses** -- list of course cards from DB. Each card shows course info (title, date, spot name linked to `/spots/[spotId]` when present — when `spotId` is null, show "Ikke bestemt" and omit the link — instructor, price). The card has stateful buttons depending on the user's enrollment:
+- **Scheduled Courses** -- list of course cards from DB. Each card shows course info (title, date, spot name linked to `/spots/[spotId]` when present — when `spotId` is null, show "Ikke bestemt" and omit the link — instructor, price). When `instructorId` is null, show "Ikke bestemt" or similar placeholder for the instructor field on the course card. The card has stateful buttons depending on the user's enrollment:
   - **Not logged in:** "Logg inn for å melde på" (links to login)
   - **Logged in, not enrolled:** "Meld på" button opens a confirmation dialog (description of action, prefilled email field showing where confirmation will be sent — read from auth, display-only — "Avbryt" + "Meld på" buttons). On confirm, calls `enroll_in_course` RPC. On successful enrollment, a confirmation email is sent to the user (see section 7). **Do not show "Chat"** — only enrolled users see it.
   - **Logged in, enrolled:** "Meld av" button opens a confirmation dialog (description of action, "Avbryt" + "Meld av" buttons). On confirm, deletes from `course_participants`. "Chat" button links to `/courses/[id]/chat`.
@@ -813,10 +861,10 @@ Server Actions (`"use server"`) for mutations. Each creates a Supabase server cl
 **Return convention:** For user-facing mutations (enroll, subscribe, unenroll, etc.), return `{ success: boolean; error?: string }` so the client can show appropriate toasts. For create/update actions (e.g. `publishCourse`), return the entity on success plus optional metadata (e.g. `notificationSent`); on failure, return `{ success: false, error }` or throw.
 
 - `src/lib/actions/courses.ts` -- `supabase.from('courses').insert(...)`, `.update(...)`, `.delete(...)`; enrollment via `supabase.rpc('enroll_in_course', { p_course_id })` (atomic capacity check, no overbooking). Handle already-enrolled: if the RPC raises `allerede_pameldt` or a unique violation (Postgres 23505), return `{ success: false, error: 'Du er allerede påmeldt' }`; client shows `toast.error('Du er allerede påmeldt')`. Handle full course: when the RPC raises `Course is full`, return `{ success: false, error: 'Kurset er fullt' }`; client shows `toast.error('Kurset er fullt')`. Unenrollment via `supabase.from('course_participants').delete().match({ user_id, course_id })` (RLS allows own deletion). On successful enrollment, sends a confirmation email to the user (see section 7). The `publishCourse` action looks up the instructor ID via `supabase.from('instructors').select('id').eq('user_id', currentUserId).single()` before inserting the course (not from the form) and sends notification emails to all subscribers in one server-side request.
-- `src/lib/actions/instructors.ts` -- **Atomic admin actions to keep `users.role` and `instructors` table in sync:** Use a Postgres transaction (or Supabase client transaction if available) when promoting/demoting so that either both operations succeed or both roll back.
-  - `promoteToInstructor(userId)`: Creates `instructors` profile row (if missing) AND sets `users.role = 'instructor'`.
-  - `promoteToAdmin(userId)`: Creates `instructors` profile row (if missing) AND sets `users.role = 'admin'`. Admins always have an instructor profile so they can create courses.
-  - `demoteToUser(userId)`: Deletes `instructors` row AND resets `users.role = 'user'`. Single action used for both removing an instructor from the Instructors tab and demoting a user in the Brukere tab.
+- `src/lib/actions/instructors.ts` -- **Atomic admin actions to keep `users.role` and `instructors` table in sync:** Implement via Postgres RPC functions (`promote_to_instructor`, `promote_to_admin`, `demote_to_user`) that perform both the `instructors` and `users.role` updates in a single transaction, similar to `enroll_in_course`. Call `supabase.rpc('promote_to_instructor', { p_user_id })`, `supabase.rpc('promote_to_admin', { p_user_id })`, and `supabase.rpc('demote_to_user', { p_user_id })` from the admin's server client. Add migration `0006` for these RPCs.
+  - `promoteToInstructor(userId)`: Calls `promote_to_instructor` RPC — creates `instructors` profile row (if missing) AND sets `users.role = 'instructor'`.
+  - `promoteToAdmin(userId)`: Calls `promote_to_admin` RPC — creates `instructors` profile row (if missing) AND sets `users.role = 'admin'`. Admins always have an instructor profile so they can create courses.
+  - `demoteToUser(userId)`: Calls `demote_to_user` RPC — deletes `instructors` row AND resets `users.role = 'user'`. Single action used for both removing an instructor from the Instruktører tab and demoting a user in the Brukere tab.
   - `updateInstructorProfile(..., instructorId?)`: Accepts an optional `instructorId`; when omitted, the caller edits their own profile. When provided and the caller is admin, RLS "Admin full access" allows updating any instructor (supports the Admin tab "Edit" action for other instructors). Photo upload goes to `instructor-photos/{userId}/` bucket, URL stored in `instructors.photoUrl`. See Section 2h for admin editing another instructor's profile photo handling.
 - `src/lib/actions/messages.ts` -- `supabase.from('messages').insert(...)`
 - `src/lib/actions/subscriptions.ts` -- insert/delete on `subscriptions`. **Email verification logic:** If the submitted email matches the user's Google auth email, insert with `verified = true` (already verified by OAuth). If email differs, insert with `verified = false` + generate a random UUID `verificationToken`, then send a verification email via Resend with a link to `/api/verify-subscription?token=xxx`.
@@ -846,7 +894,13 @@ Each Server Action wraps Supabase calls and logs before returning. No PII in log
 
 Query functions used by Server Components and Server Actions. Each returns typed data from Supabase SDK:
 
-- `src/lib/queries/courses.ts` -- Export three functions: `getCoursesForPublicPage()`, `getCoursesForAdmin()`, and `getCoursesForInstructor()`. `getCoursesForPublicPage()` filters to future courses only. **Timezone:** A naive `.gte('date', new Date().toISOString())` would incorrectly exclude courses on the same calendar day in Europe/Oslo when compared from UTC. Use start-of-day in the course's display timezone: for Europe/Oslo, get today's date as `new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Oslo' })` (returns `YYYY-MM-DD`) and compare `date >= that at 00:00 Oslo`. `getCoursesForAdmin()` returns all courses, no date filter. `getCoursesForInstructor()` **must explicitly filter by instructor:** RLS on courses only defines "Public/Authenticated can view" with `using: true`, so instructors would receive all courses otherwise. Implementation: (1) Look up the current user's instructor ID via `supabase.from('instructors').select('id').eq('user_id', authUserId).single()`, (2) Apply `.eq('instructor_id', instructorId)` to the courses query. Use `supabase.from('courses').select('*, instructors(*), spots(*)').order('date')` with that filter. All three use the same select shape.
+- `src/lib/queries/courses.ts` -- Export three functions: `getCoursesForPublicPage()`, `getCoursesForAdmin()`, and `getCoursesForInstructor()`. `getCoursesForPublicPage()` filters to future courses only. **Timezone:** A naive `.gte('date', new Date().toISOString())` would incorrectly exclude courses on the same calendar day in Europe/Oslo when compared from UTC. Use start-of-day in the course's display timezone: for Europe/Oslo, get today's date as `new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Oslo' })` (returns `YYYY-MM-DD`) and compare `date >= that at 00:00 Oslo`. Example:
+  ```ts
+  const todayOslo = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Oslo' });
+  const midnightOslo = `${todayOslo}T00:00:00`;  // or append Oslo offset for timestamptz
+  const { data } = await supabase.from('courses').select('*').gte('date', midnightOslo);
+  ```
+  `getCoursesForAdmin()` returns all courses, no date filter. `getCoursesForInstructor()` **must explicitly filter by instructor:** RLS on courses only defines "Public/Authenticated can view" with `using: true`, so instructors would receive all courses otherwise. Implementation: (1) Look up the current user's instructor ID via `supabase.from('instructors').select('id').eq('user_id', authUserId).single()`, (2) Apply `.eq('instructor_id', instructorId)` to the courses query. Use `supabase.from('courses').select('*, instructors(*), spots(*)').order('date')` with that filter. All three use the same select shape.
 - `src/lib/queries/instructors.ts` -- `supabase.from('instructors').select('*, users(*)')`
 - `src/lib/queries/messages.ts` -- `supabase.from('messages').select('*, users(name, avatar_url)').eq('course_id', id).order('created_at')`
 - `src/lib/queries/subscriptions.ts` -- check if current user has a subscription row (returns `verified` status for UI). For notification sends, filter to `verified = true` only.
@@ -883,7 +937,7 @@ A server-only Supabase client using `SUPABASE_SERVICE_ROLE_KEY` that bypasses RL
 
 - **Auth callback upsert:** `INSERT ... ON CONFLICT` into `public.users` after `exchangeCodeForSession`. Service role is required because the callback runs before the user's RLS context is fully established, and we need to write to `public.users` regardless of existing policies.
 - **Admin role changes:** Promoting/demoting users (update `users.role`). Service role is used to avoid edge cases with JWT/RLS evaluation when the admin acts on another user's row, and to ensure the operation succeeds regardless of RLS.
-- **Admin instructor promote/demote:** Creating/deleting `instructors` rows and updating roles atomically.
+- **Admin instructor promote/demote:** Invoked via Postgres RPC functions (`promote_to_instructor`, `promote_to_admin`, `demote_to_user`) — admin's server client calls these RPCs; the RPCs perform both `instructors` and `users.role` updates atomically in Postgres.
 - **publishCourse subscriber fetch:** The instructor's Supabase client has RLS that limits `subscriptions` to their own row. To send notification emails, we need all subscriber emails. Use the service role client for this single query: `adminClient.from('subscriptions').select('email').eq('verified', true)` — only verified emails receive notifications.
 - **Subscription email verification:** `src/app/api/verify-subscription/route.ts` — GET handler that reads `token` from search params, looks up the subscription by `verificationToken` using the service role client. If valid: sets `verified = true` and clears the token, then redirects to `/courses?verified=true` (the courses page can show a success toast based on the query param). If token is invalid or already used, redirect to `/courses?error=invalid_token`; the courses page reads the error query param and shows a toast when `error=invalid_token`. Service role needed because the request is unauthenticated (user clicking an email link).
 
@@ -893,7 +947,7 @@ This key is NEVER exposed to the client. Environment variable: `SUPABASE_SERVICE
 
 ## 7. Email Notifications (Resend)
 
-When an instructor or admin publishes a new course, all subscribers receive an email notification. Both use the same `publishCourse` Server Action and the same flow. This is handled in a single Server Action to avoid gaps where the course is published but the email fails silently.
+When an instructor or admin publishes a new course, all subscribers receive an email notification. Both use the same `publishCourse` Server Action and the same flow. This is handled in a single Server Action to avoid gaps where the course is published but the email fails silently. **Editing an existing course does not trigger subscriber notifications; only new course creation does.**
 
 ### Flow
 
@@ -959,6 +1013,7 @@ All in `src/components/`, using shadcn/ui as the base:
 **Loading states** — use Next.js App Router `loading.tsx` convention:
 - `src/app/loading.tsx` — global fallback with a centered spinner (reuse across all routes)
 - `src/app/courses/loading.tsx` — skeleton cards for the course list
+- `src/app/courses/[id]/chat/loading.tsx` — skeleton for message list
 - `src/app/admin/loading.tsx` — skeleton table for admin dashboard
 - `src/app/spots/loading.tsx` — skeleton cards for spots listing
 
@@ -1019,7 +1074,9 @@ src/
 │   │       └── page.tsx             # Individual spot detail page
 │   ├── courses/
 │   │   ├── page.tsx                # Courses single-page
-│   │   └── [id]/chat/page.tsx      # Per-course chat
+│   │   └── [id]/chat/
+│   │       ├── loading.tsx         # Skeleton for message list
+│   │       └── page.tsx            # Per-course chat
 │   ├── admin/
 │   │   └── page.tsx                # Admin dashboard (single tabbed page)
 │   └── instructor/
@@ -1071,12 +1128,29 @@ supabase/
     ├── 0002_custom_jwt_hook.sql     # Auth hook to inject role into JWT claims
     ├── 0003_realtime_messages.sql   # ALTER PUBLICATION supabase_realtime ADD TABLE messages
     ├── 0004_enroll_function.sql     # Atomic enroll_in_course() RPC function
-    └── 0005_storage_buckets.sql    # spot-maps + instructor-photos buckets, storage.objects RLS
+    ├── 0005_storage_buckets.sql     # spot-maps + instructor-photos buckets, storage.objects RLS
+    └── 0006_promote_demote_rpcs.sql # promote_to_instructor, promote_to_admin, demote_to_user RPCs
 ```
 
 ### Migration Workflow
 
 **Prerequisites:** See Manual Setup Steps — in particular, run `supabase link` before `supabase db push`. For a new project, run `supabase init` to create the `supabase/` directory and config; then add migration files to `supabase/migrations/`.
+
+**Initial setup checklist** — one linear sequence (dependency-ordered) for first-time setup:
+
+| Step | Action |
+|------|--------|
+| 0 | New projects only: `supabase init`, add migration files 0001–0006 to `supabase/migrations/` |
+| 1 | Manual: Create Supabase project (Dashboard) |
+| 2 | Manual: Configure Google OAuth in Supabase Auth |
+| 3 | Manual: Create OAuth credentials in Google Cloud Console |
+| 4 | Manual: Set up Resend (verify domain or use onboarding@resend.dev) |
+| 5 | Manual: Create `.env.local` with all required env vars |
+| 6 | Run `pnpm db:generate` and `pnpm db:migrate` |
+| 7 | Manual: Run `supabase link` |
+| 8 | Run `supabase db push` |
+| 9 | Manual: Configure Auth Hook in Supabase Dashboard |
+| 10 | Manual: Deploy to Vercel (connect repo, set env vars) |
 
 Migration numbers **0001–0005** refer to `supabase/migrations/` (custom SQL only). Drizzle migrations in `drizzle/` use their own numbering (e.g. `0000_*`, `0001_*`). Two systems, run in order:
 
@@ -1123,7 +1197,7 @@ Steps that must be completed manually in external dashboards and consoles before
 
 **Prerequisites:** Install Supabase CLI — `pnpm add -D supabase` or `npm install -g supabase`. Required for `supabase link`, `supabase db push`, and `supabase gen types` (used by `db:types` script).
 
-**0. New projects only:** Run `supabase init` to create the `supabase/` directory and config. Add migration files 0001–0005 to `supabase/migrations/` (content described in plan).
+**0. New projects only:** Run `supabase init` to create the `supabase/` directory and config. Add migration files 0001–0006 to `supabase/migrations/` (content described in plan).
 
 1. **Supabase project** – Create a hosted Supabase project (supabase.com). Note the project URL, anon key, service role key, and direct Postgres connection string. Find the connection string in Supabase Dashboard > Project Settings > Database, under Connection string. Use the URI format with port 5432 (direct connection, not transaction pooler).
 

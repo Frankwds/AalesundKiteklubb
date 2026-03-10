@@ -557,6 +557,11 @@ begin
     end if;
   end if;
 
+  -- Prevent duplicate enrollment: return user-friendly error
+  if exists (select 1 from course_participants where user_id = auth.uid() and course_id = p_course_id) then
+    raise exception 'allerede_pameldt';
+  end if;
+
   insert into course_participants (user_id, course_id)
     values (auth.uid(), p_course_id);
 end;
@@ -687,7 +692,7 @@ Sections:
 
 ### 5d. Course Chat (`src/app/courses/[id]/chat/page.tsx`)
 
-- **Enrollment-gated access.** Middleware only checks authentication for `/courses/*/chat` — a logged-in user who is not enrolled could otherwise reach the page. Add an explicit **page-level check** before rendering: verify the user is in `course_participants` for that course. If not, redirect to `/courses` or show: "Du må være meldt på kurset for å se chatten."
+- **Enrollment-gated access.** Middleware only checks authentication for `/courses/*/chat` — a logged-in user who is not enrolled could otherwise reach the page. Add an explicit **page-level check** before rendering: verify the user is in `course_participants` for that course. If not enrolled, **redirect to `/courses?error=not_enrolled`**; the courses page reads this param and shows a toast: "Du må være meldt på kurset for å se chatten."
 - **Not in nav.** Accessed only via the "Chat" button on the course card in `/courses` and links in the enrollment confirmation email — only visible on the card when the user is enrolled (see 5c). No navbar or mobile menu entry for chat.
 - Append-only message log, newest at bottom
 - Auto-scroll, live updates via **Supabase Realtime** -- client subscribes to `postgres_changes` on the `messages` table filtered by `course_id`. New messages appear instantly without polling.
@@ -754,7 +759,7 @@ Server Actions (`"use server"`) for mutations. Each creates a Supabase server cl
 
 **Return convention:** For user-facing mutations (enroll, subscribe, unenroll, etc.), return `{ success: boolean; error?: string }` so the client can show appropriate toasts. For create/update actions (e.g. `publishCourse`), return the entity on success plus optional metadata (e.g. `notificationSent`); on failure, return `{ success: false, error }` or throw.
 
-- `src/lib/actions/courses.ts` -- `supabase.from('courses').insert(...)`, `.update(...)`, `.delete(...)`; enrollment via `supabase.rpc('enroll_in_course', { p_course_id })` (atomic capacity check, no overbooking); unenrollment via `supabase.from('course_participants').delete().match({ user_id, course_id })` (RLS allows own deletion). On successful enrollment, sends a confirmation email to the user (see section 7). The `publishCourse` action looks up the instructor ID via `supabase.from('instructors').select('id').eq('user_id', currentUserId).single()` before inserting the course (not from the form) and sends notification emails to all subscribers in one server-side request.
+- `src/lib/actions/courses.ts` -- `supabase.from('courses').insert(...)`, `.update(...)`, `.delete(...)`; enrollment via `supabase.rpc('enroll_in_course', { p_course_id })` (atomic capacity check, no overbooking). Handle already-enrolled: if the RPC raises `allerede_pameldt` or a unique violation (Postgres 23505), return `{ success: false, error: 'Du er allerede påmeldt' }`; client shows `toast.error('Du er allerede påmeldt')`. Unenrollment via `supabase.from('course_participants').delete().match({ user_id, course_id })` (RLS allows own deletion). On successful enrollment, sends a confirmation email to the user (see section 7). The `publishCourse` action looks up the instructor ID via `supabase.from('instructors').select('id').eq('user_id', currentUserId).single()` before inserting the course (not from the form) and sends notification emails to all subscribers in one server-side request.
 - `src/lib/actions/instructors.ts` -- **Atomic admin actions to keep `users.role` and `instructors` table in sync:**
   - `promoteToInstructor(userId)`: Creates `instructors` profile row (if missing) AND sets `users.role = 'instructor'`.
   - `promoteToAdmin(userId)`: Creates `instructors` profile row (if missing) AND sets `users.role = 'admin'`. Admins always have an instructor profile so they can create courses.
@@ -911,7 +916,7 @@ All in `src/components/`, using shadcn/ui as the base:
 **Toast notifications** — `sonner` (shadcn/ui's recommended toast library):
 - Add `<Sonner />` component in `src/app/layout.tsx` (root layout, inside `<body>`, after `{children}`)
 - Use `toast.success()` / `toast.error()` in client components after server action responses. Examples:
-  - Enrollment: `toast.success('Du er påmeldt!')` / `toast.error('Kurset er fullt')`
+  - Enrollment: `toast.success('Du er påmeldt!')` / `toast.error('Kurset er fullt')` / `toast.error('Du er allerede påmeldt')` (when already enrolled)
   - Unenrollment: `toast.success('Du er avmeldt')`
   - Course save: `toast.success('Kurs lagret')`
   - Subscription: `toast.success('Du vil få varsler om nye kurs')`
@@ -1085,6 +1090,6 @@ Steps that must be completed manually in external dashboards and consoles before
 
 6. **Supabase CLI link** – Run `supabase link` to link the local project to the hosted Supabase project (required for `supabase db push`).
 
-7. **Supabase Auth Hook – Custom Access Token** – After applying migrations (including `supabase db push`), go to Supabase Dashboard > Authentication > Hooks. Add a Custom Access Token hook and configure it to invoke `public.custom_access_token_hook` (created by migration 0002). Apply migration 0002 and configure this hook before testing role-gated features; until then, `user_role` will be undefined in tokens.
+7. **Supabase Auth Hook – Custom Access Token** – After applying migrations (including `supabase db push`), go to Supabase Dashboard > Authentication > Hooks. Add a Custom Access Token hook; in the Hooks panel, select or enter `public.custom_access_token_hook` as the function to invoke (the function is created by migration 0002). Apply migration 0002 and configure this hook before testing role-gated features; until then, `user_role` will be undefined in tokens.
 
 8. **Vercel** – Connect the GitHub repo, configure the project, and set all environment variables in the Vercel dashboard.

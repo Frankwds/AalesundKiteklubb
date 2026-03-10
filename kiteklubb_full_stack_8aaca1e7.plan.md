@@ -192,8 +192,8 @@ npx create-next-app@latest . --typescript --tailwind --app --src-dir --use-pnpm
 Install core dependencies:
 
 ```bash
-# Runtime: Supabase SDK for all data access + Resend for email + Sonner for toast notifications
-pnpm add @supabase/supabase-js @supabase/ssr resend sonner
+# Runtime: Supabase SDK for all data access + Resend for email + Sonner for toast notifications + Zod for validation
+pnpm add @supabase/supabase-js @supabase/ssr resend sonner zod
 
 # Drizzle for schema definitions and migrations
 # drizzle-orm is a regular dep so schema files under src/ pass type-checking during next build
@@ -317,6 +317,7 @@ Enrollment is handled via a Postgres RPC function (not a direct insert) to preve
 | email             | text NOT NULL | Autofilled, editable, **unique** |
 | verified          | boolean       | default `false`      |
 | verificationToken | uuid          | nullable, unique. Generated when email ≠ auth email |
+| tokenExpiresAt    | timestamp     | nullable. Set to `now() + interval '24 hours'` when `verificationToken` is generated. Null when no token is active. |
 | createdAt         | timestamp     | default now()        |
 
 
@@ -514,11 +515,13 @@ Every policy below MUST be implemented as a `pgPolicy` in the corresponding Driz
 6. `"Instructors can remove participants from their courses"` — DELETE, `authenticatedRole`, using: `course_id IN (SELECT id FROM courses WHERE instructor_id IN (SELECT id FROM instructors WHERE user_id = auth.uid()))`
 7. `"Admin full access"` — ALL, `authenticatedRole`, using/withCheck: `isAdmin`
 
-**Messages table** (`src/lib/db/schema/messages.ts`) — 3 policies:
+**Messages table** (`src/lib/db/schema/messages.ts`) — 5 policies:
 
 1. `"Course participants can read messages"` — SELECT, `authenticatedRole`, using: `course_id IN (SELECT course_id FROM course_participants WHERE user_id = auth.uid())`
-2. `"Course participants can send messages"` — INSERT, `authenticatedRole`, withCheck: `user_id = auth.uid() AND course_id IN (SELECT course_id FROM course_participants WHERE user_id = auth.uid())`
-3. `"Admin full access"` — ALL, `authenticatedRole`, using/withCheck: `isAdmin`
+2. `"Instructors can read messages in own courses"` — SELECT, `authenticatedRole`, using: `course_id IN (SELECT id FROM courses WHERE instructor_id IN (SELECT id FROM instructors WHERE user_id = auth.uid()))`
+3. `"Course participants can send messages"` — INSERT, `authenticatedRole`, withCheck: `user_id = auth.uid() AND course_id IN (SELECT course_id FROM course_participants WHERE user_id = auth.uid())`
+4. `"Instructors can send messages in own courses"` — INSERT, `authenticatedRole`, withCheck: `user_id = auth.uid() AND course_id IN (SELECT id FROM courses WHERE instructor_id IN (SELECT id FROM instructors WHERE user_id = auth.uid()))`
+5. `"Admin full access"` — ALL, `authenticatedRole`, using/withCheck: `isAdmin`
 
 **Subscriptions table** (`src/lib/db/schema/subscriptions.ts`) — 4 policies:
 
@@ -535,7 +538,7 @@ Every policy below MUST be implemented as a `pgPolicy` in the corresponding Driz
 2. `"Authenticated can view spots"` — SELECT, `authenticatedRole`, using: `true`
 3. `"Admin full access"` — ALL, `authenticatedRole`, using/withCheck: `isAdmin`
 
-**Total: 30 policies** across 7 tables. All must be defined as `pgPolicy` calls in the schema files so `drizzle-kit generate` produces the corresponding `CREATE POLICY` SQL.
+**Total: 32 policies** across 7 tables. All must be defined as `pgPolicy` calls in the schema files so `drizzle-kit generate` produces the corresponding `CREATE POLICY` SQL.
 
 ### Chat-related RLS (users and course_participants)
 
@@ -713,17 +716,26 @@ $$;
 
 create or replace function public.demote_to_user(p_user_id uuid)
 returns void language plpgsql security invoker as $$
+declare
+  admin_count int;
 begin
   if (current_setting('request.jwt.claims', true)::jsonb)->>'user_role' != 'admin' then
     raise exception 'Only admins can demote users';
   end if;
+
+  -- Prevent removing the last admin
+  select count(*) into admin_count from users where role = 'admin';
+  if admin_count <= 1 and exists (select 1 from users where id = p_user_id and role = 'admin') then
+    raise exception 'Cannot demote the last admin';
+  end if;
+
   delete from instructors where user_id = p_user_id;
   update users set role = 'user' where id = p_user_id;
 end;
 $$;
 ```
 
-Called via `supabase.rpc('promote_to_instructor', { p_user_id })`, `supabase.rpc('promote_to_admin', { p_user_id })`, and `supabase.rpc('demote_to_user', { p_user_id })` from the admin's server client. RLS "Admin full access" allows the updates; the JWT check provides defense in depth. **Note:** `instructors.user_id` must have a unique constraint for `ON CONFLICT (user_id)` to work — the schema already defines `userId` as unique.
+Called via `supabase.rpc('promote_to_instructor', { p_user_id })`, `supabase.rpc('promote_to_admin', { p_user_id })`, and `supabase.rpc('demote_to_user', { p_user_id })` from the admin's server client. RLS "Admin full access" allows the updates; the JWT check provides defense in depth. `demote_to_user` includes a last-admin guard — if `p_user_id` is the only remaining admin, the function raises `'Cannot demote the last admin'`; the server action returns this as `{ success: false, error: 'Kan ikke fjerne siste admin' }` and the UI shows a toast. **Note:** `instructors.user_id` must have a unique constraint for `ON CONFLICT (user_id)` to work — the schema already defines `userId` as unique.
 
 ---
 
@@ -752,16 +764,19 @@ Manual configuration in two places:
 
 **Location:** With `src/` enabled, Next.js middleware lives at `src/middleware.ts` (not at project root). The Supabase session-refresh helper lives at `src/lib/supabase/middleware.ts` and is imported by the main middleware.
 
-Use a `config.matcher` so middleware runs only on protected and auth routes, reducing latency on public pages:
+The matcher runs on **all routes** except static assets so the Supabase session is refreshed on every navigation (including public pages where users trigger server actions like enrollment). Role-based route protection is handled inside the middleware handler, not by the matcher:
 ```ts
-export const config = { matcher: ['/admin/:path*', '/instructor/:path*', '/courses/:path*/chat', '/auth/:path*'] }
+export const config = {
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
+}
 ```
 
-- Refreshes Supabase auth session on every request
-- Reads user role by decoding the access token from `supabase.auth.getSession()` (`jwt.user_role`) -- **no DB query needed** (the custom access token hook injects `user_role` as a top-level JWT claim, not in `app_metadata`)
-- Protects `/admin/*` routes (requires `admin` role)
-- Protects `/instructor/*` routes (requires `instructor` or `admin` role)
-- Protects `/courses/*/chat` routes (requires authentication only — enrollment must be enforced at page level; see 5d)
+- **Session refresh (all matched routes):** Calls the Supabase session-refresh helper on every request, keeping access and refresh tokens up to date even while browsing public pages. This prevents stale-token errors when a user on `/courses` triggers a server action (e.g. enrollment).
+- **Role-based route protection (inside handler):** After session refresh, reads user role by decoding the access token from `supabase.auth.getSession()` (`jwt.user_role`) — **no DB query needed** (the custom access token hook injects `user_role` as a top-level JWT claim, not in `app_metadata`). Then applies route guards:
+  - `/admin/*` — requires `admin` role
+  - `/instructor/*` — requires `instructor` or `admin` role
+  - `/courses/*/chat` — requires authentication only (enrollment/instructor ownership enforced at page level; see 5d)
+  - All other routes — no role check, session refresh only
 
 ### 3d. Auth Helpers
 
@@ -852,8 +867,8 @@ Sections:
 
 ### 5d. Course Chat (`src/app/courses/[id]/chat/page.tsx`)
 
-- **Enrollment-gated access.** Middleware only checks authentication for `/courses/*/chat` — a logged-in user who is not enrolled could otherwise reach the page. Add an explicit **page-level check** before rendering: verify the user is in `course_participants` for that course. If not enrolled, **redirect to `/courses?error=not_enrolled`**; the courses page reads this param and shows a toast: "Du må være meldt på kurset for å se chatten."
-- **Not in nav.** Accessed only via the "Chat" button on the course card in `/courses` and links in the enrollment confirmation email — only visible on the card when the user is enrolled (see 5c). No navbar or mobile menu entry for chat.
+- **Enrollment- or instructor-gated access.** Middleware only checks authentication for `/courses/*/chat`. The page-level check verifies the user has chat access before rendering: the user must be (a) enrolled in `course_participants` for that course, OR (b) the instructor who owns the course (`courses.instructor_id` matches the user's instructor record), OR (c) an admin. If none of these apply, **redirect to `/courses?error=not_enrolled`**; the courses page reads this param and shows a toast: "Du må være meldt på kurset for å se chatten." RLS on the `messages` table has matching policies for participants, course instructors, and admins (see Section 2).
+- **Not in nav.** Accessed only via the "Chat" button on the course card in `/courses` and links in the enrollment confirmation email. The "Chat" button is visible when the user is enrolled (see 5c) **or** when the user is the course's instructor or an admin. No navbar or mobile menu entry for chat.
 - Append-only message log, newest at bottom
 - Auto-scroll, live updates via **Supabase Realtime** -- client subscribes to `postgres_changes` on the `messages` table filtered by `course_id`. New messages appear instantly without polling.
 - **Realtime profile enrichment:** Realtime payloads include raw message data only (no joined user data). Strategy: (1) Pre-fetch all course participants (from `course_participants` joined with `users`) at chat load to populate the profile cache. (2) When a Realtime INSERT arrives for an unknown `user_id`, fetch that user's profile on demand (`users(id, name, avatar_url)`), add to cache, and render. Show a short-lived placeholder (generic avatar or "...") while the fetch is in progress. RLS policies on `users` and `course_participants` must allow this (see section 2 RLS).
@@ -917,6 +932,22 @@ All data access uses the Supabase SDK. **Supabase SDK uses snake_case for column
 
 Server Actions (`"use server"`) for mutations. Each creates a Supabase server client, calls SDK methods, and logs success/failure via `src/lib/logger.ts`.
 
+**Input validation:** Every Server Action validates its input with Zod before touching the database. Schemas live in `src/lib/validations/` (one file per domain: `courses.ts`, `spots.ts`, `subscriptions.ts`, `instructors.ts`). On validation failure the action returns `{ success: false, error: issues[0].message }` immediately — no DB call. Example:
+
+```ts
+// src/lib/validations/courses.ts
+import { z } from 'zod';
+
+export const publishCourseSchema = z.object({
+  title: z.string().min(1, 'Tittel er påkrevd').max(200),
+  description: z.string().max(2000).optional(),
+  price: z.coerce.number().int().min(0, 'Pris kan ikke være negativ').optional(),
+  date: z.coerce.date({ required_error: 'Dato er påkrevd' }),
+  maxParticipants: z.coerce.number().int().min(1).optional(),
+  spotId: z.string().uuid().optional(),
+});
+```
+
 **Return convention:** For user-facing mutations (enroll, subscribe, unenroll, etc.), return `{ success: boolean; error?: string }` so the client can show appropriate toasts. For create/update actions (e.g. `publishCourse`), return the entity on success plus optional metadata (e.g. `notificationSent`); on failure, return `{ success: false, error }` or throw.
 
 - `src/lib/actions/courses.ts` -- `supabase.from('courses').insert(...)`, `.update(...)`, `.delete(...)`; enrollment via `supabase.rpc('enroll_in_course', { p_course_id })` (atomic capacity check, no overbooking). Handle already-enrolled: if the RPC raises `allerede_pameldt` or a unique violation (Postgres 23505), return `{ success: false, error: 'Du er allerede påmeldt' }`; client shows `toast.error('Du er allerede påmeldt')`. Handle full course: when the RPC raises `Course is full`, return `{ success: false, error: 'Kurset er fullt' }`; client shows `toast.error('Kurset er fullt')`. Unenrollment via `supabase.from('course_participants').delete().match({ user_id, course_id })` (RLS allows own deletion). On successful enrollment, sends a confirmation email to the user (see section 7). The `publishCourse` action looks up the instructor ID via `supabase.from('instructors').select('id').eq('user_id', currentUserId).single()` before inserting the course (not from the form) and sends notification emails to all subscribers in one server-side request.
@@ -926,7 +957,7 @@ Server Actions (`"use server"`) for mutations. Each creates a Supabase server cl
   - `demoteToUser(userId)`: Calls `demote_to_user` RPC — deletes `instructors` row AND resets `users.role = 'user'`. Single action used for both removing an instructor from the Instruktører tab and demoting a user in the Brukere tab.
   - `updateInstructorProfile(..., instructorId?)`: Accepts an optional `instructorId`; when omitted, the caller edits their own profile. When provided and the caller is admin, RLS "Admin full access" allows updating any instructor (supports the Admin tab "Edit" action for other instructors). Photo upload goes to `instructor-photos/{userId}/` bucket, URL stored in `instructors.photoUrl`. See Section 2h for admin editing another instructor's profile photo handling.
 - `src/lib/actions/messages.ts` -- `supabase.from('messages').insert(...)`
-- `src/lib/actions/subscriptions.ts` -- insert/delete on `subscriptions`. **Email verification logic:** If the submitted email matches the user's Google auth email, insert with `verified = true` (already verified by OAuth). If email differs, insert with `verified = false` + generate a random UUID `verificationToken`, then send a verification email via Resend with a link to `/api/verify-subscription?token=xxx`.
+- `src/lib/actions/subscriptions.ts` -- insert/delete on `subscriptions`. **Email verification logic:** If the submitted email matches the user's Google auth email, insert with `verified = true` (already verified by OAuth). If email differs, insert with `verified = false` + generate a random UUID `verificationToken` + set `tokenExpiresAt` to `now() + 24 hours`, then send a verification email via Resend with a link to `/verify-subscription?token=xxx` (landing page). The email should mention the 24-hour expiry window (e.g. "Denne lenken utløper om 24 timer").
 - `src/lib/actions/spots.ts` -- CRUD on `spots` + upload to `spot-maps` bucket (`{spotId}/{filename}`), store public URL in `mapImageUrl`. See Section 2h for new-spot creation flow (create → upload → update) and error handling (rollback on failure).
 - `src/lib/actions/users.ts` -- re-exports or delegates to `instructors.ts` RPC actions (`promoteToInstructor`, `promoteToAdmin`, `demoteToUser`) for role changes in Brukere tab and Instruktører tab. Role changes must use these RPCs to keep `users.role` and `instructors` in sync atomically; direct service-role update of `users.role` would skip instructor row create/delete.
 - `src/lib/actions/auth.ts` -- `signOut()`: calls `supabase.auth.signOut()`, then `redirect('/')`
@@ -997,7 +1028,10 @@ A server-only Supabase client using `SUPABASE_SERVICE_ROLE_KEY` that bypasses RL
 - **Auth callback upsert:** `INSERT ... ON CONFLICT` into `public.users` after `exchangeCodeForSession`. Service role is required because the callback runs before the user's RLS context is fully established, and we need to write to `public.users` regardless of existing policies.
 - **Admin role changes (promote/demote):** Must use Postgres RPC functions (`promote_to_instructor`, `promote_to_admin`, `demote_to_user`) via the admin's server client — never direct `users.role` update. The RPCs perform both `instructors` and `users.role` updates atomically in Postgres; direct service-role update would skip instructor sync and cause inconsistent state.
 - **publishCourse subscriber fetch:** The instructor's Supabase client has RLS that limits `subscriptions` to their own row. To send notification emails, we need all subscriber emails. Use the service role client for this single query: `adminClient.from('subscriptions').select('email').eq('verified', true)` — only verified emails receive notifications.
-- **Subscription email verification:** `src/app/api/verify-subscription/route.ts` — GET handler that reads `token` from search params, looks up the subscription by `verificationToken` using the service role client. If valid: sets `verified = true` and clears the token, then redirects to `/courses?verified=true` (the courses page can show a success toast based on the query param). If token is invalid or already used, redirect to `/courses?error=invalid_token`; the courses page reads the error query param and shows a toast when `error=invalid_token`. Service role needed because the request is unauthenticated (user clicking an email link).
+- **Subscription email verification:** Two-step flow to prevent email-scanner bots from auto-verifying tokens:
+  1. **Landing page** `src/app/verify-subscription/page.tsx` — a client page that reads `token` from the URL search params and shows a "Bekreft e-post" button. This is what the email link (`/verify-subscription?token=xxx`) opens. A GET request alone does nothing; the user must click the button, which calls the server action below.
+  2. **Server action** `src/lib/actions/subscriptions.ts` → `verifySubscriptionToken(token)` — looks up the subscription by `verificationToken` using the service role client. Checks: (a) token exists and is not already used, (b) `tokenExpiresAt` is not in the past. If valid: sets `verified = true`, clears `verificationToken` and `tokenExpiresAt`, returns `{ success: true }`. If expired: deletes the subscription row (user must re-subscribe) and returns `{ success: false, error: 'expired' }`. If invalid/already used: returns `{ success: false, error: 'invalid' }`. The landing page shows a success message with a link to `/courses`, or an error message with appropriate guidance.
+  Service role needed because the request is unauthenticated (user clicking an email link).
 
 This key is NEVER exposed to the client. Environment variable: `SUPABASE_SERVICE_ROLE_KEY` (server-only, not `NEXT_PUBLIC_`).
 
@@ -1048,7 +1082,7 @@ When a user successfully enrolls in a course, a confirmation email is sent to th
 - **`src/lib/email/resend.ts`** -- Resend client initialized with `RESEND_API_KEY`
 - **`src/lib/email/templates/new-course.tsx`** -- Subscriber notification: new course available. Includes course title, date, instructor name, price, spot link, and "Meld deg på" link.
 - **`src/lib/email/templates/enrollment-confirmation.tsx`** -- Sent to user on enrollment. Includes course details, spot link, link to course chat, and note about unenrolling at `/courses` with a link to that page.
-- **`src/lib/email/templates/subscription-verification.tsx`** -- Sent when a user subscribes with an email that differs from their auth email. Contains a verification link to `/api/verify-subscription?token=xxx`; user clicks to confirm the subscription email.
+- **`src/lib/email/templates/subscription-verification.tsx`** -- Sent when a user subscribes with an email that differs from their auth email. Contains a verification link to `/verify-subscription?token=xxx` (landing page, not a direct API call) and a note that the link expires in 24 hours. User clicks the link, sees a confirmation page, and presses "Bekreft e-post" to complete verification.
 - **Sending domain** -- Use env var `RESEND_FROM_EMAIL`: default `onboarding@resend.dev` for local/testing; production must set to the verified domain address (e.g. `noreply@aalesundkiteklubb.no`). Configure the verified domain in the Resend dashboard.
 
 ---
@@ -1125,7 +1159,7 @@ src/
 │   ├── not-found.tsx               # Custom 404 page
 │   ├── login/page.tsx              # Login page
 │   ├── auth/callback/route.ts      # OAuth callback
-│   ├── api/verify-subscription/route.ts  # GET: verify subscription email token
+│   ├── verify-subscription/page.tsx # Landing page for email verification (reads token from URL, shows confirm button)
 │   ├── spots/
 │   │   ├── page.tsx                 # Spots listing with cards and filters
 │   │   └── [id]/
@@ -1165,6 +1199,7 @@ src/
 │   │   └── middleware.ts           # Session refresh helper
 │   ├── auth/index.ts               # getCurrentUser() helper via Supabase SDK
 │   ├── logger.ts                   # DB mutation logging (success/failure, no PII)
+│   ├── validations/                # Zod schemas for server action input validation
 │   ├── actions/                    # Server actions (mutations via Supabase SDK)
 │   ├── queries/                    # Query functions (reads via Supabase SDK)
 │   └── email/

@@ -163,6 +163,7 @@ Environment variables needed:
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` -- Supabase anon key (used by Supabase SDK at runtime)
 - `SUPABASE_SERVICE_ROLE_KEY` -- Service role key (server-only, bypasses RLS for admin operations like role changes)
 - `RESEND_API_KEY` -- Resend API key (server-only, for sending subscriber notification emails)
+- `RESEND_FROM_EMAIL` -- FROM address for emails (default `onboarding@resend.dev` for dev; production must set to a verified domain address, e.g. `noreply@aalesundkiteklubb.no`)
 - `NEXT_PUBLIC_SITE_URL` -- Full origin of the app (e.g. `https://aalesundkiteklubb.no` in production, `http://localhost:3000` in dev). Used for OAuth redirect URLs in Supabase dashboard: add `{NEXT_PUBLIC_SITE_URL}/auth/callback` as an authorized redirect for Google OAuth.
 
 ---
@@ -413,7 +414,7 @@ pgPolicy("Admin full access", {
 })
 ```
 
-Same for instructor-scoped policies -- use `isInstructor` instead of a subquery to `users`.
+**Role vs ownership:** Use JWT claims (`isAdmin`, `isInstructor`) for role checks (who can perform which action type). For ownership checks (e.g. does this course belong to the current instructor), use the `instructors` table subquery — do not subquery the `users` table for role. The Courses policies (e.g. "Instructors can insert own courses") correctly use `instructorId IN (SELECT id FROM instructors WHERE user_id = auth.uid())` to verify ownership.
 
 **Per-table policy checklist:**
 
@@ -844,7 +845,7 @@ Each Server Action wraps Supabase calls and logs before returning. No PII in log
 
 Query functions used by Server Components and Server Actions. Each returns typed data from Supabase SDK:
 
-- `src/lib/queries/courses.ts` -- Export three functions: `getCoursesForPublicPage()`, `getCoursesForAdmin()`, and `getCoursesForInstructor()`. `getCoursesForPublicPage()` applies `.gte('date', new Date().toISOString())` to show future courses only; store course dates in UTC in the DB and ensure the date filter accounts for timezone (e.g. for Europe/Oslo, a course at 18:00 local on day D should not be excluded by a UTC comparison earlier that same day — compare against start-of-day in the course's display timezone or use a timezone-aware cutoff). `getCoursesForAdmin()` returns all courses, no date filter. `getCoursesForInstructor()` uses `supabase.from('courses').select('*, instructors(*), spots(*)').order('date')`; RLS on `courses` automatically restricts results to the instructor's own courses when using the server client with their session. All three use the same select shape.
+- `src/lib/queries/courses.ts` -- Export three functions: `getCoursesForPublicPage()`, `getCoursesForAdmin()`, and `getCoursesForInstructor()`. `getCoursesForPublicPage()` filters to future courses only. **Timezone:** A naive `.gte('date', new Date().toISOString())` would incorrectly exclude courses on the same calendar day in Europe/Oslo when compared from UTC. Use start-of-day in the course's display timezone: for Europe/Oslo, get today's date as `new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Oslo' })` (returns `YYYY-MM-DD`) and compare `date >= that at 00:00 Oslo`. `getCoursesForAdmin()` returns all courses, no date filter. `getCoursesForInstructor()` **must explicitly filter by instructor:** RLS on courses only defines "Public/Authenticated can view" with `using: true`, so instructors would receive all courses otherwise. Implementation: (1) Look up the current user's instructor ID via `supabase.from('instructors').select('id').eq('user_id', authUserId).single()`, (2) Apply `.eq('instructor_id', instructorId)` to the courses query. Use `supabase.from('courses').select('*, instructors(*), spots(*)').order('date')` with that filter. All three use the same select shape.
 - `src/lib/queries/instructors.ts` -- `supabase.from('instructors').select('*, users(*)')`
 - `src/lib/queries/messages.ts` -- `supabase.from('messages').select('*, users(name, avatar_url)').eq('course_id', id).order('created_at')`
 - `src/lib/queries/subscriptions.ts` -- check if current user has a subscription row (returns `verified` status for UI). For notification sends, filter to `verified = true` only.
@@ -935,7 +936,7 @@ When a user successfully enrolls in a course, a confirmation email is sent to th
 - **`src/lib/email/templates/new-course.tsx`** -- Subscriber notification: new course available. Includes course title, date, instructor name, price, spot link, and "Meld deg på" link.
 - **`src/lib/email/templates/enrollment-confirmation.tsx`** -- Sent to user on enrollment. Includes course details, spot link, link to course chat, and note about unenrolling at `/courses` with a link to that page.
 - **`src/lib/email/templates/subscription-verification.tsx`** -- Sent when a user subscribes with an email that differs from their auth email. Contains a verification link to `/api/verify-subscription?token=xxx`; user clicks to confirm the subscription email.
-- **Sending domain** -- For production, configure a verified domain and FROM address (e.g. `noreply@aalesundkiteklubb.no`) in Resend; use `onboarding@resend.dev` for local testing.
+- **Sending domain** -- Use env var `RESEND_FROM_EMAIL`: default `onboarding@resend.dev` for local/testing; production must set to the verified domain address (e.g. `noreply@aalesundkiteklubb.no`). Configure the verified domain in the Resend dashboard.
 
 ---
 
@@ -1088,7 +1089,7 @@ Migration numbers **0001–0005** refer to `supabase/migrations/` (custom SQL on
 - Stored in `supabase/migrations/` and applied with `supabase db push` (Supabase CLI).  
 - Run second, after schema is applied.
 
-**Initial setup sequence:** (1) Manual Setup steps 1–5: project, OAuth, Resend, env vars. (1a) For new projects: run `supabase init`, then add the 5 custom migration files to `supabase/migrations/`. (2) Run Drizzle generate + migrate. (3) Manual Setup step 6: `supabase link`. (4) Run `supabase db push`. (5) Manual Setup step 7: configure Auth Hook in Dashboard. (6) Manual Setup step 8: Vercel when deploying.
+**Initial setup sequence:** Complete Manual Setup steps 0–5 (project, OAuth, Resend, env vars). Then: (1) Run `pnpm db:generate` and `pnpm db:migrate`. (2) Manual Setup step 6: `supabase link`. (3) `supabase db push`. (4) Manual Setup step 7: configure Auth Hook in Dashboard. (5) Manual Setup step 8: Vercel when deploying.
 
 **Run order (initial setup or schema change):**
 
@@ -1137,7 +1138,7 @@ Steps that must be completed manually in external dashboards and consoles before
 
 4. **Resend** – Verify the sending domain in the Resend dashboard, or use `onboarding@resend.dev` for testing. Obtain an API key.
 
-5. **Environment variables – local** – Create `.env.local` with `DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, `NEXT_PUBLIC_SITE_URL`.
+5. **Environment variables – local** – Create `.env.local` with `DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL` (optional, defaults to `onboarding@resend.dev` for dev), `NEXT_PUBLIC_SITE_URL`.
 
 6. **Supabase CLI link** – Run `supabase link` to link the local project to the hosted Supabase project (required for `supabase db push`).
 

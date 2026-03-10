@@ -280,7 +280,7 @@ Enrollment is handled via a Postgres RPC function (not a direct insert) to preve
 | waterType      | text[]        | Array: "chop", "flat", "waves"                             |
 | createdAt      | timestamp     |                                                            |
 
-Yr and Google Maps links are generated dynamically from `latitude`/`longitude` (no stored URLs needed).
+Yr and Google Maps links are generated dynamically from `latitude`/`longitude` (no stored URLs needed). **When `latitude` or `longitude` is null:** hide the Værmelding and Veibeskrivelse sections, or show a placeholder message (e.g. "Kartlenker ikke tilgjengelig").
 
 
 ### 2h. Supabase Storage (buckets + RLS)
@@ -301,7 +301,7 @@ Image uploads use two public buckets. Buckets and `storage.objects` RLS policies
   - SELECT: Public (allow all for `bucket_id = 'instructor-photos'`)
   - INSERT: Authenticated with role instructor or admin, and `(storage.foldername(name))[1] = auth.uid()::text`
   - UPDATE/DELETE: Same path constraint (own folder only)
-- **Admin editing another instructor's profile:** Storage RLS allows upload only to own folder (`auth.uid()`). When an admin edits another instructor's profile in the Admin tab (Instruktører), photo changes must be self-uploaded by the target instructor. Alternatively, implement a service-role upload path for admin uploading to `instructor-photos/{targetUserId}/` when editing another instructor (requires server-side admin action using service role client for the upload).
+- **Admin editing another instructor's profile:** Storage RLS allows upload only to own folder (`auth.uid()`). When an admin edits another instructor's profile in the Admin tab (Instruktører), **photo changes must be self-uploaded by the target instructor** — admins cannot change another instructor's photo; the target must log in and update their photo themselves.
 
 **Migration `0005`** creates the buckets and RLS policies. Full SQL:
 
@@ -724,10 +724,10 @@ A dedicated page for each spot with these sections:
 - **Wind compass** -- visual compass rose highlighting the favorable `windDirections` (e.g. "SW", "NE")
 - **Om spotten** -- `description` text
 - **Kart** -- the admin-uploaded `mapImageUrl` (annotated satellite/map image showing the spot area)
-- **Værmelding** -- link to Yr.no using `latitude`/`longitude` (opens in new tab): `https://www.yr.no/nb/v%C3%A6rvarsel/daglig-tabell/{lat},{lon}`
-- **Veibeskrivelse** -- "Vis i Google Maps" button using `latitude`/`longitude` (opens in new tab): `https://www.google.com/maps?q={lat},{lon}`
+- **Værmelding** -- link to Yr.no using `latitude`/`longitude` (opens in new tab): `https://www.yr.no/nb/v%C3%A6rvarsel/daglig-tabell/{lat},{lon}`. When latitude or longitude is null, hide this section or show "Kartlenker ikke tilgjengelig".
+- **Veibeskrivelse** -- "Vis i Google Maps" button using `latitude`/`longitude` (opens in new tab): `https://www.google.com/maps?q={lat},{lon}`. When latitude or longitude is null, hide this section or show "Kartlenker ikke tilgjengelig".
 - **Nødvendige kiteskills** -- `skillLevel` displayed as "Erfaren" or "Nybegynner" badge, plus `skillNotes` text
-- **Type** -- `waterType` tags displayed as badges: "Chop", "Flatt vann", "Bølger"
+- **Type** -- `waterType` tags displayed as badges with this mapping: `chop` → "Chop", `flat` → "Flatt vann", `waves` → "Bølger"
 
 All content is CMS-managed by admins.
 
@@ -792,7 +792,7 @@ Protected by middleware (instructor or admin role). **Shared by both** — admin
 
 **Tab: Mine Kurs**
 - DataTable listing own courses sorted by date
-- "Nytt kurs" button → Dialog with course form (title, description, price, date, max participants, searchable spot dropdown). **`instructorId` is not in the form** — it is set automatically from the current user's instructor record when creating the course. Uses `publishCourse` which triggers subscriber emails.
+- "Nytt kurs" button → Dialog with course form (title, description, price, date, max participants, searchable spot dropdown). **`instructorId` is not in the form** — it is set automatically from the current user's instructor record when creating the course. Uses `publishCourse` which sends subscriber notification emails.
 - Row actions: Edit, Delete, View participants (expandable row or Dialog with remove buttons)
 
 ### 5g. Auth Pages
@@ -812,8 +812,8 @@ Server Actions (`"use server"`) for mutations. Each creates a Supabase server cl
 
 **Return convention:** For user-facing mutations (enroll, subscribe, unenroll, etc.), return `{ success: boolean; error?: string }` so the client can show appropriate toasts. For create/update actions (e.g. `publishCourse`), return the entity on success plus optional metadata (e.g. `notificationSent`); on failure, return `{ success: false, error }` or throw.
 
-- `src/lib/actions/courses.ts` -- `supabase.from('courses').insert(...)`, `.update(...)`, `.delete(...)`; enrollment via `supabase.rpc('enroll_in_course', { p_course_id })` (atomic capacity check, no overbooking). Handle already-enrolled: if the RPC raises `allerede_pameldt` or a unique violation (Postgres 23505), return `{ success: false, error: 'Du er allerede påmeldt' }`; client shows `toast.error('Du er allerede påmeldt')`. Unenrollment via `supabase.from('course_participants').delete().match({ user_id, course_id })` (RLS allows own deletion). On successful enrollment, sends a confirmation email to the user (see section 7). The `publishCourse` action looks up the instructor ID via `supabase.from('instructors').select('id').eq('user_id', currentUserId).single()` before inserting the course (not from the form) and sends notification emails to all subscribers in one server-side request.
-- `src/lib/actions/instructors.ts` -- **Atomic admin actions to keep `users.role` and `instructors` table in sync:**
+- `src/lib/actions/courses.ts` -- `supabase.from('courses').insert(...)`, `.update(...)`, `.delete(...)`; enrollment via `supabase.rpc('enroll_in_course', { p_course_id })` (atomic capacity check, no overbooking). Handle already-enrolled: if the RPC raises `allerede_pameldt` or a unique violation (Postgres 23505), return `{ success: false, error: 'Du er allerede påmeldt' }`; client shows `toast.error('Du er allerede påmeldt')`. Handle full course: when the RPC raises `Course is full`, return `{ success: false, error: 'Kurset er fullt' }`; client shows `toast.error('Kurset er fullt')`. Unenrollment via `supabase.from('course_participants').delete().match({ user_id, course_id })` (RLS allows own deletion). On successful enrollment, sends a confirmation email to the user (see section 7). The `publishCourse` action looks up the instructor ID via `supabase.from('instructors').select('id').eq('user_id', currentUserId).single()` before inserting the course (not from the form) and sends notification emails to all subscribers in one server-side request.
+- `src/lib/actions/instructors.ts` -- **Atomic admin actions to keep `users.role` and `instructors` table in sync:** Use a Postgres transaction (or Supabase client transaction if available) when promoting/demoting so that either both operations succeed or both roll back.
   - `promoteToInstructor(userId)`: Creates `instructors` profile row (if missing) AND sets `users.role = 'instructor'`.
   - `promoteToAdmin(userId)`: Creates `instructors` profile row (if missing) AND sets `users.role = 'admin'`. Admins always have an instructor profile so they can create courses.
   - `demoteToUser(userId)`: Deletes `instructors` row AND resets `users.role = 'user'`. Single action used for both removing an instructor from the Instructors tab and demoting a user in the Brukere tab.

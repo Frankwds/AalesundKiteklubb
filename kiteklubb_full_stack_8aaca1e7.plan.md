@@ -301,6 +301,7 @@ Image uploads use two public buckets. Buckets and `storage.objects` RLS policies
   - SELECT: Public (allow all for `bucket_id = 'instructor-photos'`)
   - INSERT: Authenticated with role instructor or admin, and `(storage.foldername(name))[1] = auth.uid()::text`
   - UPDATE/DELETE: Same path constraint (own folder only)
+- **Admin editing another instructor's profile:** Storage RLS allows upload only to own folder (`auth.uid()`). When an admin edits another instructor's profile in the Admin tab (Instruktører), photo changes must be self-uploaded by the target instructor. Alternatively, implement a service-role upload path for admin uploading to `instructor-photos/{targetUserId}/` when editing another instructor (requires server-side admin action using service role client for the upload).
 
 **Migration `0005`** creates the buckets and RLS policies. Full SQL:
 
@@ -332,7 +333,7 @@ CREATE POLICY "instructor-photos authenticated upload" ON storage.objects
     (current_setting('request.jwt.claims', true)::jsonb)->>'user_role' IN ('instructor','admin') AND
     (storage.foldername(name))[1] = auth.uid()::text
   );
-CREATE POLICY "instructor-photos own folder update delete" ON storage.objects
+CREATE POLICY "instructor-photos own folder update" ON storage.objects
   FOR UPDATE TO authenticated USING (
     bucket_id = 'instructor-photos' AND (storage.foldername(name))[1] = auth.uid()::text
   )
@@ -347,7 +348,7 @@ CREATE POLICY "instructor-photos own folder delete" ON storage.objects
 
 **Upload flow:** Server Actions call `supabase.storage.from(bucket).upload(path, file)`, then `getPublicUrl(path)` to obtain the URL stored in `instructors.photoUrl` or `spots.mapImageUrl`.
 
-**New spot creation with map:** Since the bucket path requires `spotId`, for a new spot: (1) Create the spot row first (without `mapImageUrl`), (2) Upload image to `spot-maps/{newSpotId}/{filename}`, (3) Update the spot with `mapImageUrl`. For edits, use the existing `spotId` directly. **Error handling:** If step 2 or 3 fails (e.g. upload error, network failure), delete the newly created spot row and return an error to the admin. Do not leave a spot without a map in a partial state.
+**New spot creation with map:** Since the bucket path requires `spotId`, for a new spot: (1) Create the spot row first (without `mapImageUrl`), (2) Upload image to `spot-maps/{newSpotId}/{filename}`, (3) Update the spot with `mapImageUrl`. For edits, use the existing `spotId` directly. When creating a spot without a map, omit steps 2–3; `mapImageUrl` remains null. **Error handling:** If step 2 or 3 fails (e.g. upload error, network failure), delete the newly created spot row and return an error to the admin. Do not leave a spot without a map in a partial state.
 
 
 ### RLS Policies (native Drizzle `pgPolicy` -- defined alongside tables)
@@ -816,7 +817,7 @@ Server Actions (`"use server"`) for mutations. Each creates a Supabase server cl
   - `promoteToInstructor(userId)`: Creates `instructors` profile row (if missing) AND sets `users.role = 'instructor'`.
   - `promoteToAdmin(userId)`: Creates `instructors` profile row (if missing) AND sets `users.role = 'admin'`. Admins always have an instructor profile so they can create courses.
   - `demoteToUser(userId)`: Deletes `instructors` row AND resets `users.role = 'user'`. Single action used for both removing an instructor from the Instructors tab and demoting a user in the Brukere tab.
-  - `updateInstructorProfile(...)`: Instructor or admin edits their own profile (bio, certs, photo, etc.) -- RLS allows self-update. Photo upload goes to `instructor-photos/{userId}/` bucket, URL stored in `instructors.photoUrl`.
+  - `updateInstructorProfile(..., instructorId?)`: Accepts an optional `instructorId`; when omitted, the caller edits their own profile. When provided and the caller is admin, RLS "Admin full access" allows updating any instructor (supports the Admin tab "Edit" action for other instructors). Photo upload goes to `instructor-photos/{userId}/` bucket, URL stored in `instructors.photoUrl`. See Section 2h for admin editing another instructor's profile photo handling.
 - `src/lib/actions/messages.ts` -- `supabase.from('messages').insert(...)`
 - `src/lib/actions/subscriptions.ts` -- insert/delete on `subscriptions`. **Email verification logic:** If the submitted email matches the user's Google auth email, insert with `verified = true` (already verified by OAuth). If email differs, insert with `verified = false` + generate a random UUID `verificationToken`, then send a verification email via Resend with a link to `/api/verify-subscription?token=xxx`.
 - `src/lib/actions/spots.ts` -- CRUD on `spots` + upload to `spot-maps` bucket (`{spotId}/{filename}`), store public URL in `mapImageUrl`. See Section 2h for new-spot creation flow (create → upload → update) and error handling (rollback on failure).

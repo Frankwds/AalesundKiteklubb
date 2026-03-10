@@ -39,4 +39,4 @@ After processing all items, output a short summary:
 - How many items were applied, skipped, or modified
 - For skipped items, briefly state why (e.g., “ERR-005: Applied — fixed schema typo”, “CLAR-012: Skipped — current wording is intentional”)
 
-Then return the updated plan as the final artifact.
+Then Write the Summary to the bottom of the improvements.json file for the next agent to see and review your work.

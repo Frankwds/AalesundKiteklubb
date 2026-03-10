@@ -175,6 +175,7 @@ All schemas in `src/lib/db/schema/`. In schema files, use explicit Postgres colu
 
 Synced from Supabase Auth on first login via auth callback.
 
+Column names below are Drizzle/TypeScript property names; Postgres columns use snake_case (e.g. `avatar_url`, `created_at`, `user_id`).
 
 | Column    | Type          | Notes                         |
 | --------- | ------------- | ----------------------------- |
@@ -304,12 +305,12 @@ Image uploads use two public buckets. Buckets and `storage.objects` RLS policies
 
 **Upload flow:** Server Actions call `supabase.storage.from(bucket).upload(path, file)`, then `getPublicUrl(path)` to obtain the URL stored in `instructors.photoUrl` or `spots.mapImageUrl`.
 
-**New spot creation with map:** Since the bucket path requires `spotId`, for a new spot: (1) Create the spot row first (without `mapImageUrl`), (2) Upload image to `spot-maps/{newSpotId}/{filename}`, (3) Update the spot with `mapImageUrl`. For edits, use the existing `spotId` directly.
+**New spot creation with map:** Since the bucket path requires `spotId`, for a new spot: (1) Create the spot row first (without `mapImageUrl`), (2) Upload image to `spot-maps/{newSpotId}/{filename}`, (3) Update the spot with `mapImageUrl`. For edits, use the existing `spotId` directly. **Error handling:** If step 2 or 3 fails (e.g. upload error, network failure), delete the newly created spot row and return an error — do not leave a spot without a map in a partial state. Alternatively, document that partial creation is acceptable and the admin can retry the map upload later via Edit.
 
 
 ### RLS Policies (native Drizzle `pgPolicy` -- defined alongside tables)
 
-RLS is the primary authorization mechanism. Policies are defined directly in the Drizzle schema files using `pgPolicy` from `drizzle-orm/pg-core` and Supabase helpers (`authenticatedRole`, `anonRole`, `authUid`) from `drizzle-orm/supabase`. `drizzle-kit generate` produces the `CREATE POLICY` SQL automatically.
+RLS is the primary authorization mechanism. Policies are defined directly in the Drizzle schema files using `pgPolicy` from `drizzle-orm/pg-core` and Supabase helpers (`authenticatedRole`, `anonRole`, `authUid`) from `drizzle-orm/supabase`. `drizzle-kit generate` produces the `CREATE POLICY` SQL automatically. **Note:** Ensure `drizzle-orm` and `drizzle-orm/supabase` (or the package providing these exports) are at compatible versions; if the package structure has changed, update the import path accordingly.
 
 Example pattern used across all tables:
 
@@ -350,9 +351,32 @@ export const courses = pgTable('courses', {
 ]);
 ```
 
+### Reading roles from JWT in RLS policies (no subqueries)
+
+Since the Custom JWT Claims Hook (migration `0002`) injects `user_role` into the token, all RLS policies that check roles should read directly from the JWT instead of querying the `users` table. This is instant -- no table access needed.
+
+```typescript
+// Helper SQL fragment (reuse across all policies that check role)
+const isAdmin = sql`(current_setting('request.jwt.claims', true)::jsonb)->>'user_role' = 'admin'`;
+const isInstructor = sql`(current_setting('request.jwt.claims', true)::jsonb)->>'user_role' = 'instructor'`;
+```
+
+Admin bypass policy (added to every table where admins need full access):
+
+```typescript
+pgPolicy("Admin full access", {
+  for: "all",
+  to: authenticatedRole,
+  using: isAdmin,
+  withCheck: isAdmin,
+})
+```
+
+Same for instructor-scoped policies -- use `isInstructor` instead of a subquery to `users`.
+
 **Per-table policy checklist:**
 
-Every policy below MUST be implemented as a `pgPolicy` in the corresponding Drizzle schema file. Use the `isAdmin` / `isInstructor` JWT helpers (see below) for role checks — never subquery `users` for role. The "Admin full access" policy (for: `"all"`, using: `isAdmin`, withCheck: `isAdmin`) should be added to every table where admin access is listed.
+Every policy below MUST be implemented as a `pgPolicy` in the corresponding Drizzle schema file. Use the `isAdmin` / `isInstructor` JWT helpers (see above) for role checks — never subquery `users` for role. The "Admin full access" policy (for: `"all"`, using: `isAdmin`, withCheck: `isAdmin`) should be added to every table where admin access is listed.
 
 **Users table** (`src/lib/db/schema/users.ts`) — 4 policies:
 
@@ -409,29 +433,6 @@ Every policy below MUST be implemented as a `pgPolicy` in the corresponding Driz
 3. `"Admin full access"` — ALL, `authenticatedRole`, using/withCheck: `isAdmin`
 
 **Total: 31 policies** across 7 tables. All must be defined as `pgPolicy` calls in the schema files so `drizzle-kit generate` produces the corresponding `CREATE POLICY` SQL.
-
-### Reading roles from JWT in RLS policies (no subqueries)
-
-Since the Custom JWT Claims Hook (migration `0002`) injects `user_role` into the token, all RLS policies that check roles should read directly from the JWT instead of querying the `users` table. This is instant -- no table access needed.
-
-```typescript
-// Helper SQL fragment (reuse across all policies that check role)
-const isAdmin = sql`(current_setting('request.jwt.claims', true)::jsonb)->>'user_role' = 'admin'`;
-const isInstructor = sql`(current_setting('request.jwt.claims', true)::jsonb)->>'user_role' = 'instructor'`;
-```
-
-Admin bypass policy (added to every table where admins need full access):
-
-```typescript
-pgPolicy("Admin full access", {
-  for: "all",
-  to: authenticatedRole,
-  using: isAdmin,
-  withCheck: isAdmin,
-})
-```
-
-Same for instructor-scoped policies -- use `isInstructor` instead of a subquery to `users`.
 
 ### Chat-related RLS (users and course_participants)
 
@@ -680,7 +681,7 @@ Sections:
   - **Not logged in:** "Logg inn for å melde på" (links to login)
   - **Logged in, not enrolled:** "Meld på" button opens a confirmation dialog (description of action, prefilled email field showing where confirmation will be sent — read from auth, display-only — "Avbryt" + "Meld på" buttons). On confirm, calls `enroll_in_course` RPC. On successful enrollment, a confirmation email is sent to the user (see section 7). **Do not show "Chat"** — only enrolled users see it.
   - **Logged in, enrolled:** "Meld av" button opens a confirmation dialog (description of action, "Avbryt" + "Meld av" buttons). On confirm, deletes from `course_participants`. "Chat" button links to `/courses/[id]/chat`.
-  - When no courses: semi-grayed placeholder text, e.g. "Kurs legges ut når forholdene ser lovende ut, ikke langt i forkant. Meld deg på for å få varsler." plus Subscribe button/link that scrolls to the Subscribe section.
+  - When no courses: muted placeholder text (e.g. `text-muted-foreground` or reduced opacity), e.g. "Kurs legges ut når forholdene ser lovende ut, ikke langt i forkant. Meld deg på for å få varsler." plus Subscribe button/link that scrolls to the Subscribe section.
 - **Subscribe** -- requires login. Clicking Subscribe opens a confirmation dialog with: description of the action (e.g. receive email when new courses are published), prefilled editable email field, "Avbryt" (cancel) and "Meld på" (confirm) buttons. On confirm, stores in subscriptions table. If already subscribed, "Meld av" opens a confirmation dialog (description, "Avbryt" + "Meld av"); on confirm, removes from subscriptions.
 
 ### 5d. Course Chat (`src/app/courses/[id]/chat/page.tsx`)
@@ -750,7 +751,7 @@ All data access uses the Supabase SDK. **Supabase SDK uses snake_case for column
 
 Server Actions (`"use server"`) for mutations. Each creates a Supabase server client, calls SDK methods, and logs success/failure via `src/lib/logger.ts`.
 
-- `src/lib/actions/courses.ts` -- `supabase.from('courses').insert(...)`, `.update(...)`, `.delete(...)`; enrollment via `supabase.rpc('enroll_in_course', { p_course_id })` (atomic capacity check, no overbooking); unenrollment via `supabase.from('course_participants').delete().match({ user_id, course_id })` (RLS allows own deletion). On successful enrollment, sends a confirmation email to the user (see section 7). The `publishCourse` action inserts the course with `instructorId` set from the current user's instructor record (not from the form) and sends notification emails to all subscribers in one server-side request.
+- `src/lib/actions/courses.ts` -- `supabase.from('courses').insert(...)`, `.update(...)`, `.delete(...)`; enrollment via `supabase.rpc('enroll_in_course', { p_course_id })` (atomic capacity check, no overbooking); unenrollment via `supabase.from('course_participants').delete().match({ user_id, course_id })` (RLS allows own deletion). On successful enrollment, sends a confirmation email to the user (see section 7). The `publishCourse` action looks up the instructor ID via `supabase.from('instructors').select('id').eq('user_id', currentUserId).single()` before inserting the course (not from the form) and sends notification emails to all subscribers in one server-side request.
 - `src/lib/actions/instructors.ts` -- **Atomic admin actions to keep `users.role` and `instructors` table in sync:**
   - `promoteToInstructor(userId)`: Creates `instructors` profile row (if missing) AND sets `users.role = 'instructor'`.
   - `promoteToAdmin(userId)`: Creates `instructors` profile row (if missing) AND sets `users.role = 'admin'`. Admins always have an instructor profile so they can create courses.
@@ -855,7 +856,7 @@ sequenceDiagram
 ### Implementation (`src/lib/actions/courses.ts`)
 
 The `publishCourse` Server Action:
-1. Inserts the course (with `spotId`) via Supabase server client (RLS verifies the user is an instructor or admin)
+1. Looks up instructor ID via `supabase.from('instructors').select('id').eq('user_id', currentUserId).single()`, then inserts the course (with `instructorId`, `spotId`) via Supabase server client (RLS verifies the user is an instructor or admin)
 2. On success, fetches the linked spot data and all subscriber emails. Subscriber list uses the **service role client** (instructor's client is restricted by RLS to their own subscription only)
 3. Sends individual emails via Resend to each verified subscriber (loop or `Promise.all` over individual sends). One email per subscriber with course details (title, date, description, spot name + link to `/spots/[spotId]`, and a "Meld deg på" enroll link).
 4. Returns `{ course, notificationSent: boolean }` where `notificationSent` is true only if all subscriber emails were sent successfully. If false, the client may show a warning toast; the course remains created.
@@ -874,6 +875,7 @@ When a user successfully enrolls in a course, a confirmation email is sent to th
 - **`src/lib/email/resend.ts`** -- Resend client initialized with `RESEND_API_KEY`
 - **`src/lib/email/templates/new-course.tsx`** -- Subscriber notification: new course available. Includes course title, date, instructor name, price, spot link, and "Meld deg på" link.
 - **`src/lib/email/templates/enrollment-confirmation.tsx`** -- Sent to user on enrollment. Includes course details, spot link, link to course chat, and note about unenrolling at `/courses` with a link to that page.
+- **`src/lib/email/templates/subscription-verification.tsx`** -- Sent when a user subscribes with an email that differs from their auth email. Contains a verification link to `/api/verify-subscription?token=xxx`; user clicks to confirm the subscription email.
 - **Sending domain** -- For production, configure a verified domain and FROM address (e.g. `noreply@aalesundkiteklubb.no`) in Resend; use `onboarding@resend.dev` for local testing.
 
 ---
@@ -993,7 +995,8 @@ src/
 │       ├── resend.ts               # Resend client instance
 │       └── templates/
 │           ├── new-course.tsx      # Subscriber notification: new course available
-│           └── enrollment-confirmation.tsx  # Sent to user on enrollment
+│           ├── enrollment-confirmation.tsx  # Sent to user on enrollment
+│           └── subscription-verification.tsx  # Click to verify subscription email (when email ≠ auth)
 ├── types/
 │   └── database.ts                 # Generated types from Supabase (npx supabase gen types)
 └── middleware.ts                   # Next.js middleware (session refresh + route protection)
@@ -1012,7 +1015,7 @@ supabase/
 
 ### Migration Workflow
 
-**Prerequisites:** See Manual Setup (Section 12) — in particular, run `supabase link` before `supabase db push`.
+**Prerequisites:** See Manual Setup Steps — in particular, run `supabase link` before `supabase db push`.
 
 Migration numbers **0001–0005** refer to `supabase/migrations/` (custom SQL only). Drizzle migrations in `drizzle/` use their own numbering (e.g. `0000_*`, `0001_*`). Two systems, run in order:
 

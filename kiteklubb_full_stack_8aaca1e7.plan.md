@@ -241,88 +241,88 @@ Synced from Supabase Auth on first login via auth callback.
 
 All column names use snake_case (e.g. `avatar_url`, `created_at`, `user_id`).
 
-| Column    | Type          | Notes                         |
-| --------- | ------------- | ----------------------------- |
-| id        | uuid PK       | Matches `auth.users.id`       |
-| email     | text NOT NULL |                               |
-| name      | text          |                               |
-| avatarUrl | text          |                               |
-| role      | enum          | `user`, `instructor`, `admin` |
-| createdAt | timestamp     | default now()                 |
+| Column     | Type          | Notes                         |
+| ---------- | ------------- | ----------------------------- |
+| id         | uuid PK       | Matches `auth.users.id`       |
+| email      | text NOT NULL |                               |
+| name       | text          |                               |
+| avatar_url | text          |                               |
+| role       | enum          | `user`, `instructor`, `admin` |
+| created_at | timestamp     | default now()                 |
 
 
 ### 2b. Instructors
 
 
-| Column          | Type      | Notes                   |
-| --------------- | --------- | ----------------------- |
-| id              | uuid PK   | default gen_random_uuid |
-| userId          | uuid FK   | -> users.id, unique, ON DELETE CASCADE |
-| bio             | text      |                         |
-| certifications  | text      | e.g. "IKO Level 2"      |
-| yearsExperience | integer   |                         |
-| phone           | text      |                         |
-| photoUrl        | text      | Supabase Storage public URL from `instructor-photos` bucket |
-| createdAt       | timestamp |                         |
+| Column           | Type      | Notes                   |
+| ---------------- | --------- | ----------------------- |
+| id               | uuid PK   | default gen_random_uuid |
+| user_id          | uuid FK   | -> users.id, unique, ON DELETE CASCADE |
+| bio              | text      |                         |
+| certifications   | text      | e.g. "IKO Level 2"      |
+| years_experience | integer   |                         |
+| phone            | text      |                         |
+| photo_url        | text      | Supabase Storage public URL from `instructor-photos` bucket |
+| created_at       | timestamp |                         |
 
-**Sync invariant:** Users with `role = 'instructor'` or `role = 'admin'` always have a row in `instructors`. Admins automatically get an instructor profile when promoted (so they can create courses using the same UI). These are created atomically via admin actions (see section 6). The JWT claim (`user_role`) handles fast permission checks (middleware, UI). The `instructors` table holds profile data and provides the FK for `courses.instructorId`.
+**Sync invariant:** Users with `role = 'instructor'` or `role = 'admin'` always have a row in `instructors`. Admins automatically get an instructor profile when promoted (so they can create courses using the same UI). These are created atomically via admin actions (see section 6). The JWT claim (`user_role`) handles fast permission checks (middleware, UI). The `instructors` table holds profile data and provides the FK for `courses.instructor_id`.
 
 
 ### 2c. Courses
 
 
-| Column          | Type          | Notes                                 |
-| --------------- | ------------- | ------------------------------------- |
-| id              | uuid PK       |                                       |
-| title           | text NOT NULL |                                       |
-| description     | text          |                                       |
-| price           | integer       | In NOK (e.g. 500 kr)                  |
-| date            | timestamp     |                                       |
-| maxParticipants | integer       | nullable = unlimited                  |
-| instructorId    | uuid FK       | -> instructors.id, nullable, ON DELETE SET NULL |
-| spotId          | uuid FK       | -> spots.id, nullable, ON DELETE SET NULL |
-| createdAt       | timestamp     |                                       |
+| Column           | Type          | Notes                                 |
+| ---------------- | ------------- | ------------------------------------- |
+| id               | uuid PK       |                                       |
+| title            | text NOT NULL |                                       |
+| description      | text          |                                       |
+| price            | integer       | In NOK (e.g. 500 kr)                  |
+| date             | timestamptz   | Stored with timezone; compare using Oslo-aware midnight (see queries section) |
+| max_participants | integer       | nullable = unlimited                  |
+| instructor_id    | uuid FK       | -> instructors.id, nullable, ON DELETE SET NULL |
+| spot_id          | uuid FK       | -> spots.id, nullable, ON DELETE SET NULL |
+| created_at       | timestamp     |                                       |
 
 
 ### 2d. Course Participants
 
 
-| Column     | Type      | Notes         |
-| ---------- | --------- | ------------- |
-| id         | uuid PK   |               |
-| userId     | uuid FK   | -> users.id, ON DELETE CASCADE   |
-| courseId   | uuid FK   | -> courses.id, ON DELETE CASCADE |
-| enrolledAt | timestamp | default now() |
+| Column      | Type      | Notes         |
+| ----------- | --------- | ------------- |
+| id          | uuid PK   |               |
+| user_id     | uuid FK   | -> users.id, ON DELETE CASCADE   |
+| course_id   | uuid FK   | -> courses.id, ON DELETE CASCADE |
+| enrolled_at | timestamp | default now() |
 
 
-Unique constraint on (userId, courseId).
+Unique constraint on (user_id, course_id).
 
 Enrollment is handled via a Postgres RPC function (not a direct insert) to prevent overbooking -- see migration `0006`.
 
 ### 2e. Messages
 
 
-| Column    | Type          | Notes         |
-| --------- | ------------- | ------------- |
-| id        | uuid PK       |               |
-| userId    | uuid FK       | -> users.id, nullable, ON DELETE SET NULL (shows "Slettet bruker" in chat) |
-| courseId  | uuid FK       | -> courses.id, ON DELETE CASCADE |
-| content   | text NOT NULL |               |
-| createdAt | timestamp     | default now() |
+| Column     | Type          | Notes         |
+| ---------- | ------------- | ------------- |
+| id         | uuid PK       |               |
+| user_id    | uuid FK       | -> users.id, nullable, ON DELETE SET NULL (shows "Slettet bruker" in chat) |
+| course_id  | uuid FK       | -> courses.id, ON DELETE CASCADE |
+| content    | text NOT NULL |               |
+| created_at | timestamp     | default now() |
 
 
 ### 2f. Subscriptions
 
 
-| Column            | Type          | Notes                |
-| ----------------- | ------------- | -------------------- |
-| id                | uuid PK       |                      |
-| userId            | uuid FK       | -> users.id, **unique**, ON DELETE CASCADE |
-| email             | text NOT NULL | Autofilled, editable, **unique** |
-| verified          | boolean       | default `false`      |
-| verificationToken | uuid          | nullable, unique. Generated when email ≠ auth email |
-| tokenExpiresAt    | timestamp     | nullable. Set to `now() + interval '24 hours'` when `verificationToken` is generated. Null when no token is active. |
-| createdAt         | timestamp     | default now()        |
+| Column             | Type          | Notes                |
+| ------------------ | ------------- | -------------------- |
+| id                 | uuid PK       |                      |
+| user_id            | uuid FK       | -> users.id, **unique**, ON DELETE CASCADE |
+| email              | text NOT NULL | Autofilled, editable. Not globally unique — two users may use the same notification address; `user_id` UNIQUE enforces one subscription per user. |
+| verified           | boolean       | default `false`      |
+| verification_token | uuid          | nullable, unique. Generated when email ≠ auth email |
+| token_expires_at   | timestamp     | nullable. Set to `now() + interval '24 hours'` when `verification_token` is generated. Null when no token is active. |
+| created_at         | timestamp     | default now()        |
 
 
 ### 2g. Spots
@@ -335,14 +335,14 @@ Enrollment is handled via a Postgres RPC function (not a direct insert) to preve
 | description    | text          | "Om spotten" text                                          |
 | season         | enum          | `summer`, `winter` (SommerSpotter / VinterSpotter)         |
 | area           | text NOT NULL | Grouping for filtering (e.g. "Giske", "Ålesund"). Free text. Admin form uses a Combobox that suggests existing area values from other spots (typed text filters the list). Selecting autofills the field; typing a new value uses it as-is. Used for area filter on listing page. |
-| windDirections | text[]        | Array of compass strings: "N","NE","E","SE","S","SW","W","NW" |
-| mapImageUrl    | text          | Supabase Storage public URL from `spot-maps` bucket         |
-| latitude       | numeric       | For Yr link and Google Maps link                           |
-| longitude      | numeric       | For Yr link and Google Maps link                           |
-| skillLevel     | enum          | `beginner`, `experienced`                                  |
-| skillNotes     | text          | e.g. "Du må kunne ta høyde, ikke veldig langgrunt"         |
-| waterType      | text[]        | Array: "chop", "flat", "waves"                             |
-| createdAt      | timestamp     |                                                            |
+| wind_directions | text[]        | Array of compass strings: "N","NE","E","SE","S","SW","W","NW" |
+| map_image_url   | text          | Supabase Storage public URL from `spot-maps` bucket         |
+| latitude        | numeric       | For Yr link and Google Maps link                           |
+| longitude       | numeric       | For Yr link and Google Maps link                           |
+| skill_level     | enum          | `beginner`, `experienced`                                  |
+| skill_notes     | text          | e.g. "Du må kunne ta høyde, ikke veldig langgrunt"         |
+| water_type      | text[]        | Array: "chop", "flat", "waves"                             |
+| created_at      | timestamp     |                                                            |
 
 Yr and Google Maps links are generated dynamically from `latitude`/`longitude` (no stored URLs needed). **When `latitude` or `longitude` is null:** hide the Værmelding and Veibeskrivelse sections, or show a placeholder message (e.g. "Kartlenker ikke tilgjengelig").
 
@@ -410,9 +410,9 @@ CREATE POLICY "instructor-photos own folder delete" ON storage.objects
   );
 ```
 
-**Upload flow:** Server Actions call `supabase.storage.from(bucket).upload(path, file)`, then `getPublicUrl(path)` to obtain the URL stored in `instructors.photoUrl` or `spots.mapImageUrl`.
+**Upload flow:** Server Actions call `supabase.storage.from(bucket).upload(path, file)`, then `getPublicUrl(path)` to obtain the URL stored in `instructors.photo_url` or `spots.map_image_url`.
 
-**New spot creation with map:** Since the bucket path requires `spotId`, for a new spot: (1) Create the spot row first (without `mapImageUrl`), (2) Upload image to `spot-maps/{newSpotId}/{filename}`, (3) Update the spot with `mapImageUrl`. For edits, use the existing `spotId` directly. When creating a spot without a map, omit steps 2–3; `mapImageUrl` remains null. **Error handling:** If step 2 or 3 fails (e.g. upload error, network failure), delete the newly created spot row and return an error to the admin. Do not leave a spot without a map in a partial state.
+**New spot creation with map:** Since the bucket path requires `spotId`, for a new spot: (1) Create the spot row first (without `map_image_url`), (2) Upload image to `spot-maps/{newSpotId}/{filename}`, (3) Update the spot with `map_image_url`. For edits, use the existing `spotId` directly. When creating a spot without a map, omit steps 2–3; `map_image_url` remains null. **Error handling:** If step 2 or 3 fails (e.g. upload error, network failure), delete the newly created spot row and return an error to the admin. Do not leave a spot without a map in a partial state.
 
 
 ### RLS Policies (defined in migration `0002`)
@@ -605,6 +605,12 @@ begin
   return event;
 end;
 $$;
+
+-- Required grants: supabase_auth_admin must be able to call the hook and read users.role
+grant usage on schema public to supabase_auth_admin;
+grant execute on function public.custom_access_token_hook to supabase_auth_admin;
+revoke execute on function public.custom_access_token_hook from authenticated, anon, public;
+grant all on table public.users to supabase_auth_admin;
 ```
 
 After this, every access token issued by Supabase contains `user_role` as a top-level JWT claim. **Important:** this claim is NOT in `user.app_metadata` — it lives in the raw JWT payload. To read it on the JS side, decode the access token from the session:
@@ -635,7 +641,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.messages;
 
 ### Atomic Enrollment Function (RPC)
 
-A Postgres function that atomically checks course capacity and enrolls the user, preventing race conditions where two users enroll at the same moment and exceed `maxParticipants`. Defined in migration `0006`.
+A Postgres function that atomically checks course capacity and enrolls the user, preventing race conditions where two users enroll at the same moment and exceed `max_participants`. Defined in migration `0006`.
 
 ```sql
 create or replace function public.enroll_in_course(p_course_id uuid)
@@ -720,7 +726,7 @@ end;
 $$;
 ```
 
-Called via `supabase.rpc('promote_to_instructor', { p_user_id })`, `supabase.rpc('promote_to_admin', { p_user_id })`, and `supabase.rpc('demote_to_user', { p_user_id })` from the admin's server client. RLS "Admin full access" allows the updates; the JWT check provides defense in depth. `demote_to_user` includes a last-admin guard — if `p_user_id` is the only remaining admin, the function raises `'Cannot demote the last admin'`; the server action returns this as `{ success: false, error: 'Kan ikke fjerne siste admin' }` and the UI shows a toast. **Note:** `instructors.user_id` must have a unique constraint for `ON CONFLICT (user_id)` to work — the schema already defines `userId` as unique.
+Called via `supabase.rpc('promote_to_instructor', { p_user_id })`, `supabase.rpc('promote_to_admin', { p_user_id })`, and `supabase.rpc('demote_to_user', { p_user_id })` from the admin's server client. RLS "Admin full access" allows the updates; the JWT check provides defense in depth. `demote_to_user` includes a last-admin guard — if `p_user_id` is the only remaining admin, the function raises `'Cannot demote the last admin'`; the server action returns this as `{ success: false, error: 'Kan ikke fjerne siste admin' }` and the UI shows a toast. **Note:** `instructors.user_id` must have a unique constraint for `ON CONFLICT (user_id)` to work — the schema already defines `user_id` as unique.
 
 ---
 
@@ -828,13 +834,13 @@ Spots are accessed via a direct nav link to `/spots`. One nav item "Spotter" lin
 
 A dedicated page for each spot with these sections:
 
-- **Wind compass** -- visual compass rose highlighting the favorable `windDirections` (e.g. "SW", "NE")
+- **Wind compass** -- visual compass rose highlighting the favorable `wind_directions` (e.g. "SW", "NE")
 - **Om spotten** -- `description` text
-- **Kart** -- the admin-uploaded `mapImageUrl` (annotated satellite/map image showing the spot area)
+- **Kart** -- the admin-uploaded `map_image_url` (annotated satellite/map image showing the spot area)
 - **Værmelding** -- link to Yr.no using `latitude`/`longitude` (opens in new tab): `https://www.yr.no/nb/v%C3%A6rvarsel/daglig-tabell/{lat},{lon}`. When latitude or longitude is null, hide this section or show "Kartlenker ikke tilgjengelig".
 - **Veibeskrivelse** -- "Vis i Google Maps" button using `latitude`/`longitude` (opens in new tab): `https://www.google.com/maps?q={lat},{lon}`. When latitude or longitude is null, hide this section or show "Kartlenker ikke tilgjengelig".
-- **Nødvendige kiteskills** -- `skillLevel` displayed as "Erfaren" or "Nybegynner" badge, plus `skillNotes` text
-- **Type** -- `waterType` tags displayed as badges with this mapping: `chop` → "Chop", `flat` → "Flatt vann", `waves` → "Bølger"
+- **Nødvendige kiteskills** -- `skill_level` displayed as "Erfaren" or "Nybegynner" badge, plus `skill_notes` text
+- **Type** -- `water_type` tags displayed as badges with this mapping: `chop` → "Chop", `flat` → "Flatt vann", `waves` → "Bølger"
 
 All content is CMS-managed by admins.
 
@@ -843,7 +849,7 @@ All content is CMS-managed by admins.
 Sections:
 
 - **Intro kurs** -- what courses are about, who the instructors are, general info text
-- **Scheduled Courses** -- list of course cards from DB. Each card shows course info (title, date, spot name linked to `/spots/[spotId]` when present — when `spotId` is null, show "Ikke bestemt" and omit the link — instructor, price). When `instructorId` is null, show "Ikke bestemt" or similar placeholder for the instructor field on the course card. The card has stateful buttons depending on the user's enrollment:
+- **Scheduled Courses** -- list of course cards from DB. Each card shows course info (title, date, spot name linked to `/spots/[id]` when present — when `spot_id` is null, show "Ikke bestemt" and omit the link — instructor, price). When `instructor_id` is null, show "Ikke bestemt" or similar placeholder for the instructor field on the course card. The card has stateful buttons depending on the user's enrollment:
   - **Not logged in:** "Logg inn for å melde på" (links to login)
   - **Logged in, not enrolled:** "Meld på" button opens a confirmation dialog (description of action, prefilled email field showing where confirmation will be sent — read from auth, display-only — "Avbryt" + "Meld på" buttons). On confirm, calls `enroll_in_course` RPC. On successful enrollment, a confirmation email is sent to the user (see section 7). **Do not show "Chat"** — only enrolled users see it.
   - **Logged in, enrolled:** "Meld av" button opens a confirmation dialog (description of action, "Avbryt" + "Meld av" buttons). On confirm, deletes from `course_participants`. "Chat" button links to `/courses/[id]/chat`.
@@ -940,10 +946,10 @@ export const publishCourseSchema = z.object({
   - `promoteToInstructor(userId)`: Calls `promote_to_instructor` RPC — creates `instructors` profile row (if missing) AND sets `users.role = 'instructor'`.
   - `promoteToAdmin(userId)`: Calls `promote_to_admin` RPC — creates `instructors` profile row (if missing) AND sets `users.role = 'admin'`. Admins always have an instructor profile so they can create courses.
   - `demoteToUser(userId)`: Calls `demote_to_user` RPC — deletes `instructors` row AND resets `users.role = 'user'`. Single action used for both removing an instructor from the Instruktører tab and demoting a user in the Brukere tab.
-  - `updateInstructorProfile(..., instructorId?)`: Accepts an optional `instructorId`; when omitted, the caller edits their own profile. When provided and the caller is admin, RLS "Admin full access" allows updating any instructor (supports the Admin tab "Edit" action for other instructors). Photo upload goes to `instructor-photos/{userId}/` bucket, URL stored in `instructors.photoUrl`. See Section 2h for admin editing another instructor's profile photo handling.
+  - `updateInstructorProfile(..., instructorId?)`: Accepts an optional `instructorId`; when omitted, the caller edits their own profile. When provided and the caller is admin, RLS "Admin full access" allows updating any instructor (supports the Admin tab "Edit" action for other instructors). Photo upload goes to `instructor-photos/{userId}/` bucket, URL stored in `instructors.photo_url`. See Section 2h for admin editing another instructor's profile photo handling.
 - `src/lib/actions/messages.ts` -- `supabase.from('messages').insert(...)`
-- `src/lib/actions/subscriptions.ts` -- insert/delete on `subscriptions`. **Email verification logic:** If the submitted email matches the user's Google auth email, insert with `verified = true` (already verified by OAuth). If email differs, insert with `verified = false` + generate a random UUID `verificationToken` + set `tokenExpiresAt` to `now() + 24 hours`, then send a verification email via Resend with a link to `/verify-subscription?token=xxx` (landing page). The email should mention the 24-hour expiry window (e.g. "Denne lenken utløper om 24 timer").
-- `src/lib/actions/spots.ts` -- CRUD on `spots` + upload to `spot-maps` bucket (`{spotId}/{filename}`), store public URL in `mapImageUrl`. See Section 2h for new-spot creation flow (create → upload → update) and error handling (rollback on failure).
+- `src/lib/actions/subscriptions.ts` -- insert/delete on `subscriptions`. **Email verification logic:** If the submitted email matches the user's Google auth email, insert with `verified = true` (already verified by OAuth). If email differs, insert with `verified = false` + generate a random UUID `verification_token` + set `token_expires_at` to `now() + 24 hours`, then send a verification email via Resend with a link to `/verify-subscription?token=xxx` (landing page). The email should mention the 24-hour expiry window (e.g. "Denne lenken utløper om 24 timer").
+- `src/lib/actions/spots.ts` -- CRUD on `spots` + upload to `spot-maps` bucket (`{spotId}/{filename}`), store public URL in `map_image_url`. See Section 2h for new-spot creation flow (create → upload → update) and error handling (rollback on failure).
 - `src/lib/actions/users.ts` -- re-exports or delegates to `instructors.ts` RPC actions (`promoteToInstructor`, `promoteToAdmin`, `demoteToUser`) for role changes in Brukere tab and Instruktører tab. Role changes must use these RPCs to keep `users.role` and `instructors` in sync atomically; direct service-role update of `users.role` would skip instructor row create/delete.
 - `src/lib/actions/auth.ts` -- `signOut()`: calls `supabase.auth.signOut()`, then `redirect('/')`
 
@@ -1015,7 +1021,7 @@ A server-only Supabase client using `SUPABASE_SERVICE_ROLE_KEY` that bypasses RL
 - **publishCourse subscriber fetch:** The instructor's Supabase client has RLS that limits `subscriptions` to their own row. To send notification emails, we need all subscriber emails. Use the service role client for this single query: `adminClient.from('subscriptions').select('email').eq('verified', true)` — only verified emails receive notifications.
 - **Subscription email verification:** Two-step flow to prevent email-scanner bots from auto-verifying tokens:
   1. **Landing page** `src/app/verify-subscription/page.tsx` — a client page that reads `token` from the URL search params and shows a "Bekreft e-post" button. This is what the email link (`/verify-subscription?token=xxx`) opens. A GET request alone does nothing; the user must click the button, which calls the server action below.
-  2. **Server action** `src/lib/actions/subscriptions.ts` → `verifySubscriptionToken(token)` — looks up the subscription by `verificationToken` using the service role client. Checks: (a) token exists and is not already used, (b) `tokenExpiresAt` is not in the past. If valid: sets `verified = true`, clears `verificationToken` and `tokenExpiresAt`, returns `{ success: true }`. If expired: deletes the subscription row (user must re-subscribe) and returns `{ success: false, error: 'expired' }`. If invalid/already used: returns `{ success: false, error: 'invalid' }`. The landing page shows a success message with a link to `/courses`, or an error message with appropriate guidance.
+  2. **Server action** `src/lib/actions/subscriptions.ts` → `verifySubscriptionToken(token)` — looks up the subscription by `verification_token` using the service role client. Checks: (a) token exists and is not already used, (b) `token_expires_at` is not in the past. If valid: sets `verified = true`, clears `verification_token` and `token_expires_at`, returns `{ success: true }`. If expired: deletes the subscription row (user must re-subscribe) and returns `{ success: false, error: 'expired' }`. If invalid/already used: returns `{ success: false, error: 'invalid' }`. The landing page shows a success message with a link to `/courses`, or an error message with appropriate guidance.
   Service role needed because the request is unauthenticated (user clicking an email link).
 
 This key is NEVER exposed to the client. Environment variable: `SUPABASE_SERVICE_ROLE_KEY` (server-only, not `NEXT_PUBLIC_`).

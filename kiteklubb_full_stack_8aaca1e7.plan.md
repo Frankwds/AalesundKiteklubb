@@ -1,15 +1,15 @@
 ---
 name: Kiteklubb Full Stack
-overview: Build a full-stack Next.js application for Ålesund Kiteklubb with Supabase (Postgres, Auth, SDK for all data access) and Drizzle (schema definitions, RLS policies, migrations only). Google OAuth, course management, instructor profiles, enrollment, per-course chat, spot guide, subscriptions, admin/instructor dashboards -- deployed to Vercel.
+overview: Build a full-stack Next.js application for Ålesund Kiteklubb with Supabase (Postgres, Auth, SDK for all data access). Pure SQL migrations for schema, RLS policies, triggers, and functions. Google OAuth, course management, instructor profiles, enrollment, per-course chat, spot guide, subscriptions, admin/instructor dashboards -- deployed to Vercel.
 todos:
   - id: scaffold
-    content: Scaffold Next.js 15 project with TypeScript, Tailwind, pnpm. Install Drizzle, Supabase, shadcn/ui dependencies.
+    content: Scaffold Next.js 15 project with TypeScript, Tailwind, pnpm. Install Supabase, shadcn/ui dependencies.
     status: pending
   - id: env-config
-    content: Create drizzle.config.ts, .env.local.example, and Supabase client setup files (client.ts, server.ts, and lib/supabase/middleware.ts for session refresh — all in lib/supabase/). The auth-flow todo covers creating src/middleware.ts that imports this helper.
+    content: Create .env.local.example and Supabase client setup files (client.ts, server.ts, and lib/supabase/middleware.ts for session refresh — all in lib/supabase/). The auth-flow todo covers creating src/middleware.ts that imports this helper.
     status: pending
   - id: db-schema
-    content: Define all Drizzle schemas with native pgPolicy RLS (using authenticatedRole, authUid, etc.) for users, instructors, courses, courseParticipants, messages, subscriptions, spots. Generate and apply migrations via drizzle-kit (generate + migrate; push has RLS issues).
+    content: Write all SQL migrations (tables, RLS policies, triggers, functions, storage) in supabase/migrations/. Apply via supabase db push.
     status: pending
   - id: auth-flow
     content: "Implement Supabase Auth with Google OAuth: callback route, user sync/upsert, middleware for session refresh and route protection, auth helper functions."
@@ -36,7 +36,7 @@ todos:
     content: "Build instructor dashboard: edit own profile, CRUD own courses, view/remove participants from own courses."
     status: pending
   - id: server-actions
-    content: Implement all server actions using Supabase SDK (not Drizzle) for data access. RLS enforces authorization at DB level; actions handle session passing.
+    content: Implement all server actions using Supabase SDK for data access. RLS enforces authorization at DB level; actions handle session passing.
     status: pending
   - id: polish-deploy
     content: "Final polish: mobile-first responsive design (touch-friendly, tap-based nav), loading states, error handling, SEO meta tags. Configure Vercel deployment with env vars."
@@ -52,21 +52,21 @@ isProject: false
   - [Key Architectural Principle](#key-architectural-principle)
 - [Architecture Overview](#architecture-overview)
 - [1. Project Scaffolding](#1-project-scaffolding)
-- [2. Database Schema (Drizzle -- schema definition only)](#2-database-schema-drizzle----schema-definition-only)
-  - [2a. Users](#2a-users-srclibdbschemausersts)
-  - [2b. Instructors](#2b-instructors-srclibdbschemainstructorsts)
-  - [2c. Courses](#2c-courses-srclibdbschemacoursests)
-  - [2d. Course Participants](#2d-course-participants-srclibdbschemacourseparticipantsts)
-  - [2e. Messages](#2e-messages-srclibdbschemamessagests)
-  - [2f. Subscriptions](#2f-subscriptions-srclibdbschemasubscriptionsts)
-  - [2g. Spots](#2g-spots-srclibdbschemaspotsts)
+- [2. Database Schema (SQL Migrations)](#2-database-schema-sql-migrations)
+  - [2a. Users](#2a-users)
+  - [2b. Instructors](#2b-instructors)
+  - [2c. Courses](#2c-courses)
+  - [2d. Course Participants](#2d-course-participants)
+  - [2e. Messages](#2e-messages)
+  - [2f. Subscriptions](#2f-subscriptions)
+  - [2g. Spots](#2g-spots)
   - [2h. Supabase Storage (buckets + RLS)](#2h-supabase-storage-buckets--rls)
-  - [RLS Policies](#rls-policies-native-drizzle-pgpolicy----defined-alongside-tables)
+  - [RLS Policies](#rls-policies-defined-in-migration-0002)
   - [Reading roles from JWT in RLS policies](#reading-roles-from-jwt-in-rls-policies-no-subqueries)
   - [Chat-related RLS](#chat-related-rls-users-and-course_participants)
   - [Supabase DB Trigger for User Sync](#supabase-db-trigger-for-user-sync)
   - [Custom JWT Claims (Auth Hook)](#custom-jwt-claims-auth-hook)
-  - [Realtime Publication](#realtime-publication-migration-0003)
+  - [Realtime Publication](#realtime-publication-migration-0005)
   - [Atomic Enrollment Function (RPC)](#atomic-enrollment-function-rpc)
   - [Atomic Promote/Demote Functions (RPC)](#atomic-promotedemote-functions-rpc)
 - [3. Authentication](#3-authentication)
@@ -109,7 +109,7 @@ isProject: false
 
 - **Framework:** Next.js 15 (App Router, TypeScript)
 - **Database:** Supabase Postgres
-- **Schema & Migrations:** Drizzle ORM + drizzle-kit (schema definition with native `pgPolicy` for RLS, migrations ONLY -- not used for runtime queries)
+- **Schema & Migrations:** Pure SQL migration files in `supabase/migrations/`, applied via Supabase CLI (`supabase db push`)
 - **Runtime Data Access:** Supabase JS SDK (`@supabase/supabase-js` + `@supabase/ssr`) for ALL reads and writes
 - **Auth:** Supabase Auth (Google OAuth provider)
 - **Styling:** Tailwind CSS v4 + shadcn/ui
@@ -117,9 +117,9 @@ isProject: false
 
 ### Key Architectural Principle
 
-**Drizzle vs Supabase SDK -- separation of concerns:**
+**SQL migrations vs Supabase SDK -- separation of concerns:**
 
-- **Drizzle** is a build/dev-time tool. It defines table schemas AND RLS policies in TypeScript using native `pgPolicy`, `authenticatedRole`, `authUid` from `drizzle-orm/supabase`. `drizzle-kit generate` produces the SQL migrations including `CREATE POLICY` statements. It connects to Postgres directly via `DATABASE_URL` during `drizzle-kit migrate` (use migrate, not push — see Migration Workflow).
+- **SQL migrations** (`supabase/migrations/`) define all database structure: tables, enums, RLS policies, triggers, auth hooks, RPC functions, storage buckets. These are hand-written SQL files applied via `supabase db push`. This gives full control over Postgres features with a single migration system and no extra dependencies.
 - **Supabase SDK** is the runtime data access layer. All queries (select, insert, update, delete) from both server and client components go through the Supabase client. This ensures RLS policies are enforced automatically, since the Supabase client passes the user's JWT to Postgres.
 
 ---
@@ -129,9 +129,8 @@ isProject: false
 ```mermaid
 graph TB
   subgraph buildTime [Build/Dev Time]
-    DrizzleSchema[Drizzle Schema Definitions]
-    DrizzleKit[drizzle-kit generate/migrate]
-    RLSPolicies[RLS Policy Definitions]
+    SQLMigrations["SQL Migrations (supabase/migrations/)"]
+    SupabaseCLI["supabase db push"]
   end
 
   subgraph client [Client - Browser]
@@ -161,9 +160,8 @@ graph TB
     Google[Google OAuth]
   end
 
-  DrizzleSchema --> DrizzleKit
-  RLSPolicies --> DrizzleKit
-  DrizzleKit -->|"direct SQL connection (dev only)"| SupabasePG
+  SQLMigrations --> SupabaseCLI
+  SupabaseCLI -->|"applies schema, RLS, functions"| SupabasePG
 
   client --> BrowserClient
   BrowserClient -->|"with user JWT"| SupabaseAPI
@@ -195,21 +193,15 @@ Install core dependencies:
 # Runtime: Supabase SDK for all data access + Resend for email + Sonner for toast notifications + Zod for validation
 pnpm add @supabase/supabase-js @supabase/ssr resend sonner zod
 
-# Drizzle for schema definitions and migrations
-# drizzle-orm is a regular dep so schema files under src/ pass type-checking during next build
-pnpm add drizzle-orm
-pnpm add -D drizzle-kit postgres
+# Supabase CLI for migrations and type generation
+pnpm add -D supabase
 
 # UI
 pnpm dlx shadcn@latest init
 ```
 
-Note: `drizzle-orm` is a regular dependency because schema files under `src/` must pass TypeScript type-checking during `next build` (even though no runtime code imports them). It adds zero client bundle weight. `drizzle-kit` and `postgres` remain dev dependencies — they are only used to generate and apply migrations.
-
 Key config files to create:
 
-- `drizzle.config.ts` -- Drizzle Kit config. `schema`: `./src/lib/db/schema`. `out`: `./drizzle` (Drizzle's migration output). `dbCredentials.url`: `DATABASE_URL`.
-- `src/lib/db/schema/` -- Drizzle schema files (used by drizzle-kit, not imported at runtime)
 - `src/lib/supabase/client.ts` -- Browser Supabase client (createBrowserClient)
 - `src/lib/supabase/server.ts` -- Server Supabase client (createServerClient with cookies). **Next.js 15 breaking change:** `cookies()` is now async -- `createClient()` must be an `async` function that `await`s `cookies()` before passing them to `createServerClient`.
 - `src/lib/supabase/middleware.ts` -- Auth session refresh
@@ -217,7 +209,6 @@ Key config files to create:
 
 Environment variables needed:
 
-- `DATABASE_URL` -- Supabase Postgres **direct** connection string, **port 5432** (used ONLY by drizzle-kit for migrations, never at runtime). Do NOT use the transaction pooler (port 6543) -- DDL operations require session-level locks that the pooler cannot provide.
 - `NEXT_PUBLIC_SUPABASE_URL` -- Supabase project URL (used by Supabase SDK at runtime)
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` -- Supabase anon key (used by Supabase SDK at runtime)
 - `SUPABASE_SERVICE_ROLE_KEY` -- Service role key (server-only, bypasses RLS for admin operations like role changes)
@@ -227,15 +218,28 @@ Environment variables needed:
 
 ---
 
-## 2. Database Schema (Drizzle -- schema definition only)
+## 2. Database Schema (SQL Migrations)
 
-All schemas in `src/lib/db/schema/`. In schema files, use explicit Postgres column names for compatibility with triggers and Supabase SDK (snake_case): e.g. `avatarUrl: text('avatar_url')`, `userId: uuid('user_id')`, `instructorId: uuid('instructor_id')`. One file per table, re-exported from `src/lib/db/schema/index.ts`. These files are consumed by `drizzle-kit` to generate migrations -- they are NOT imported by the application runtime.
+All database objects (tables, enums, RLS policies, triggers, functions, storage) are defined as hand-written SQL migration files in `supabase/migrations/`. Migrations are applied via `supabase db push`. All column names use snake_case (e.g. `avatar_url`, `user_id`, `instructor_id`) for consistency with Supabase SDK and triggers.
 
-### 2a. Users (`src/lib/db/schema/users.ts`)
+The migration files follow this structure:
+
+| Migration | Contents |
+|-----------|----------|
+| `0001_initial_schema.sql` | CREATE TYPE enums, CREATE TABLE for all 7 tables |
+| `0002_rls_policies.sql` | All RLS policies for all tables |
+| `0003_user_sync_trigger.sql` | Trigger on auth.users to auto-create public.users |
+| `0004_custom_jwt_hook.sql` | Auth hook to inject role into JWT claims |
+| `0005_realtime_messages.sql` | ALTER PUBLICATION for Realtime on messages |
+| `0006_enroll_function.sql` | Atomic enroll_in_course() RPC function |
+| `0007_storage_buckets.sql` | spot-maps + instructor-photos buckets, storage.objects RLS |
+| `0008_promote_demote_rpcs.sql` | promote_to_instructor, promote_to_admin, demote_to_user RPCs |
+
+### 2a. Users
 
 Synced from Supabase Auth on first login via auth callback.
 
-Column names below are Drizzle/TypeScript property names; Postgres columns use snake_case (e.g. `avatar_url`, `created_at`, `user_id`).
+All column names use snake_case (e.g. `avatar_url`, `created_at`, `user_id`).
 
 | Column    | Type          | Notes                         |
 | --------- | ------------- | ----------------------------- |
@@ -247,7 +251,7 @@ Column names below are Drizzle/TypeScript property names; Postgres columns use s
 | createdAt | timestamp     | default now()                 |
 
 
-### 2b. Instructors (`src/lib/db/schema/instructors.ts`)
+### 2b. Instructors
 
 
 | Column          | Type      | Notes                   |
@@ -264,7 +268,7 @@ Column names below are Drizzle/TypeScript property names; Postgres columns use s
 **Sync invariant:** Users with `role = 'instructor'` or `role = 'admin'` always have a row in `instructors`. Admins automatically get an instructor profile when promoted (so they can create courses using the same UI). These are created atomically via admin actions (see section 6). The JWT claim (`user_role`) handles fast permission checks (middleware, UI). The `instructors` table holds profile data and provides the FK for `courses.instructorId`.
 
 
-### 2c. Courses (`src/lib/db/schema/courses.ts`)
+### 2c. Courses
 
 
 | Column          | Type          | Notes                                 |
@@ -280,7 +284,7 @@ Column names below are Drizzle/TypeScript property names; Postgres columns use s
 | createdAt       | timestamp     |                                       |
 
 
-### 2d. Course Participants (`src/lib/db/schema/courseParticipants.ts`)
+### 2d. Course Participants
 
 
 | Column     | Type      | Notes         |
@@ -293,9 +297,9 @@ Column names below are Drizzle/TypeScript property names; Postgres columns use s
 
 Unique constraint on (userId, courseId).
 
-Enrollment is handled via a Postgres RPC function (not a direct insert) to prevent overbooking -- see migration `0004`.
+Enrollment is handled via a Postgres RPC function (not a direct insert) to prevent overbooking -- see migration `0006`.
 
-### 2e. Messages (`src/lib/db/schema/messages.ts`)
+### 2e. Messages
 
 
 | Column    | Type          | Notes         |
@@ -307,7 +311,7 @@ Enrollment is handled via a Postgres RPC function (not a direct insert) to preve
 | createdAt | timestamp     | default now() |
 
 
-### 2f. Subscriptions (`src/lib/db/schema/subscriptions.ts`)
+### 2f. Subscriptions
 
 
 | Column            | Type          | Notes                |
@@ -321,7 +325,7 @@ Enrollment is handled via a Postgres RPC function (not a direct insert) to preve
 | createdAt         | timestamp     | default now()        |
 
 
-### 2g. Spots (`src/lib/db/schema/spots.ts`)
+### 2g. Spots
 
 
 | Column         | Type          | Notes                                                      |
@@ -345,7 +349,7 @@ Yr and Google Maps links are generated dynamically from `latitude`/`longitude` (
 
 ### 2h. Supabase Storage (buckets + RLS)
 
-Image uploads use two public buckets. Buckets and `storage.objects` RLS policies are defined in migration `0005` (Drizzle does not manage the `storage` schema).
+Image uploads use two public buckets. Buckets and `storage.objects` RLS policies are defined in migration `0007`.
 
 **Bucket: `spot-maps`**
 - **Purpose:** Admin-uploaded annotated map/satellite images for spots
@@ -363,7 +367,7 @@ Image uploads use two public buckets. Buckets and `storage.objects` RLS policies
   - UPDATE/DELETE: Same path constraint (own folder only)
 - **Admin editing another instructor's profile:** Storage RLS allows upload only to own folder (`auth.uid()`). When an admin edits another instructor's profile in the Admin tab (Instruktører), **photo changes must be self-uploaded by the target instructor** — admins cannot change another instructor's photo; the target must log in and update their photo themselves.
 
-**Migration `0005`** creates the buckets and RLS policies. Full SQL:
+**Migration `0007`** creates the buckets and RLS policies. Full SQL:
 
 ```sql
 -- Create buckets (5MB for spot-maps, 2MB for instructor-photos; jpeg, png, webp)
@@ -411,172 +415,153 @@ CREATE POLICY "instructor-photos own folder delete" ON storage.objects
 **New spot creation with map:** Since the bucket path requires `spotId`, for a new spot: (1) Create the spot row first (without `mapImageUrl`), (2) Upload image to `spot-maps/{newSpotId}/{filename}`, (3) Update the spot with `mapImageUrl`. For edits, use the existing `spotId` directly. When creating a spot without a map, omit steps 2–3; `mapImageUrl` remains null. **Error handling:** If step 2 or 3 fails (e.g. upload error, network failure), delete the newly created spot row and return an error to the admin. Do not leave a spot without a map in a partial state.
 
 
-### RLS Policies (native Drizzle `pgPolicy` -- defined alongside tables)
+### RLS Policies (defined in migration `0002`)
 
-RLS is the primary authorization mechanism. Policies are defined directly in the Drizzle schema files using `pgPolicy` from `drizzle-orm/pg-core` and Supabase helpers (`authenticatedRole`, `anonRole`, `authUid`) from `drizzle-orm/supabase`. `drizzle-kit generate` produces the `CREATE POLICY` SQL automatically. **Note:** Ensure `drizzle-orm` and `drizzle-orm/supabase` (or the package providing these exports) are at compatible versions; if the package structure has changed, update the import path accordingly.
+RLS is the primary authorization mechanism. All policies are written as `CREATE POLICY` SQL statements in `supabase/migrations/0002_rls_policies.sql`. Each table must have `ALTER TABLE ... ENABLE ROW LEVEL SECURITY;` before its policies.
 
 Example pattern used across all tables:
 
-```typescript
-import { pgTable, uuid, text, pgPolicy } from 'drizzle-orm/pg-core';
-import { authenticatedRole, anonRole, authUid } from 'drizzle-orm/supabase';
-import { sql } from 'drizzle-orm';
+```sql
+ALTER TABLE public.courses ENABLE ROW LEVEL SECURITY;
 
-export const courses = pgTable('courses', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  title: text('title').notNull(),
-  instructorId: uuid('instructor_id').references(() => instructors.id),
-}, (table) => [
-  pgPolicy("Public can view courses", {
-    for: "select",
-    to: anonRole,
-    using: sql`true`,
-  }),
-  pgPolicy("Authenticated can view courses", {
-    for: "select",
-    to: authenticatedRole,
-    using: sql`true`,
-  }),
-  pgPolicy("Instructors can insert own courses", {
-    for: "insert",
-    to: authenticatedRole,
-    withCheck: sql`${table.instructorId} IN (
-      SELECT id FROM instructors WHERE user_id = auth.uid()
-    )`,
-  }),
-  pgPolicy("Instructors can update own courses", {
-    for: "update",
-    to: authenticatedRole,
-    using: sql`${table.instructorId} IN (
-      SELECT id FROM instructors WHERE user_id = auth.uid()
-    )`,
-  }),
-]);
+CREATE POLICY "Public can view courses" ON public.courses
+  FOR SELECT TO anon USING (true);
+
+CREATE POLICY "Authenticated can view courses" ON public.courses
+  FOR SELECT TO authenticated USING (true);
+
+CREATE POLICY "Instructors can insert own courses" ON public.courses
+  FOR INSERT TO authenticated WITH CHECK (
+    instructor_id IN (SELECT id FROM public.instructors WHERE user_id = auth.uid())
+  );
+
+CREATE POLICY "Instructors can update own courses" ON public.courses
+  FOR UPDATE TO authenticated USING (
+    instructor_id IN (SELECT id FROM public.instructors WHERE user_id = auth.uid())
+  );
 ```
 
 ### Reading roles from JWT in RLS policies (no subqueries)
 
-Since the Custom JWT Claims Hook (migration `0002`) injects `user_role` into the token, all RLS policies that check roles should read directly from the JWT instead of querying the `users` table. This is instant -- no table access needed.
+Since the Custom JWT Claims Hook (migration `0004`) injects `user_role` into the token, all RLS policies that check roles should read directly from the JWT instead of querying the `users` table. This is instant -- no table access needed.
 
-```typescript
-// Helper SQL fragment (reuse across all policies that check role)
-const isAdmin = sql`(current_setting('request.jwt.claims', true)::jsonb)->>'user_role' = 'admin'`;
-const isInstructor = sql`(current_setting('request.jwt.claims', true)::jsonb)->>'user_role' = 'instructor'`;
+```sql
+-- Helper expressions (reuse across all policies that check role)
+-- isAdmin:
+(current_setting('request.jwt.claims', true)::jsonb)->>'user_role' = 'admin'
+-- isInstructor:
+(current_setting('request.jwt.claims', true)::jsonb)->>'user_role' = 'instructor'
 ```
 
 Admin bypass policy (added to every table where admins need full access):
 
-```typescript
-pgPolicy("Admin full access", {
-  for: "all",
-  to: authenticatedRole,
-  using: isAdmin,
-  withCheck: isAdmin,
-})
+```sql
+CREATE POLICY "Admin full access" ON public.<table>
+  FOR ALL TO authenticated
+  USING ((current_setting('request.jwt.claims', true)::jsonb)->>'user_role' = 'admin')
+  WITH CHECK ((current_setting('request.jwt.claims', true)::jsonb)->>'user_role' = 'admin');
 ```
 
-**Role vs ownership:** Use JWT claims (`isAdmin`, `isInstructor`) for role checks (who can perform which action type). For ownership checks (e.g. does this course belong to the current instructor), use the `instructors` table subquery — do not subquery the `users` table for role. The Courses policies (e.g. "Instructors can insert own courses") correctly use `instructorId IN (SELECT id FROM instructors WHERE user_id = auth.uid())` to verify ownership.
+**Role vs ownership:** Use JWT claims for role checks (who can perform which action type). For ownership checks (e.g. does this course belong to the current instructor), use the `instructors` table subquery — do not subquery the `users` table for role. The Courses policies (e.g. "Instructors can insert own courses") correctly use `instructor_id IN (SELECT id FROM instructors WHERE user_id = auth.uid())` to verify ownership.
 
 **Per-table policy checklist:**
 
-Every policy below MUST be implemented as a `pgPolicy` in the corresponding Drizzle schema file. Use the `isAdmin` / `isInstructor` JWT helpers (see above) for role checks — never subquery `users` for role. The "Admin full access" policy (for: `"all"`, using: `isAdmin`, withCheck: `isAdmin`) should be added to every table where admin access is listed.
+Every policy below MUST be written as a `CREATE POLICY` statement in `supabase/migrations/0002_rls_policies.sql`. Use the JWT claim expressions (see above) for role checks — never subquery `users` for role. The "Admin full access" policy should be added to every table where admin access is listed.
 
-**Users table** (`src/lib/db/schema/users.ts`) — 3 policies:
+**Users table** — 3 policies:
 
-1. `"Users can read own profile"` — SELECT, `authenticatedRole`, using: `id = auth.uid()`
-2. `"Co-participants can read profile fields"` — SELECT, `authenticatedRole`, using: EXISTS subquery on `course_participants` (see Chat-related RLS section below for SQL)
-3. `"Admin full access"` — ALL, `authenticatedRole`, using/withCheck: `isAdmin`
+1. `"Users can read own profile"` — SELECT, `authenticated`, using: `id = auth.uid()`
+2. `"Co-participants can read profile fields"` — SELECT, `authenticated`, using: EXISTS subquery on `course_participants` (see Chat-related RLS section below for SQL)
+3. `"Admin full access"` — ALL, `authenticated`, using/withCheck: JWT `user_role = 'admin'`
 
 **Note:** INSERT is handled by DB trigger; UPDATE/DELETE by admins via RPC (promote_to_instructor, etc.) using the admin's server client. Service role is not used for users table.
 
-**Instructors table** (`src/lib/db/schema/instructors.ts`) — 4 policies:
+**Instructors table** — 4 policies:
 
-1. `"Public can view instructor profiles"` — SELECT, `anonRole`, using: `true`
-2. `"Authenticated can view instructor profiles"` — SELECT, `authenticatedRole`, using: `true`
-3. `"Instructors can update own profile"` — UPDATE, `authenticatedRole`, using: `user_id = auth.uid()`
-4. `"Admin full access"` — ALL, `authenticatedRole`, using/withCheck: `isAdmin`
+1. `"Public can view instructor profiles"` — SELECT, `anon`, using: `true`
+2. `"Authenticated can view instructor profiles"` — SELECT, `authenticated`, using: `true`
+3. `"Instructors can update own profile"` — UPDATE, `authenticated`, using: `user_id = auth.uid()`
+4. `"Admin full access"` — ALL, `authenticated`, using/withCheck: JWT `user_role = 'admin'`
 
-**Courses table** (`src/lib/db/schema/courses.ts`) — 6 policies:
+**Courses table** — 6 policies:
 
-1. `"Public can view courses"` — SELECT, `anonRole`, using: `true`
-2. `"Authenticated can view courses"` — SELECT, `authenticatedRole`, using: `true`
-3. `"Instructors can insert own courses"` — INSERT, `authenticatedRole`, withCheck: `instructorId IN (SELECT id FROM instructors WHERE user_id = auth.uid())`
-4. `"Instructors can update own courses"` — UPDATE, `authenticatedRole`, using: same instructor subquery
-5. `"Instructors can delete own courses"` — DELETE, `authenticatedRole`, using: same instructor subquery
-6. `"Admin full access"` — ALL, `authenticatedRole`, using/withCheck: `isAdmin`
+1. `"Public can view courses"` — SELECT, `anon`, using: `true`
+2. `"Authenticated can view courses"` — SELECT, `authenticated`, using: `true`
+3. `"Instructors can insert own courses"` — INSERT, `authenticated`, withCheck: `instructor_id IN (SELECT id FROM instructors WHERE user_id = auth.uid())`
+4. `"Instructors can update own courses"` — UPDATE, `authenticated`, using: same instructor subquery
+5. `"Instructors can delete own courses"` — DELETE, `authenticated`, using: same instructor subquery
+6. `"Admin full access"` — ALL, `authenticated`, using/withCheck: JWT `user_role = 'admin'`
 
-**Course Participants table** (`src/lib/db/schema/courseParticipants.ts`) — 7 policies:
+**Course Participants table** — 7 policies:
 
-1. `"Users can view own enrollments"` — SELECT, `authenticatedRole`, using: `user_id = auth.uid()`
-2. `"Instructors can view their course participants"` — SELECT, `authenticatedRole`, using: `course_id IN (SELECT id FROM courses WHERE instructor_id IN (SELECT id FROM instructors WHERE user_id = auth.uid()))`
-3. `"Participants can see co-participants in same course"` — SELECT, `authenticatedRole`, using: EXISTS subquery (see Chat-related RLS section below for SQL)
-4. `"Users can enroll themselves"` — INSERT, `authenticatedRole`, withCheck: `user_id = auth.uid()` (note: enrollment primarily goes through `enroll_in_course` RPC which uses `security definer`, but this policy is still needed as a safety net)
-5. `"Users can unenroll themselves"` — DELETE, `authenticatedRole`, using: `user_id = auth.uid()`
-6. `"Instructors can remove participants from their courses"` — DELETE, `authenticatedRole`, using: `course_id IN (SELECT id FROM courses WHERE instructor_id IN (SELECT id FROM instructors WHERE user_id = auth.uid()))`
-7. `"Admin full access"` — ALL, `authenticatedRole`, using/withCheck: `isAdmin`
+1. `"Users can view own enrollments"` — SELECT, `authenticated`, using: `user_id = auth.uid()`
+2. `"Instructors can view their course participants"` — SELECT, `authenticated`, using: `course_id IN (SELECT id FROM courses WHERE instructor_id IN (SELECT id FROM instructors WHERE user_id = auth.uid()))`
+3. `"Participants can see co-participants in same course"` — SELECT, `authenticated`, using: EXISTS subquery (see Chat-related RLS section below for SQL)
+4. `"Users can enroll themselves"` — INSERT, `authenticated`, withCheck: `user_id = auth.uid()` (note: enrollment primarily goes through `enroll_in_course` RPC which uses `security definer`, but this policy is still needed as a safety net)
+5. `"Users can unenroll themselves"` — DELETE, `authenticated`, using: `user_id = auth.uid()`
+6. `"Instructors can remove participants from their courses"` — DELETE, `authenticated`, using: `course_id IN (SELECT id FROM courses WHERE instructor_id IN (SELECT id FROM instructors WHERE user_id = auth.uid()))`
+7. `"Admin full access"` — ALL, `authenticated`, using/withCheck: JWT `user_role = 'admin'`
 
-**Messages table** (`src/lib/db/schema/messages.ts`) — 5 policies:
+**Messages table** — 5 policies:
 
-1. `"Course participants can read messages"` — SELECT, `authenticatedRole`, using: `course_id IN (SELECT course_id FROM course_participants WHERE user_id = auth.uid())`
-2. `"Instructors can read messages in own courses"` — SELECT, `authenticatedRole`, using: `course_id IN (SELECT id FROM courses WHERE instructor_id IN (SELECT id FROM instructors WHERE user_id = auth.uid()))`
-3. `"Course participants can send messages"` — INSERT, `authenticatedRole`, withCheck: `user_id = auth.uid() AND course_id IN (SELECT course_id FROM course_participants WHERE user_id = auth.uid())`
-4. `"Instructors can send messages in own courses"` — INSERT, `authenticatedRole`, withCheck: `user_id = auth.uid() AND course_id IN (SELECT id FROM courses WHERE instructor_id IN (SELECT id FROM instructors WHERE user_id = auth.uid()))`
-5. `"Admin full access"` — ALL, `authenticatedRole`, using/withCheck: `isAdmin`
+1. `"Course participants can read messages"` — SELECT, `authenticated`, using: `course_id IN (SELECT course_id FROM course_participants WHERE user_id = auth.uid())`
+2. `"Instructors can read messages in own courses"` — SELECT, `authenticated`, using: `course_id IN (SELECT id FROM courses WHERE instructor_id IN (SELECT id FROM instructors WHERE user_id = auth.uid()))`
+3. `"Course participants can send messages"` — INSERT, `authenticated`, withCheck: `user_id = auth.uid() AND course_id IN (SELECT course_id FROM course_participants WHERE user_id = auth.uid())`
+4. `"Instructors can send messages in own courses"` — INSERT, `authenticated`, withCheck: `user_id = auth.uid() AND course_id IN (SELECT id FROM courses WHERE instructor_id IN (SELECT id FROM instructors WHERE user_id = auth.uid()))`
+5. `"Admin full access"` — ALL, `authenticated`, using/withCheck: JWT `user_role = 'admin'`
 
-**Subscriptions table** (`src/lib/db/schema/subscriptions.ts`) — 4 policies:
+**Subscriptions table** — 4 policies:
 
-1. `"Users can view own subscription"` — SELECT, `authenticatedRole`, using: `user_id = auth.uid()`
-2. `"Users can create own subscription"` — INSERT, `authenticatedRole`, withCheck: `user_id = auth.uid()`
-3. `"Users can delete own subscription"` — DELETE, `authenticatedRole`, using: `user_id = auth.uid()`
-4. `"Admin full access"` — ALL, `authenticatedRole`, using/withCheck: `isAdmin`
+1. `"Users can view own subscription"` — SELECT, `authenticated`, using: `user_id = auth.uid()`
+2. `"Users can create own subscription"` — INSERT, `authenticated`, withCheck: `user_id = auth.uid()`
+3. `"Users can delete own subscription"` — DELETE, `authenticated`, using: `user_id = auth.uid()`
+4. `"Admin full access"` — ALL, `authenticated`, using/withCheck: JWT `user_role = 'admin'`
 
 **Note:** Subscription email is immutable after creation. To change email, the user must delete and re-subscribe (with verification if the new email differs from auth).
 
-**Spots table** (`src/lib/db/schema/spots.ts`) — 3 policies:
+**Spots table** — 3 policies:
 
-1. `"Public can view spots"` — SELECT, `anonRole`, using: `true`
-2. `"Authenticated can view spots"` — SELECT, `authenticatedRole`, using: `true`
-3. `"Admin full access"` — ALL, `authenticatedRole`, using/withCheck: `isAdmin`
+1. `"Public can view spots"` — SELECT, `anon`, using: `true`
+2. `"Authenticated can view spots"` — SELECT, `authenticated`, using: `true`
+3. `"Admin full access"` — ALL, `authenticated`, using/withCheck: JWT `user_role = 'admin'`
 
-**Total: 32 policies** across 7 tables. All must be defined as `pgPolicy` calls in the schema files so `drizzle-kit generate` produces the corresponding `CREATE POLICY` SQL.
+**Total: 32 policies** across 7 tables. All written as `CREATE POLICY` SQL in migration `0002`.
 
 ### Chat-related RLS (users and course_participants)
 
-Chat needs to display other participants' names and avatars. Add these policies:
+Chat needs to display other participants' names and avatars. Add these policies in migration `0002`:
 
 **Users** — co-participant read (for chat profile enrichment):
 
-```typescript
-pgPolicy("Co-participants can read profile fields", {
-  for: "select",
-  to: authenticatedRole,
-  using: sql` EXISTS (
-    SELECT 1 FROM course_participants cp1
-    WHERE cp1.user_id = auth.uid()
-    AND EXISTS (
-      SELECT 1 FROM course_participants cp2
-      WHERE cp2.course_id = cp1.course_id AND cp2.user_id = ${table.id}
+```sql
+CREATE POLICY "Co-participants can read profile fields" ON public.users
+  FOR SELECT TO authenticated USING (
+    EXISTS (
+      SELECT 1 FROM public.course_participants cp1
+      WHERE cp1.user_id = auth.uid()
+      AND EXISTS (
+        SELECT 1 FROM public.course_participants cp2
+        WHERE cp2.course_id = cp1.course_id AND cp2.user_id = users.id
+      )
     )
-  )`,
-})
+  );
 ```
 
 **Course participants** — participant list read (enables pre-fetch for chat):
 
-```typescript
-pgPolicy("Participants can see co-participants in same course", {
-  for: "select",
-  to: authenticatedRole,
-  using: sql` EXISTS (
-    SELECT 1 FROM course_participants my
-    WHERE my.user_id = auth.uid() AND my.course_id = ${table.courseId}
-  )`,
-})
+```sql
+CREATE POLICY "Participants can see co-participants in same course" ON public.course_participants
+  FOR SELECT TO authenticated USING (
+    EXISTS (
+      SELECT 1 FROM public.course_participants my
+      WHERE my.user_id = auth.uid() AND my.course_id = course_participants.course_id
+    )
+  );
 ```
 
 ### Supabase DB Trigger for User Sync
 
-A Postgres trigger function on `auth.users` (AFTER INSERT) automatically creates a row in `public.users` with `role = 'user'`. Migration `0001` contains:
+A Postgres trigger function on `auth.users` (AFTER INSERT) automatically creates a row in `public.users` with `role = 'user'`. Migration `0003` contains:
 
 ```sql
 create or replace function public.handle_new_user()
@@ -634,11 +619,11 @@ const role = jwt.user_role; // 'user' | 'instructor' | 'admin'
 
 `supabase.auth.getUser()` returns the user object from the Auth API — it does **not** include custom JWT claims injected by hooks. Always use `getSession()` + token decode for role checks.
 
-In Supabase Dashboard > Authentication > Hooks, add a Custom Access Token hook and configure it to invoke `public.custom_access_token_hook` (the function is created by migration 0002). See Manual Setup step 7.
+In Supabase Dashboard > Authentication > Hooks, add a Custom Access Token hook and configure it to invoke `public.custom_access_token_hook` (the function is created by migration 0004). See Manual Setup step 7.
 
 **Trade-off:** When an admin changes a user's role, the JWT updates on next token refresh (~1 hour) or on re-login. For rare admin operations this is acceptable.
 
-### Realtime Publication (migration 0003)
+### Realtime Publication (migration 0005)
 
 Add the `messages` table to the Supabase Realtime publication so the course chat receives live inserts:
 
@@ -650,7 +635,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.messages;
 
 ### Atomic Enrollment Function (RPC)
 
-A Postgres function that atomically checks course capacity and enrolls the user, preventing race conditions where two users enroll at the same moment and exceed `maxParticipants`. Defined in migration `0004`.
+A Postgres function that atomically checks course capacity and enrolls the user, preventing race conditions where two users enroll at the same moment and exceed `maxParticipants`. Defined in migration `0006`.
 
 ```sql
 create or replace function public.enroll_in_course(p_course_id uuid)
@@ -687,7 +672,7 @@ Called via `supabase.rpc('enroll_in_course', { p_course_id: courseId })` instead
 
 ### Atomic Promote/Demote Functions (RPC)
 
-Postgres RPC functions that atomically update both `instructors` and `users.role` in a single transaction. The Supabase JS SDK has no client-side transaction API for multi-statement operations, so these RPCs are required. Defined in migration `0006`.
+Postgres RPC functions that atomically update both `instructors` and `users.role` in a single transaction. The Supabase JS SDK has no client-side transaction API for multi-statement operations, so these RPCs are required. Defined in migration `0008`.
 
 ```sql
 create or replace function public.promote_to_instructor(p_user_id uuid)
@@ -755,7 +740,7 @@ Manual configuration in two places:
 ### 3b. Auth Callback Route (`src/app/auth/callback/route.ts`)
 
 1. Exchange the OAuth code for a session via `supabase.auth.exchangeCodeForSession(code)`.
-2. **Upsert into `public.users`** using the service role client: `INSERT ... ON CONFLICT (id) DO UPDATE SET email=..., name=..., avatar_url=...`. Do NOT overwrite `role` on conflict (admin-managed). **Note:** Drizzle schemas use camelCase (mapped to snake_case in Postgres). Use snake_case for all raw SQL and Supabase SDK column names (e.g. `avatar_url`, not `avatarUrl`).
+2. **Upsert into `public.users`** using the service role client: `INSERT ... ON CONFLICT (id) DO UPDATE SET email=..., name=..., avatar_url=...`. Do NOT overwrite `role` on conflict (admin-managed). Use snake_case for all Supabase SDK column names (e.g. `avatar_url`, not `avatarUrl`).
 3. Redirect to `/`.
 
 **Why upsert in the callback?** The trigger creates the row first (same transaction as `auth.users`), so normally the row already exists when the callback runs. The callback upsert is a safety net: if the trigger failed, if the user was created outside our flow, or if there's any edge case, the callback ensures `public.users` has the row. It also refreshes `email`/`name`/`avatar_url` from the latest Google profile on every login. Idempotent — no race: upsert handles both "row missing" and "row exists" correctly.
@@ -926,7 +911,7 @@ Protected by middleware (instructor or admin role). **Shared by both** — admin
 
 ## 6. Server Actions and Data Access (all via Supabase SDK)
 
-All data access uses the Supabase SDK. **Supabase SDK uses snake_case for column names** in `.select()`, `.insert()`, `.update()`, etc. (e.g. `instructor_id`, `user_id`). Map accordingly when using generated types or referencing Drizzle schema columns (which use camelCase). Server Actions use the server-side Supabase client (which reads the user's session from cookies). Client components can also query directly via the browser Supabase client. RLS ensures security regardless of where the query originates.
+All data access uses the Supabase SDK. **Supabase SDK uses snake_case for column names** in `.select()`, `.insert()`, `.update()`, etc. (e.g. `instructor_id`, `user_id`), matching the database schema. Server Actions use the server-side Supabase client (which reads the user's session from cookies). Client components can also query directly via the browser Supabase client. RLS ensures security regardless of where the query originates.
 
 ### Server Actions (`src/lib/actions/`)
 
@@ -951,7 +936,7 @@ export const publishCourseSchema = z.object({
 **Return convention:** For user-facing mutations (enroll, subscribe, unenroll, etc.), return `{ success: boolean; error?: string }` so the client can show appropriate toasts. For create/update actions (e.g. `publishCourse`), return the entity on success plus optional metadata (e.g. `notificationSent`); on failure, return `{ success: false, error }` or throw.
 
 - `src/lib/actions/courses.ts` -- `supabase.from('courses').insert(...)`, `.update(...)`, `.delete(...)`; enrollment via `supabase.rpc('enroll_in_course', { p_course_id })` (atomic capacity check, no overbooking). Handle already-enrolled: if the RPC raises `allerede_pameldt` or a unique violation (Postgres 23505), return `{ success: false, error: 'Du er allerede påmeldt' }`; client shows `toast.error('Du er allerede påmeldt')`. Handle full course: when the RPC raises `Course is full`, return `{ success: false, error: 'Kurset er fullt' }`; client shows `toast.error('Kurset er fullt')`. Unenrollment via `supabase.from('course_participants').delete().match({ user_id, course_id })` (RLS allows own deletion). On successful enrollment, sends a confirmation email to the user (see section 7). The `publishCourse` action looks up the instructor ID via `supabase.from('instructors').select('id').eq('user_id', currentUserId).single()` before inserting the course (not from the form) and sends notification emails to all subscribers in one server-side request.
-- `src/lib/actions/instructors.ts` -- **Atomic admin actions to keep `users.role` and `instructors` table in sync:** Implement via Postgres RPC functions (`promote_to_instructor`, `promote_to_admin`, `demote_to_user`) that perform both the `instructors` and `users.role` updates in a single transaction, similar to `enroll_in_course`. Call `supabase.rpc('promote_to_instructor', { p_user_id })`, `supabase.rpc('promote_to_admin', { p_user_id })`, and `supabase.rpc('demote_to_user', { p_user_id })` from the admin's server client. Add migration `0006` for these RPCs.
+- `src/lib/actions/instructors.ts` -- **Atomic admin actions to keep `users.role` and `instructors` table in sync:** Implement via Postgres RPC functions (`promote_to_instructor`, `promote_to_admin`, `demote_to_user`) that perform both the `instructors` and `users.role` updates in a single transaction, similar to `enroll_in_course`. Call `supabase.rpc('promote_to_instructor', { p_user_id })`, `supabase.rpc('promote_to_admin', { p_user_id })`, and `supabase.rpc('demote_to_user', { p_user_id })` from the admin's server client. These RPCs are defined in migration `0008`.
   - `promoteToInstructor(userId)`: Calls `promote_to_instructor` RPC — creates `instructors` profile row (if missing) AND sets `users.role = 'instructor'`.
   - `promoteToAdmin(userId)`: Calls `promote_to_admin` RPC — creates `instructors` profile row (if missing) AND sets `users.role = 'admin'`. Admins always have an instructor profile so they can create courses.
   - `demoteToUser(userId)`: Calls `demote_to_user` RPC — deletes `instructors` row AND resets `users.role = 'user'`. Single action used for both removing an instructor from the Instruktører tab and demoting a user in the Brukere tab.
@@ -1019,7 +1004,7 @@ RLS applies to Realtime events -- users only receive inserts for courses they're
 
 **Profile cache:** Populate at load from (a) initial messages (joined user data) and (b) pre-fetch of `course_participants` joined with `users` for the course. On Realtime insert with unknown sender, fetch on demand. Requires RLS on `users` (co-participant read) and `course_participants` (participant-list read) -- see section 2.
 
-**Requires a custom migration** to add `messages` to the Realtime publication (see migration `0003`).
+**Requires a custom migration** to add `messages` to the Realtime publication (see migration `0005`).
 
 ### Service Role Client (`src/lib/supabase/admin.ts`)
 
@@ -1142,7 +1127,7 @@ All in `src/components/`, using shadcn/ui as the base:
 
 - **Vercel:** Connect GitHub repo, auto-deploy on push
 - **Supabase:** Separate hosted Supabase project (free tier to start)
-- **Migrations:** Run `drizzle-kit generate` then `drizzle-kit migrate` as part of CI/CD or manually (use migrate, not push — see Migration Workflow)
+- **Migrations:** Run `supabase db push` to apply all pending migrations (see Migration Workflow)
 - **Environment:** Set env vars in Vercel dashboard
 
 ---
@@ -1182,16 +1167,6 @@ src/
 │   ├── spots/                      # SpotCard, SpotList, SpotFilters, WindCompass, SpotDetail
 │   └── admin/                      # Forms, DataTables
 ├── lib/
-│   ├── db/
-│   │   └── schema/                 # Drizzle schemas (dev-time only, consumed by drizzle-kit)
-│   │       ├── index.ts            # Re-exports all schemas
-│   │       ├── users.ts
-│   │       ├── instructors.ts
-│   │       ├── courses.ts
-│   │       ├── courseParticipants.ts
-│   │       ├── messages.ts
-│   │       ├── subscriptions.ts
-│   │       └── spots.ts
 │   ├── supabase/
 │   │   ├── client.ts               # Browser Supabase client (createBrowserClient)
 │   │   ├── server.ts               # Server Supabase client (createServerClient + cookies)
@@ -1209,78 +1184,63 @@ src/
 │           ├── enrollment-confirmation.tsx  # Sent to user on enrollment
 │           └── subscription-verification.tsx  # Click to verify subscription email (when email ≠ auth)
 ├── types/
-│   └── database.ts                 # Generated types from Supabase (npx supabase gen types)
+│   └── database.ts                 # Generated types from Supabase (pnpm db:types)
 └── middleware.ts                   # Next.js middleware (session refresh + route protection)
 
 # Root-level (outside src/)
-drizzle.config.ts                    # Drizzle Kit config (points to DATABASE_URL)
-drizzle/                              # Drizzle output (drizzle-kit generate). Schema migration SQL for reference.
 supabase/
-└── migrations/                       # Custom SQL only. Drizzle does NOT output here.
-    ├── 0001_user_sync_trigger.sql   # Trigger on auth.users to auto-create public.users
-    ├── 0002_custom_jwt_hook.sql     # Auth hook to inject role into JWT claims
-    ├── 0003_realtime_messages.sql   # ALTER PUBLICATION supabase_realtime ADD TABLE messages
-    ├── 0004_enroll_function.sql     # Atomic enroll_in_course() RPC function
-    ├── 0005_storage_buckets.sql     # spot-maps + instructor-photos buckets, storage.objects RLS
-    └── 0006_promote_demote_rpcs.sql # promote_to_instructor, promote_to_admin, demote_to_user RPCs
+└── migrations/                       # ALL SQL migrations (schema, RLS, triggers, functions, storage)
+    ├── 0001_initial_schema.sql      # CREATE TYPE enums + CREATE TABLE for all 7 tables
+    ├── 0002_rls_policies.sql        # ENABLE RLS + CREATE POLICY for all tables (32 policies)
+    ├── 0003_user_sync_trigger.sql   # Trigger on auth.users to auto-create public.users
+    ├── 0004_custom_jwt_hook.sql     # Auth hook to inject role into JWT claims
+    ├── 0005_realtime_messages.sql   # ALTER PUBLICATION supabase_realtime ADD TABLE messages
+    ├── 0006_enroll_function.sql     # Atomic enroll_in_course() RPC function
+    ├── 0007_storage_buckets.sql     # spot-maps + instructor-photos buckets, storage.objects RLS
+    └── 0008_promote_demote_rpcs.sql # promote_to_instructor, promote_to_admin, demote_to_user RPCs
 ```
 
 ### Migration Workflow
 
 **Prerequisites:** See Manual Setup Steps — in particular, run `supabase link` before `supabase db push`. For a new project, run `supabase init` to create the `supabase/` directory and config; then add migration files to `supabase/migrations/`.
 
+**Single migration system:** All migrations live in `supabase/migrations/` as hand-written SQL files. They are applied in order via `supabase db push`. No separate schema generation step needed.
+
 **Initial setup checklist** — one linear sequence (dependency-ordered) for first-time setup:
 
 | Step | Action |
 |------|--------|
-| 0 | New projects only: `supabase init`, add migration files 0001–0006 to `supabase/migrations/` |
+| 0 | New projects only: `supabase init`, write migration files 0001–0008 in `supabase/migrations/` |
 | 1 | Manual: Create Supabase project (Dashboard) |
 | 2 | Manual: Configure Google OAuth in Supabase Auth |
 | 3 | Manual: Create OAuth credentials in Google Cloud Console |
 | 4 | Manual: Set up Resend (verify domain or use onboarding@resend.dev) |
 | 5 | Manual: Create `.env.local` with all required env vars |
-| 6 | Run `pnpm db:generate` and `pnpm db:migrate` |
-| 7 | Manual: Run `supabase link` |
-| 8 | Run `supabase db push` |
-| 9 | Manual: Configure Auth Hook in Supabase Dashboard |
+| 6 | Manual: Run `supabase link` to link local project to hosted Supabase |
+| 7 | Run `supabase db push` to apply all migrations |
+| 8 | Manual: Configure Auth Hook in Supabase Dashboard |
+| 9 | Run `pnpm db:types` to generate TypeScript types |
 | 10 | Manual: Deploy to Vercel (connect repo, set env vars) |
-
-Migration numbers **0001–0006** refer to `supabase/migrations/` (custom SQL only). Drizzle migrations in `drizzle/` use their own numbering (e.g. `0000_*`, `0001_*`). Two systems, run in order:
-
-**1. Drizzle (schema + RLS)** — tables and `pgPolicy` from TypeScript schema  
-- **`drizzle-kit generate`** writes migration SQL to `./drizzle/` including RLS policies.  
-- **`drizzle-kit migrate`** applies migrations to the DB. **Note:** `drizzle-kit push` has known RLS policy bugs (GitHub #3504, #4078) — use generate + migrate, not push.  
-- Run first so tables exist before custom SQL.
-
-**2. Supabase custom SQL** — logic Drizzle does not generate  
-- Triggers, auth hooks, Realtime publication, RPC functions, storage buckets.  
-- Stored in `supabase/migrations/` and applied with `supabase db push` (Supabase CLI).  
-- Run second, after schema is applied.
-
-**Initial setup sequence:** Complete Manual Setup steps 0–5 (project, OAuth, Resend, env vars). Then: (1) Run `pnpm db:generate` and `pnpm db:migrate`. (2) Manual Setup step 6: `supabase link`. (3) `supabase db push`. (4) Manual Setup step 7: configure Auth Hook in Dashboard. (5) Manual Setup step 8: Vercel when deploying.
 
 **Run order (initial setup or schema change):**
 
 **Prerequisite:** Run `supabase link` (Manual Setup step 6) before `supabase db push`.
 
 ```bash
-pnpm db:generate      # 1. Generate migration SQL from Drizzle schema
-pnpm db:migrate       # 2. Apply migrations (schema + RLS) to DB
-supabase db push      # 3. Apply custom SQL (requires Supabase CLI, linked project)
-pnpm db:types         # 4. Regenerate types
+supabase db push      # 1. Apply all pending SQL migrations to DB
+pnpm db:types         # 2. Regenerate TypeScript types from DB schema
 ```
 
 **Scripts (`package.json`):**
 ```json
 "scripts": {
-  "db:generate": "drizzle-kit generate",
-  "db:migrate": "drizzle-kit migrate",
+  "db:push": "supabase db push",
   "db:types": "supabase gen types typescript --linked > src/types/database.ts",
-  "db:sync": "pnpm db:generate && pnpm db:migrate && supabase db push && pnpm db:types"
+  "db:sync": "supabase db push && pnpm db:types"
 }
 ```
 
-**Schema changes:** Update Drizzle schema files, then run `pnpm db:generate` and `pnpm db:migrate`. Use `--linked` for `db:types` when the project is linked via `supabase link` (Manual Setup step 6). Custom SQL rarely changes; add new `supabase/migrations/*.sql` only when adding triggers, functions, or storage config.
+**Schema changes:** Create a new migration file (e.g. `supabase/migrations/0009_add_new_column.sql`), write the `ALTER TABLE` / `CREATE POLICY` / etc. SQL, then run `supabase db push` to apply followed by `pnpm db:types` to refresh types. Use `--linked` for `db:types` when the project is linked via `supabase link` (Manual Setup step 6).
 
 ---
 
@@ -1290,9 +1250,9 @@ Steps that must be completed manually in external dashboards and consoles before
 
 **Prerequisites:** Install Supabase CLI — `pnpm add -D supabase` or `npm install -g supabase`. Required for `supabase link`, `supabase db push`, and `supabase gen types` (used by `db:types` script).
 
-**0. New projects only:** Run `supabase init` to create the `supabase/` directory and config. Add migration files 0001–0006 to `supabase/migrations/` (content described in plan).
+**0. New projects only:** Run `supabase init` to create the `supabase/` directory and config. Write migration files 0001–0008 in `supabase/migrations/` (content described in plan).
 
-1. **Supabase project** – Create a hosted Supabase project (supabase.com). Note the project URL, anon key, service role key, and direct Postgres connection string. Find the connection string in Supabase Dashboard > Project Settings > Database, under Connection string. Use the URI format with port 5432 (direct connection, not transaction pooler).
+1. **Supabase project** – Create a hosted Supabase project (supabase.com). Note the project URL, anon key, and service role key.
 
 2. **Supabase Auth – Google OAuth (Supabase Dashboard)** – Authentication > Providers > Google:
    - Enable the Google OAuth provider
@@ -1306,10 +1266,10 @@ Steps that must be completed manually in external dashboards and consoles before
 
 4. **Resend** – Verify the sending domain in the Resend dashboard, or use `onboarding@resend.dev` for testing. Obtain an API key.
 
-5. **Environment variables – local** – Create `.env.local` with `DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL` (optional, defaults to `onboarding@resend.dev` for dev), `NEXT_PUBLIC_SITE_URL`.
+5. **Environment variables – local** – Create `.env.local` with `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL` (optional, defaults to `onboarding@resend.dev` for dev), `NEXT_PUBLIC_SITE_URL`.
 
 6. **Supabase CLI link** – Run `supabase link` to link the local project to the hosted Supabase project (required for `supabase db push`).
 
-7. **Supabase Auth Hook – Custom Access Token** – After applying migrations (including `supabase db push`), go to Supabase Dashboard > Authentication > Hooks. Add a Custom Access Token hook; in the Hooks panel, select or enter `public.custom_access_token_hook` as the function to invoke (the function is created by migration 0002). Apply migration 0002 and configure this hook before testing role-gated features; until then, `user_role` will be undefined in tokens.
+7. **Supabase Auth Hook – Custom Access Token** – After applying migrations (via `supabase db push`), go to Supabase Dashboard > Authentication > Hooks. Add a Custom Access Token hook; in the Hooks panel, select or enter `public.custom_access_token_hook` as the function to invoke (the function is created by migration 0004). Apply all migrations and configure this hook before testing role-gated features; until then, `user_role` will be undefined in tokens.
 
 8. **Vercel** – Connect the GitHub repo, configure the project, and set all environment variables in the Vercel dashboard.

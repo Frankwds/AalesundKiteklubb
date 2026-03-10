@@ -759,7 +759,7 @@ Design: Off-white content card floating over the panorama background. Shades of 
 Spots are accessed via a direct nav link to `/spots`. One nav item "Spotter" links to the listing page.
 
 **Layout:**
-- **Filters:** Placed in a drawer at the top of the page (same on mobile and desktop). Season (SommerSpotter / VinterSpotter), Area (e.g. Giske, Ålesund), Wind direction (N, NE, E, SE, S, SW, W, NW — multi-select). Filters sync to URL params (e.g. `?season=summer&area=Giske`); initial render reads params and filters client-side. Shareable links use URL params. Drawer can be collapsed/expanded.
+- **Filters:** Placed in a drawer at the top of the page (same on mobile and desktop). Season (SommerSpotter / VinterSpotter), Area (e.g. Giske, Ålesund), Wind direction (N, NE, E, SE, S, SW, W, NW — multi-select). When multiple wind directions are selected, show spots whose windDirections array contains any of the selected directions (OR semantics). Filters sync to URL params (e.g. `?season=summer&area=Giske`); initial render reads params and filters client-side. Shareable links use URL params. Drawer can be collapsed/expanded.
 - **Spot cards:** Grid of cards below the filter drawer, each showing spot name, area, season badge, skill level, wind compass (or favorable wind badges). Tap/click navigates to `/spots/[id]`.
 - **Empty state:** If no spots match filters, show clear message and option to clear filters.
 
@@ -807,7 +807,7 @@ Protected by middleware (admin role only). One page with shadcn/ui `Tabs` to swi
 
 **Tab: Instruktører**
 - DataTable listing all instructors (name, email, certifications, created date)
-- "Legg til instruktør" button → Dialog with a user search/select field. On submit, atomically creates `instructors` profile row and sets `users.role = 'instructor'`.
+- "Legg til instruktør" button → Dialog with a user search/select field. The user list excludes users who already have a row in the instructors table (or whose `users.role` is `instructor` or `admin`), to avoid duplicate-instructor attempts or confusing UX. On submit, atomically creates `instructors` profile row and sets `users.role = 'instructor'`.
 - Row actions: Edit (opens Dialog with profile form), Remove (atomically deletes profile and resets role to `user`)
 
 **Tab: Kurs**

@@ -60,7 +60,7 @@ isProject: false
 
 **Drizzle vs Supabase SDK -- separation of concerns:**
 
-- **Drizzle** is a build/dev-time tool. It defines table schemas AND RLS policies in TypeScript using native `pgPolicy`, `authenticatedRole`, `authUid` from `drizzle-orm/supabase`. `drizzle-kit generate` produces the SQL migrations including `CREATE POLICY` statements. It connects to Postgres directly via `DATABASE_URL` during `drizzle-kit migrate` (use migrate, not push — push has known RLS policy issues).
+- **Drizzle** is a build/dev-time tool. It defines table schemas AND RLS policies in TypeScript using native `pgPolicy`, `authenticatedRole`, `authUid` from `drizzle-orm/supabase`. `drizzle-kit generate` produces the SQL migrations including `CREATE POLICY` statements. It connects to Postgres directly via `DATABASE_URL` during `drizzle-kit migrate` (use migrate, not push — see Migration Workflow).
 - **Supabase SDK** is the runtime data access layer. All queries (select, insert, update, delete) from both server and client components go through the Supabase client. This ensures RLS policies are enforced automatically, since the Supabase client passes the user's JWT to Postgres.
 
 ---
@@ -523,9 +523,11 @@ const jwt = JSON.parse(atob(session.access_token.split('.')[1]));
 const role = jwt.user_role; // 'user' | 'instructor' | 'admin'
 ```
 
+**Note:** JWT payload is base64url-encoded. For reliable decoding: use `Buffer.from(part, 'base64url')` in Node, or convert base64url to base64 (replace `-` with `+`, `_` with `/`, add padding) before `atob` in the browser.
+
 `supabase.auth.getUser()` returns the user object from the Auth API — it does **not** include custom JWT claims injected by hooks. Always use `getSession()` + token decode for role checks.
 
-This is enabled in the Supabase Dashboard under Authentication > Hooks.
+In Supabase Dashboard > Authentication > Hooks, add a Custom Access Token hook and configure it to invoke `public.custom_access_token_hook` (the function is created by migration 0002). See Manual Setup step 7.
 
 **Trade-off:** When an admin changes a user's role, the JWT updates on next token refresh (~1 hour) or on re-login. For rare admin operations this is acceptable.
 
@@ -856,7 +858,7 @@ The `publishCourse` Server Action:
 1. Inserts the course (with `spotId`) via Supabase server client (RLS verifies the user is an instructor or admin)
 2. On success, fetches the linked spot data and all subscriber emails. Subscriber list uses the **service role client** (instructor's client is restricted by RLS to their own subscription only)
 3. Sends individual emails via Resend to each verified subscriber (loop or `Promise.all` over individual sends). One email per subscriber with course details (title, date, description, spot name + link to `/spots/[spotId]`, and a "Meld deg på" enroll link).
-4. Returns the course data + whether the notification was sent successfully
+4. Returns `{ course, notificationSent: boolean }` where `notificationSent` is true only if all subscriber emails were sent successfully. If false, the client may show a warning toast; the course remains created.
 
 If the email send fails, the course is still created -- the action returns a warning about the notification failure rather than rolling back.
 
@@ -872,7 +874,7 @@ When a user successfully enrolls in a course, a confirmation email is sent to th
 - **`src/lib/email/resend.ts`** -- Resend client initialized with `RESEND_API_KEY`
 - **`src/lib/email/templates/new-course.tsx`** -- Subscriber notification: new course available. Includes course title, date, instructor name, price, spot link, and "Meld deg på" link.
 - **`src/lib/email/templates/enrollment-confirmation.tsx`** -- Sent to user on enrollment. Includes course details, spot link, link to course chat, and note about unenrolling at `/courses` with a link to that page.
-- **Sending domain** -- must be verified in the Resend dashboard (or use `onboarding@resend.dev` for testing)
+- **Sending domain** -- For production, configure a verified domain and FROM address (e.g. `noreply@aalesundkiteklubb.no`) in Resend; use `onboarding@resend.dev` for local testing.
 
 ---
 
@@ -930,7 +932,7 @@ All in `src/components/`, using shadcn/ui as the base:
 
 - **Vercel:** Connect GitHub repo, auto-deploy on push
 - **Supabase:** Separate hosted Supabase project (free tier to start)
-- **Migrations:** Run `drizzle-kit generate` then `drizzle-kit migrate` as part of CI/CD or manually (use migrate, not push — push has RLS policy issues)
+- **Migrations:** Run `drizzle-kit generate` then `drizzle-kit migrate` as part of CI/CD or manually (use migrate, not push — see Migration Workflow)
 - **Environment:** Set env vars in Vercel dashboard
 
 ---
@@ -1010,6 +1012,8 @@ supabase/
 
 ### Migration Workflow
 
+**Prerequisites:** See Manual Setup (Section 12) — in particular, run `supabase link` before `supabase db push`.
+
 Migration numbers **0001–0005** refer to `supabase/migrations/` (custom SQL only). Drizzle migrations in `drizzle/` use their own numbering (e.g. `0000_*`, `0001_*`). Two systems, run in order:
 
 **1. Drizzle (schema + RLS)** — tables and `pgPolicy` from TypeScript schema  
@@ -1023,6 +1027,9 @@ Migration numbers **0001–0005** refer to `supabase/migrations/` (custom SQL on
 - Run second, after schema is applied.
 
 **Run order (initial setup or schema change):**
+
+**Prerequisite:** Run `supabase link` (Manual Setup step 6) before `supabase db push`.
+
 ```bash
 pnpm db:generate      # 1. Generate migration SQL from Drizzle schema
 pnpm db:migrate       # 2. Apply migrations (schema + RLS) to DB
@@ -1066,4 +1073,6 @@ Steps that must be completed manually in external dashboards and consoles before
 
 6. **Supabase CLI link** – Run `supabase link` to link the local project to the hosted Supabase project (required for `supabase db push`).
 
-7. **Vercel** – Connect the GitHub repo, configure the project, and set all environment variables in the Vercel dashboard.
+7. **Supabase Auth Hook – Custom Access Token** – After applying migrations (including `supabase db push`), go to Supabase Dashboard > Authentication > Hooks. Add a Custom Access Token hook and configure it to invoke `public.custom_access_token_hook` (created by migration 0002). Apply migration 0002 and configure this hook before testing role-gated features; until then, `user_role` will be undefined in tokens.
+
+8. **Vercel** – Connect the GitHub repo, configure the project, and set all environment variables in the Vercel dashboard.

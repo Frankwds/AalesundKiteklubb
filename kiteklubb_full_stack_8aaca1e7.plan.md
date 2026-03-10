@@ -169,7 +169,7 @@ Environment variables needed:
 
 ## 2. Database Schema (Drizzle -- schema definition only)
 
-All schemas in `src/lib/db/schema/`. One file per table, re-exported from `src/lib/db/schema/index.ts`. These files are consumed by `drizzle-kit` to generate migrations -- they are NOT imported by the application runtime.
+All schemas in `src/lib/db/schema/`. In schema files, use explicit Postgres column names for compatibility with triggers and Supabase SDK (snake_case): e.g. `avatarUrl: text('avatar_url')`, `userId: uuid('user_id')`, `instructorId: uuid('instructor_id')`. One file per table, re-exported from `src/lib/db/schema/index.ts`. These files are consumed by `drizzle-kit` to generate migrations -- they are NOT imported by the application runtime.
 
 ### 2a. Users (`src/lib/db/schema/users.ts`)
 
@@ -377,14 +377,15 @@ Every policy below MUST be implemented as a `pgPolicy` in the corresponding Driz
 5. `"Instructors can delete own courses"` — DELETE, `authenticatedRole`, using: same instructor subquery
 6. `"Admin full access"` — ALL, `authenticatedRole`, using/withCheck: `isAdmin`
 
-**Course Participants table** (`src/lib/db/schema/courseParticipants.ts`) — 6 policies:
+**Course Participants table** (`src/lib/db/schema/courseParticipants.ts`) — 7 policies:
 
 1. `"Users can view own enrollments"` — SELECT, `authenticatedRole`, using: `user_id = auth.uid()`
 2. `"Instructors can view their course participants"` — SELECT, `authenticatedRole`, using: `course_id IN (SELECT id FROM courses WHERE instructor_id IN (SELECT id FROM instructors WHERE user_id = auth.uid()))`
 3. `"Participants can see co-participants in same course"` — SELECT, `authenticatedRole`, using: EXISTS subquery (see Chat-related RLS section below for SQL)
 4. `"Users can enroll themselves"` — INSERT, `authenticatedRole`, withCheck: `user_id = auth.uid()` (note: enrollment primarily goes through `enroll_in_course` RPC which uses `security definer`, but this policy is still needed as a safety net)
 5. `"Users can unenroll themselves"` — DELETE, `authenticatedRole`, using: `user_id = auth.uid()`
-6. `"Admin full access"` — ALL, `authenticatedRole`, using/withCheck: `isAdmin`
+6. `"Instructors can remove participants from their courses"` — DELETE, `authenticatedRole`, using: `course_id IN (SELECT id FROM courses WHERE instructor_id IN (SELECT id FROM instructors WHERE user_id = auth.uid()))`
+7. `"Admin full access"` — ALL, `authenticatedRole`, using/withCheck: `isAdmin`
 
 **Messages table** (`src/lib/db/schema/messages.ts`) — 3 policies:
 
@@ -399,13 +400,15 @@ Every policy below MUST be implemented as a `pgPolicy` in the corresponding Driz
 3. `"Users can delete own subscription"` — DELETE, `authenticatedRole`, using: `user_id = auth.uid()`
 4. `"Admin full access"` — ALL, `authenticatedRole`, using/withCheck: `isAdmin`
 
+**Note:** Subscription email is immutable after creation. To change email, the user must delete and re-subscribe (with verification if the new email differs from auth).
+
 **Spots table** (`src/lib/db/schema/spots.ts`) — 3 policies:
 
 1. `"Public can view spots"` — SELECT, `anonRole`, using: `true`
 2. `"Authenticated can view spots"` — SELECT, `authenticatedRole`, using: `true`
 3. `"Admin full access"` — ALL, `authenticatedRole`, using/withCheck: `isAdmin`
 
-**Total: 30 policies** across 7 tables. All must be defined as `pgPolicy` calls in the schema files so `drizzle-kit generate` produces the corresponding `CREATE POLICY` SQL.
+**Total: 31 policies** across 7 tables. All must be defined as `pgPolicy` calls in the schema files so `drizzle-kit generate` produces the corresponding `CREATE POLICY` SQL.
 
 ### Reading roles from JWT in RLS policies (no subqueries)
 
@@ -673,9 +676,8 @@ Sections:
 - **Intro kurs** -- what courses are about, who the instructors are, general info text
 - **Scheduled Courses** -- list of course cards from DB. Each card shows course info (title, date, spot name linked to `/spots/[spotId]` when present — when `spotId` is null, show "TBD" or "Ikke bestemt" and omit the link — instructor, price). The card has stateful buttons depending on the user's enrollment:
   - **Not logged in:** "Logg inn for å melde på" (links to login)
-  - **Logged in, not enrolled:** "Meld på" button opens a confirmation dialog (description of action, prefilled email field showing where confirmation will be sent — read from auth, display-only — "Avbryt" + "Meld på" buttons). On confirm, calls `enroll_in_course` RPC. Confirmation email is sent to the user's auth email. **Do not show "Chat"** — only enrolled users see it.
+  - **Logged in, not enrolled:** "Meld på" button opens a confirmation dialog (description of action, prefilled email field showing where confirmation will be sent — read from auth, display-only — "Avbryt" + "Meld på" buttons). On confirm, calls `enroll_in_course` RPC. On successful enrollment, a confirmation email is sent to the user (see section 7). **Do not show "Chat"** — only enrolled users see it.
   - **Logged in, enrolled:** "Meld av" button opens a confirmation dialog (description of action, "Avbryt" + "Meld av" buttons). On confirm, deletes from `course_participants`. "Chat" button links to `/courses/[id]/chat`.
-  - On successful enrollment, a confirmation email is sent to the user (see section 7)
   - When no courses: semi-grayed placeholder text, e.g. "Kurs legges ut når forholdene ser lovende ut, ikke langt i forkant. Meld deg på for å få varsler." plus Subscribe button/link that scrolls to the Subscribe section.
 - **Subscribe** -- requires login. Clicking Subscribe opens a confirmation dialog with: description of the action (e.g. receive email when new courses are published), prefilled editable email field, "Avbryt" (cancel) and "Meld på" (confirm) buttons. On confirm, stores in subscriptions table. If already subscribed, "Meld av" opens a confirmation dialog (description, "Avbryt" + "Meld av"); on confirm, removes from subscriptions.
 
@@ -784,7 +786,7 @@ Query functions used by Server Components and Server Actions. Each returns typed
 - `src/lib/queries/instructors.ts` -- `supabase.from('instructors').select('*, users(*)')`
 - `src/lib/queries/messages.ts` -- `supabase.from('messages').select('*, users(name, avatar_url)').eq('course_id', id).order('created_at')`
 - `src/lib/queries/subscriptions.ts` -- check if current user has a subscription row (returns `verified` status for UI). For notification sends, filter to `verified = true` only.
-- `src/lib/queries/spots.ts` -- `supabase.from('spots').select('*')`; fetches all spots for the listing page. Filtering by season, area, wind direction is done client-side or via query params.
+- `src/lib/queries/spots.ts` -- `supabase.from('spots').select('*')`; fetches all spots for the listing page. Filtering is client-side: fetch all spots, filter in JS by season/area/wind. URL params (e.g. `?season=summer&area=Giske`) are read on load and applied to filter state; shareable links restore filters.
 - `src/lib/queries/users.ts` -- admin queries with service role client for user management
 
 ### Client-side Queries and Realtime
@@ -843,7 +845,7 @@ sequenceDiagram
   DB-->>SA: course data
   SA->>DB: select all subscribers
   DB-->>SA: subscriber emails
-  SA->>R: send batch email
+  SA->>R: send emails to each subscriber
   R-->>SA: success/failure
   SA-->>U: return course + notification status
 ```
@@ -853,7 +855,7 @@ sequenceDiagram
 The `publishCourse` Server Action:
 1. Inserts the course (with `spotId`) via Supabase server client (RLS verifies the user is an instructor or admin)
 2. On success, fetches the linked spot data and all subscriber emails. Subscriber list uses the **service role client** (instructor's client is restricted by RLS to their own subscription only)
-3. Sends a batch email via Resend with course details (title, date, description, spot name + link to `/spots/[spotId]`, and a "Meld deg på" enroll link)
+3. Sends individual emails via Resend to each verified subscriber (loop or `Promise.all` over individual sends). One email per subscriber with course details (title, date, description, spot name + link to `/spots/[spotId]`, and a "Meld deg på" enroll link).
 4. Returns the course data + whether the notification was sent successfully
 
 If the email send fails, the course is still created -- the action returns a warning about the notification failure rather than rolling back.
@@ -885,7 +887,7 @@ All in `src/components/`, using shadcn/ui as the base:
 - **Spots:** `SpotCard`, `SpotList`, `SpotFilters` (listing page with season/area/wind filters), `WindCompass` (visual compass rose), `SpotDetailPage` sections
 - **Admin:** `InstructorForm`, `CourseForm` (with searchable spot dropdown via shadcn `Combobox`), `SpotForm` (with map image upload, compass direction picker, multi-select water type), `DataTable`
 - **Subscription:** `SubscribeDialog` (Meld på: action description, editable email, "Avbryt" + "Meld på"); `UnsubscribeDialog` (Meld av: action description, "Avbryt" + "Meld av"). If subscribed but `verified = false`, show a subtle hint: "Sjekk e-posten din for å bekrefte" instead of the normal subscribed state
-- **Enrollment:** `EnrollConfirmDialog` (Meld på: action description, editable email, "Avbryt" + "Meld på"); `UnenrollConfirmDialog` (Meld av: action description, "Avbryt" + "Meld av")
+- **Enrollment:** `EnrollConfirmDialog` (Meld på: action description, display-only email field showing auth email where confirmation will be sent, "Avbryt" + "Meld på"); `UnenrollConfirmDialog` (Meld av: action description, "Avbryt" + "Meld av")
 
 ### Loading, Error & Toast UI
 
@@ -1008,7 +1010,7 @@ supabase/
 
 ### Migration Workflow
 
-Two systems, run in order:
+Migration numbers **0001–0005** refer to `supabase/migrations/` (custom SQL only). Drizzle migrations in `drizzle/` use their own numbering (e.g. `0000_*`, `0001_*`). Two systems, run in order:
 
 **1. Drizzle (schema + RLS)** — tables and `pgPolicy` from TypeScript schema  
 - **`drizzle-kit generate`** writes migration SQL to `./drizzle/` including RLS policies.  

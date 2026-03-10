@@ -249,12 +249,14 @@ Enrollment is handled via a Postgres RPC function (not a direct insert) to preve
 ### 2f. Subscriptions (`src/lib/db/schema/subscriptions.ts`)
 
 
-| Column    | Type          | Notes                |
-| --------- | ------------- | -------------------- |
-| id        | uuid PK       |                      |
-| userId    | uuid FK       | -> users.id, **unique**, ON DELETE CASCADE |
-| email     | text NOT NULL | Autofilled, editable, **unique** |
-| createdAt | timestamp     | default now()        |
+| Column            | Type          | Notes                |
+| ----------------- | ------------- | -------------------- |
+| id                | uuid PK       |                      |
+| userId            | uuid FK       | -> users.id, **unique**, ON DELETE CASCADE |
+| email             | text NOT NULL | Autofilled, editable, **unique** |
+| verified          | boolean       | default `false`      |
+| verificationToken | uuid          | nullable, unique. Generated when email ≠ auth email |
+| createdAt         | timestamp     | default now()        |
 
 
 ### 2g. Spots (`src/lib/db/schema/spots.ts`)
@@ -728,7 +730,7 @@ Server Actions (`"use server"`) for mutations. Each creates a Supabase server cl
   - `removeInstructor(userId)` / `demoteToUser(userId)`: Deletes `instructors` row AND resets `users.role = 'user'`.
   - `updateInstructorProfile(...)`: Instructor or admin edits their own profile (bio, certs, photo, etc.) -- RLS allows self-update. Photo upload goes to `instructor-photos/{userId}/` bucket, URL stored in `instructors.photoUrl`.
 - `src/lib/actions/messages.ts` -- `supabase.from('messages').insert(...)`
-- `src/lib/actions/subscriptions.ts` -- insert/delete on `subscriptions`
+- `src/lib/actions/subscriptions.ts` -- insert/delete on `subscriptions`. **Email verification logic:** If the submitted email matches the user's Google auth email, insert with `verified = true` (already verified by OAuth). If email differs, insert with `verified = false` + generate a random UUID `verificationToken`, then send a verification email via Resend with a link to `/api/verify-subscription?token=xxx`.
 - `src/lib/actions/spots.ts` -- CRUD on `spots` + upload to `spot-maps` bucket (`{spotId}/{filename}`), store public URL in `mapImageUrl`
 - `src/lib/actions/users.ts` -- admin-only role updates (admin uses service role client for this specific operation)
 - `src/lib/actions/auth.ts` -- `signOut()`: calls `supabase.auth.signOut()`, then `redirect('/')`
@@ -758,7 +760,7 @@ Query functions used by Server Components and Server Actions. Each returns typed
 - `src/lib/queries/courses.ts` -- `supabase.from('courses').select('*, instructors(*), spots(*)')`. Public page filters to future courses only (`.gte('date', new Date().toISOString())`). Admin dashboard shows all courses.
 - `src/lib/queries/instructors.ts` -- `supabase.from('instructors').select('*, users(*)')`
 - `src/lib/queries/messages.ts` -- `supabase.from('messages').select('*, users(name, avatar_url)').eq('course_id', id).order('created_at')`
-- `src/lib/queries/subscriptions.ts` -- check if current user has a subscription row
+- `src/lib/queries/subscriptions.ts` -- check if current user has a subscription row (returns `verified` status for UI). For notification sends, filter to `verified = true` only.
 - `src/lib/queries/spots.ts` -- `supabase.from('spots').select('*')`; fetches all spots for the listing page. Filtering by season, area, wind direction is done client-side or via query params.
 - `src/lib/queries/users.ts` -- admin queries with service role client for user management
 
@@ -793,7 +795,8 @@ A server-only Supabase client using `SUPABASE_SERVICE_ROLE_KEY` that bypasses RL
 - **Auth callback upsert:** `INSERT ... ON CONFLICT` into `public.users` after `exchangeCodeForSession`. Service role is required because the callback runs before the user's RLS context is fully established, and we need to write to `public.users` regardless of existing policies.
 - **Admin role changes:** Promoting/demoting users (update `users.role`), which RLS restricts to admins but the admin is acting on another user's row.
 - **Admin instructor promote/demote:** Creating/deleting `instructors` rows and updating roles atomically.
-- **publishCourse subscriber fetch:** The instructor's Supabase client has RLS that limits `subscriptions` to their own row. To send notification emails, we need all subscriber emails. Use the service role client for this single query: `adminClient.from('subscriptions').select('email')`.
+- **publishCourse subscriber fetch:** The instructor's Supabase client has RLS that limits `subscriptions` to their own row. To send notification emails, we need all subscriber emails. Use the service role client for this single query: `adminClient.from('subscriptions').select('email').eq('verified', true)` — only verified emails receive notifications.
+- **Subscription email verification:** `src/app/api/verify-subscription/route.ts` — GET handler that reads `token` from search params, looks up the subscription by `verificationToken` using the service role client, sets `verified = true` and clears the token, then redirects to `/courses?verified=true` (the courses page can show a success toast based on the query param). Service role needed because the request is unauthenticated (user clicking an email link).
 
 This key is NEVER exposed to the client. Environment variable: `SUPABASE_SERVICE_ROLE_KEY` (server-only, not `NEXT_PUBLIC_`).
 
@@ -858,7 +861,7 @@ All in `src/components/`, using shadcn/ui as the base:
 - **Chat:** `ChatWindow`, `MessageBubble`, `MessageInput`
 - **Spots:** `SpotCard`, `SpotList`, `SpotFilters` (listing page with season/area/wind filters), `WindCompass` (visual compass rose), `SpotDetailPage` sections
 - **Admin:** `InstructorForm`, `CourseForm` (with searchable spot dropdown via shadcn `Combobox`), `SpotForm` (with map image upload, compass direction picker, multi-select water type), `DataTable`
-- **Subscription:** `SubscribeDialog` (Meld på: action description, editable email, "Avbryt" + "Meld på"); `UnsubscribeDialog` (Meld av: action description, "Avbryt" + "Meld av")
+- **Subscription:** `SubscribeDialog` (Meld på: action description, editable email, "Avbryt" + "Meld på"); `UnsubscribeDialog` (Meld av: action description, "Avbryt" + "Meld av"). If subscribed but `verified = false`, show a subtle hint: "Sjekk e-posten din for å bekrefte" instead of the normal subscribed state
 - **Enrollment:** `EnrollConfirmDialog` (Meld på: action description, editable email, "Avbryt" + "Meld på"); `UnenrollConfirmDialog` (Meld av: action description, "Avbryt" + "Meld av")
 
 ### Loading, Error & Toast UI
@@ -919,6 +922,7 @@ src/
 │   ├── not-found.tsx               # Custom 404 page
 │   ├── login/page.tsx              # Login page
 │   ├── auth/callback/route.ts      # OAuth callback
+│   ├── api/verify-subscription/route.ts  # GET: verify subscription email token
 │   ├── spots/
 │   │   ├── page.tsx                 # Spots listing with cards and filters
 │   │   └── [id]/

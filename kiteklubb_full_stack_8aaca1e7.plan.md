@@ -222,6 +222,8 @@ Environment variables needed:
 
 All database objects (tables, enums, RLS policies, triggers, functions, storage) are defined as hand-written SQL migration files in `supabase/migrations/`. Migrations are applied via `supabase db push`. All column names use snake_case (e.g. `avatar_url`, `user_id`, `instructor_id`) for consistency with Supabase SDK and triggers.
 
+**Timezone convention:** All timestamp columns use `timestamptz` (not `timestamp`). Postgres stores them as UTC internally. The application always interprets and displays them in `Europe/Oslo` using the shared date formatting utilities in `src/lib/utils/date.ts` (see Section 9). Never use raw `.toLocaleDateString()` or `.toLocaleString()` without explicitly passing `{ timeZone: 'Europe/Oslo' }`.
+
 The migration files follow this structure:
 
 | Migration | Contents |
@@ -248,7 +250,7 @@ All column names use snake_case (e.g. `avatar_url`, `created_at`, `user_id`).
 | name       | text          |                               |
 | avatar_url | text          |                               |
 | role       | enum          | `user`, `instructor`, `admin` |
-| created_at | timestamp     | default now()                 |
+| created_at | timestamptz   | default now()                 |
 
 
 ### 2b. Instructors
@@ -263,7 +265,7 @@ All column names use snake_case (e.g. `avatar_url`, `created_at`, `user_id`).
 | years_experience | integer   |                         |
 | phone            | text      |                         |
 | photo_url        | text      | Supabase Storage public URL from `instructor-photos` bucket |
-| created_at       | timestamp |                         |
+| created_at       | timestamptz |                         |
 
 **Sync invariant:** Users with `role = 'instructor'` or `role = 'admin'` always have a row in `instructors`. Admins automatically get an instructor profile when promoted (so they can create courses using the same UI). These are created atomically via admin actions (see section 6). The JWT claim (`user_role`) handles fast permission checks (middleware, UI). The `instructors` table holds profile data and provides the FK for `courses.instructor_id`.
 
@@ -281,7 +283,7 @@ All column names use snake_case (e.g. `avatar_url`, `created_at`, `user_id`).
 | max_participants | integer       | nullable = unlimited                  |
 | instructor_id    | uuid FK       | -> instructors.id, nullable, ON DELETE SET NULL |
 | spot_id          | uuid FK       | -> spots.id, nullable, ON DELETE SET NULL |
-| created_at       | timestamp     |                                       |
+| created_at       | timestamptz   |                                       |
 
 
 ### 2d. Course Participants
@@ -292,7 +294,7 @@ All column names use snake_case (e.g. `avatar_url`, `created_at`, `user_id`).
 | id          | uuid PK   |               |
 | user_id     | uuid FK   | -> users.id, ON DELETE CASCADE   |
 | course_id   | uuid FK   | -> courses.id, ON DELETE CASCADE |
-| enrolled_at | timestamp | default now() |
+| enrolled_at | timestamptz | default now() |
 
 
 Unique constraint on (user_id, course_id).
@@ -308,7 +310,7 @@ Enrollment is handled via a Postgres RPC function (not a direct insert) to preve
 | user_id    | uuid FK       | -> users.id, nullable, ON DELETE SET NULL (shows "Slettet bruker" in chat) |
 | course_id  | uuid FK       | -> courses.id, ON DELETE CASCADE |
 | content    | text NOT NULL |               |
-| created_at | timestamp     | default now() |
+| created_at | timestamptz   | default now() |
 
 
 ### 2f. Subscriptions
@@ -321,8 +323,8 @@ Enrollment is handled via a Postgres RPC function (not a direct insert) to preve
 | email              | text NOT NULL | Autofilled, editable. Not globally unique — two users may use the same notification address; `user_id` UNIQUE enforces one subscription per user. |
 | verified           | boolean       | default `false`      |
 | verification_token | uuid          | nullable, unique. Generated when email ≠ auth email |
-| token_expires_at   | timestamp     | nullable. Set to `now() + interval '24 hours'` when `verification_token` is generated. Null when no token is active. |
-| created_at         | timestamp     | default now()        |
+| token_expires_at   | timestamptz   | nullable. Set to `now() + interval '24 hours'` when `verification_token` is generated. Null when no token is active. |
+| created_at         | timestamptz   | default now()        |
 
 
 ### 2g. Spots
@@ -342,7 +344,7 @@ Enrollment is handled via a Postgres RPC function (not a direct insert) to preve
 | skill_level     | enum          | `beginner`, `experienced`                                  |
 | skill_notes     | text          | e.g. "Du må kunne ta høyde, ikke veldig langgrunt"         |
 | water_type      | text[]        | Array: "chop", "flat", "waves"                             |
-| created_at      | timestamp     |                                                            |
+| created_at      | timestamptz   |                                                            |
 
 Yr and Google Maps links are generated dynamically from `latitude`/`longitude` (no stored URLs needed). **When `latitude` or `longitude` is null:** hide the Værmelding and Veibeskrivelse sections, or show a placeholder message (e.g. "Kartlenker ikke tilgjengelig").
 
@@ -1010,10 +1012,10 @@ Each Server Action wraps Supabase calls and logs before returning. No PII in log
 
 Query functions used by Server Components and Server Actions. Each returns typed data from Supabase SDK:
 
-- `src/lib/queries/courses.ts` -- Export three functions: `getCoursesForPublicPage()`, `getCoursesForAdmin()`, and `getCoursesForInstructor()`. `getCoursesForPublicPage()` filters to future courses only. **Timezone:** A naive `.gte('date', new Date().toISOString())` would incorrectly exclude courses on the same calendar day in Europe/Oslo when compared from UTC. Use start-of-day in the course's display timezone: for Europe/Oslo, get today's date as `new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Oslo' })` (returns `YYYY-MM-DD`) and compare `date >= that at 00:00 Oslo`. Example:
+- `src/lib/queries/courses.ts` -- Export three functions: `getCoursesForPublicPage()`, `getCoursesForAdmin()`, and `getCoursesForInstructor()`. `getCoursesForPublicPage()` filters to future courses only. **Timezone:** A naive `.gte('date', new Date().toISOString())` would incorrectly exclude courses on the same calendar day in Europe/Oslo when compared from UTC. Use the shared `todayOsloISO()` helper from `src/lib/utils/date.ts` to get start-of-day in Oslo. Example:
   ```ts
-  const todayOslo = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Oslo' });
-  const midnightOslo = `${todayOslo}T00:00:00`;  // or append Oslo offset for timestamptz
+  import { todayOsloISO } from '@/lib/utils/date';
+  const midnightOslo = `${todayOsloISO()}T00:00:00`;
   const { data } = await supabase.from('courses').select('*').gte('date', midnightOslo);
   ```
   `getCoursesForAdmin()` returns all courses, no date filter. `getCoursesForInstructor()` **must explicitly filter by instructor:** RLS on courses only defines "Public/Authenticated can view" with `using: true`, so instructors would receive all courses otherwise. Implementation: (1) Look up the current user's instructor ID via `supabase.from('instructors').select('id').eq('user_id', authUserId).single()`, (2) Apply `.eq('instructor_id', instructorId)` to the courses query. Use `supabase.from('courses').select('*, instructors(*), spots(*)').order('date')` with that filter. All three use the same select shape.
@@ -1165,6 +1167,49 @@ All in `src/components/`, using shadcn/ui as the base:
 - **Typography:** Clean sans-serif (Inter via next/font)
 - **Responsive:** Default layout for small screens; larger breakpoints refine spacing and layout. Content card full-width with padding on mobile.
 
+### Date & Time Formatting
+
+All date/time rendering in the app uses shared helpers from `src/lib/utils/date.ts`. Components must never call `.toLocaleDateString()` or `.toLocaleString()` directly — always use these utilities to guarantee consistent Oslo timezone and Norwegian locale:
+
+```ts
+// src/lib/utils/date.ts
+const TZ = 'Europe/Oslo';
+const LOCALE = 'nb-NO';
+
+/** "12. mars 2026" */
+export const formatDate = (d: string) =>
+  new Date(d).toLocaleDateString(LOCALE, {
+    timeZone: TZ,
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+
+/** "12. mar. 14:30" */
+export const formatDateTime = (d: string) =>
+  new Date(d).toLocaleString(LOCALE, {
+    timeZone: TZ,
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+/** "14:30" — for chat message timestamps */
+export const formatTime = (d: string) =>
+  new Date(d).toLocaleTimeString(LOCALE, {
+    timeZone: TZ,
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+/** Today's date in Oslo as YYYY-MM-DD (for DB queries) */
+export const todayOsloISO = () =>
+  new Date().toLocaleDateString('sv-SE', { timeZone: TZ });
+```
+
+**Usage:** `formatDate` for course cards, admin tables, spot pages. `formatDateTime` for enrollment dates, subscription dates. `formatTime` for chat message timestamps. `todayOsloISO` for the future-course query filter (see Section 6 queries).
+
 ---
 
 ## 10. Deployment
@@ -1224,6 +1269,8 @@ src/
 │   │   ├── admin.ts                # Service role client (bypasses RLS, server-only)
 │   │   └── middleware.ts           # Session refresh helper
 │   ├── auth/index.ts               # getCurrentUser() helper via Supabase SDK
+│   ├── utils/
+│   │   └── date.ts                 # Shared date/time formatting (Europe/Oslo, nb-NO)
 │   ├── logger.ts                   # DB mutation logging (success/failure, no PII)
 │   ├── validations/                # Zod schemas for server action input validation
 │   ├── actions/                    # Server actions (mutations via Supabase SDK)

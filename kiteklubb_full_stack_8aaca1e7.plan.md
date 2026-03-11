@@ -190,8 +190,8 @@ npx create-next-app@latest . --typescript --tailwind --app --src-dir --use-pnpm
 Install core dependencies:
 
 ```bash
-# Runtime: Supabase SDK for all data access + Resend for email + Sonner for toast notifications + Zod for validation
-pnpm add @supabase/supabase-js @supabase/ssr resend sonner zod
+# Runtime: Supabase SDK for all data access + Resend for email + React Email for templates + Sonner for toast notifications + Zod for validation
+pnpm add @supabase/supabase-js @supabase/ssr resend @react-email/components sonner zod
 
 # Supabase CLI for migrations and type generation
 pnpm add -D supabase
@@ -292,8 +292,8 @@ All column names use snake_case (e.g. `avatar_url`, `created_at`, `user_id`).
 | Column      | Type      | Notes         |
 | ----------- | --------- | ------------- |
 | id          | uuid PK   |               |
-| user_id     | uuid FK   | -> users.id, ON DELETE CASCADE   |
-| course_id   | uuid FK   | -> courses.id, ON DELETE CASCADE |
+| user_id     | uuid FK NOT NULL | -> users.id, ON DELETE CASCADE   |
+| course_id   | uuid FK NOT NULL | -> courses.id, ON DELETE CASCADE |
 | enrolled_at | timestamptz | default now() |
 
 
@@ -319,7 +319,7 @@ Enrollment is handled via a Postgres RPC function (not a direct insert) to preve
 | Column             | Type          | Notes                |
 | ------------------ | ------------- | -------------------- |
 | id                 | uuid PK       |                      |
-| user_id            | uuid FK       | -> users.id, **unique**, ON DELETE CASCADE |
+| user_id            | uuid FK NOT NULL | -> users.id, **unique**, ON DELETE CASCADE |
 | email              | text NOT NULL | Autofilled, editable. Not globally unique — two users may use the same notification address; `user_id` UNIQUE enforces one subscription per user. |
 | verified           | boolean       | default `false`      |
 | verification_token | uuid          | nullable, unique. Generated when email ≠ auth email |

@@ -641,6 +641,13 @@ begin
     event := jsonb_set(event, '{claims,user_role}', '"user"');
   end if;
   return event;
+exception when others then
+  -- Graceful degradation: if anything fails (missing table, bad cast, transient error),
+  -- fall back to least-privileged role instead of crashing the entire auth flow.
+  -- Without this, an unhandled exception propagates to Supabase Auth and blocks
+  -- token issuance for ALL users, not just the affected one.
+  event := jsonb_set(event, '{claims,user_role}', '"user"');
+  return event;
 end;
 $$;
 
@@ -684,10 +691,20 @@ Postgres RPC functions that atomically update both `instructors` and `users.role
 ```sql
 create or replace function public.promote_to_instructor(p_user_id uuid)
 returns void language plpgsql security invoker as $$
+declare
+  current_role text;
 begin
   if (current_setting('request.jwt.claims', true)::jsonb)->>'user_role' != 'admin' then
     raise exception 'Only admins can promote users';
   end if;
+
+  -- Prevent downgrading an admin through the promote path
+  -- (bypasses the last-admin guard in demote_to_user)
+  select role into current_role from users where id = p_user_id;
+  if current_role = 'admin' then
+    raise exception 'Cannot change an admin role via promotion';
+  end if;
+
   insert into instructors (user_id) values (p_user_id)
     on conflict (user_id) do nothing;
   update users set role = 'instructor' where id = p_user_id;
@@ -732,9 +749,23 @@ end;
 $$;
 ```
 
-Called via `supabase.rpc('promote_to_instructor', { p_user_id })`, `supabase.rpc('promote_to_admin', { p_user_id })`, and `supabase.rpc('demote_to_user', { p_user_id })` from the admin's server client. RLS "Admin full access" allows the updates; the JWT check provides defense in depth. `demote_to_user` includes a self-demotion guard (`'Cannot demote yourself'` → `{ success: false, error: 'Du kan ikke endre din egen rolle' }`) and a last-admin guard — if `p_user_id` is the only remaining admin, the function raises `'Cannot demote the last admin'`; the server action returns this as `{ success: false, error: 'Kan ikke fjerne siste admin' }` and the UI shows a toast. **Note:** `instructors.user_id` must have a unique constraint for `ON CONFLICT (user_id)` to work — the schema already defines `user_id` as unique.
+Called via `supabase.rpc('promote_to_instructor', { p_user_id })`, `supabase.rpc('promote_to_admin', { p_user_id })`, and `supabase.rpc('demote_to_user', { p_user_id })` from the admin's server client. RLS "Admin full access" allows the updates; the JWT check provides defense in depth. `demote_to_user` includes a self-demotion guard (`'Cannot demote yourself'` → `{ success: false, error: 'Du kan ikke endre din egen rolle' }`) and a last-admin guard — if `p_user_id` is the only remaining admin, the function raises `'Cannot demote the last admin'`; the server action returns this as `{ success: false, error: 'Kan ikke fjerne siste admin' }` and the UI shows a toast. `promote_to_instructor` includes an admin-downgrade guard — if the target user is already an admin, the function raises `'Cannot change an admin role via promotion'`; the server action returns `{ success: false, error: 'Kan ikke nedgradere en admin via forfremming — bruk nedgradering først' }`. **Note:** `instructors.user_id` must have a unique constraint for `ON CONFLICT (user_id)` to work — the schema already defines `user_id` as unique.
 
-**JWT staleness after role changes:** After a successful promote/demote, the user's JWT still contains the old `user_role` claim until the token refreshes (~1 hour). The admin dashboard should show a toast after every role change: `toast.success('Rolle endret. Brukeren må logge ut og inn igjen for å få tilgang.')`. This is a Supabase Auth limitation — `supabase.auth.refreshSession()` only works in the target user's own browser, so the admin cannot force a refresh on their behalf.
+**JWT staleness after role changes:** After a successful promote/demote, the user's JWT still contains the old `user_role` claim until the token refreshes (~1 hour). The admin dashboard should show a context-specific toast after each role change. This is a Supabase Auth limitation — `supabase.auth.refreshSession()` only works in the target user's own browser, so the admin cannot force a refresh on their behalf.
+
+**Per-operation toast messages:**
+
+| Operation | Toast |
+|-----------|-------|
+| Promote user → instructor | `toast.success('Bruker forfremmet til instruktør. De må logge ut og inn igjen for å få tilgang.')` |
+| Promote user/instructor → admin | `toast.success('Bruker forfremmet til admin. De må logge ut og inn igjen for å få tilgang.')` |
+| Demote instructor → user | `toast.success('Instruktør nedgradert til bruker. De må logge ut og inn igjen.')` |
+| Demote admin → user | `toast.success('Admin nedgradert til bruker. De må logge ut og inn igjen.')` |
+| Self-demotion attempt | `toast.error('Du kan ikke endre din egen rolle')` |
+| Last-admin demotion | `toast.error('Kan ikke fjerne siste admin')` |
+| Admin-downgrade via promote | `toast.error('Kan ikke nedgradere en admin via forfremming — bruk nedgradering først')` |
+
+**Admin → instructor demotion (Brukere tab):** When the admin selects "Instruktør" for a user whose current role is `admin`, the UI must show a **confirmation dialog** before calling `demote_to_user` + `promote_to_instructor`: "Denne brukeren er admin. Å endre rollen til instruktør vil fjerne admin-tilgangen. Instruktør-profilen beholdes. Vil du fortsette?" with "Avbryt" and "Bekreft" buttons. On confirm, call `demote_to_user(userId)` first, then `promote_to_instructor(userId)` (two sequential RPCs — the first removes admin + deletes instructor row, the second re-creates instructor row and sets role). On success, show `toast.success('Admin nedgradert til instruktør. De må logge ut og inn igjen.')`.
 
 ---
 

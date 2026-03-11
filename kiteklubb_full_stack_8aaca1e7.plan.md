@@ -596,11 +596,11 @@ create trigger on_auth_user_created
 
 ### Custom JWT Claims (Auth Hook)
 
-A Supabase Auth Hook ("Custom Access Token") injects the user's `role` from `public.users` directly into the JWT. This is a Postgres function that runs every time a token is issued/refreshed:
+A Supabase Auth Hook ("Custom Access Token") injects the user's `role` from `public.users` directly into the JWT. This is a Postgres function that runs every time a token is issued/refreshed. **Must be `SECURITY DEFINER`** because the hook is invoked by `supabase_auth_admin` with no `auth.uid()` context and no JWT claims — without it, RLS on `public.users` would block the `SELECT role` query for every user, causing the fallback to always set `user_role = 'user'` regardless of actual role:
 
 ```sql
 create or replace function public.custom_access_token_hook(event jsonb)
-returns jsonb language plpgsql as $$
+returns jsonb language plpgsql security definer set search_path = public as $$
 declare
   user_role text;
 begin
@@ -658,9 +658,13 @@ declare
   current_count int;
   max_count int;
 begin
-  -- Lock the course row to prevent concurrent enrollments
+  -- Serialize concurrent enrollments for this course (advisory lock auto-released on commit).
+  -- Cannot use FOR UPDATE here: SECURITY INVOKER + RLS means regular users have no UPDATE
+  -- policy on courses, so FOR UPDATE would return zero rows and skip the capacity check entirely.
+  perform pg_advisory_xact_lock(hashtext(p_course_id::text));
+
   select max_participants into max_count
-    from courses where id = p_course_id for update;
+    from courses where id = p_course_id;
 
   if max_count is not null then
     select count(*) into current_count
@@ -682,7 +686,7 @@ end;
 $$;
 ```
 
-Called via `supabase.rpc('enroll_in_course', { p_course_id: courseId })` instead of a direct insert. The `FOR UPDATE` lock on the course row serializes concurrent enrollments, making overbooking impossible.
+Called via `supabase.rpc('enroll_in_course', { p_course_id: courseId })` instead of a direct insert. The `pg_advisory_xact_lock` serializes concurrent enrollments, making overbooking impossible. A plain `SELECT` (not `FOR UPDATE`) is used for the capacity check because `SECURITY INVOKER` + RLS would cause `FOR UPDATE` to return zero rows for regular users (no UPDATE policy), silently skipping the capacity check.
 
 ### Atomic Promote/Demote Functions (RPC)
 

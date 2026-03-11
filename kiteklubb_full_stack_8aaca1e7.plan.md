@@ -954,10 +954,13 @@ Sections:
   RLS policies on `users` and `course_participants` must allow participant reads (see section 2 RLS).
 - Initial messages loaded server-side with joined user data; the server component also fetches the course instructor's profile. Cache is seeded from both, plus the client-side participant prefetch (best-effort).
 - Messages show user avatar, name, timestamp
+- **Optimistic send (trade-off):** For simplicity, message sending does NOT use optimistic UI. The flow is: insert via server action → Realtime fires INSERT → message appears. The sender sees a brief delay (~200-500ms). This is acceptable at club scale. If snappier feel is desired later, add a local optimistic append (push message into local state immediately, reconcile when Realtime confirms) — but skip for v1.
 
 ### 5e. Admin Dashboard (`src/app/admin/page.tsx`) -- Single page, tabbed
 
 Protected by middleware (admin role only). One page with shadcn/ui `Tabs` to switch between sections. No sub-routes -- everything lives on `/admin`.
+
+**Data-fetching strategy:** The page-level Server Component fetches all tab data upfront (instructors, courses, spots, subscribers, users) and passes each dataset as props to the corresponding tab panel. At this scale (tens of rows per table) this is the right trade-off — one server render, no waterfall, no per-tab loading spinners needed. Tab switching is instant because the data is already in the component tree. `loading.tsx` covers only the initial page navigation.
 
 **Tab: Instruktører**
 - DataTable listing all instructors (name, email, certifications, created date)
@@ -988,6 +991,8 @@ Uses shadcn/ui `Tabs`, `DataTable`, `Dialog`, `Form`, `Combobox` components.
 ### 5f. Instructor Dashboard (`src/app/instructor/page.tsx`) -- Single page, tabbed
 
 Protected by middleware (instructor or admin role). **Shared by both** — admins see this panel in addition to the Admin dashboard, reusing the same UI for course creation. One page with shadcn/ui `Tabs`, no sub-routes.
+
+**Data-fetching strategy:** Same as Admin — page-level Server Component fetches instructor profile + courses upfront, passes as props. Tab switching is instant.
 
 **Tab: Profil**
 - Edit own bio, certifications, years experience, phone, photo
@@ -1227,6 +1232,8 @@ All in `src/components/`, using shadcn/ui as the base:
 **Error boundaries** — use Next.js `error.tsx` convention:
 - `src/app/error.tsx` — global error boundary (`"use client"`) showing "Noe gikk galt" message with a retry button (`reset()`)
 - `src/app/not-found.tsx` — custom 404 page ("Siden finnes ikke" with link back to home)
+
+**Form submission pending states** — All mutation buttons (enroll, unenroll, subscribe, CRUD forms, role changes) must show a pending state while the server action runs. Use `useTransition` in client components: wrap the server action call in `startTransition`, use `isPending` to disable the button and show a spinner (e.g. `<Loader2 className="animate-spin" />` from lucide-react) during submission. **Dialog close + toast sequence:** After a successful mutation inside a Dialog, (1) close the dialog (set open state to `false`), (2) show a `toast.success()`. The `revalidatePath` call in the server action handles refreshing the underlying data automatically. On error, keep the dialog open and show `toast.error(result.error)`.
 
 **Toast notifications** — `sonner` (shadcn/ui's recommended toast library):
 - Add `<Sonner />` component in `src/app/layout.tsx` (root layout, inside `<body>`, after `{children}`)

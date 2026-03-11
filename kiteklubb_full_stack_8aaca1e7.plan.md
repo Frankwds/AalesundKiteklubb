@@ -406,7 +406,7 @@ Image uploads use two public buckets. Buckets and `storage.objects` RLS policies
   - SELECT: Public (allow all for `bucket_id = 'instructor-photos'`)
   - INSERT: Authenticated with role instructor or admin, and `(storage.foldername(name))[1] = auth.uid()::text`
   - UPDATE/DELETE: Same path constraint (own folder only)
-- **Admin editing another instructor's profile:** Storage RLS allows upload only to own folder (`auth.uid()`). When an admin edits another instructor's profile in the Admin tab (Instruktører), **photo changes must be self-uploaded by the target instructor** — admins cannot change another instructor's photo; the target must log in and update their photo themselves.
+- **No cross-user uploads:** Storage RLS enforces that each instructor/admin can only upload to their own folder (`auth.uid()`). The admin dashboard does not expose instructor profile editing — admins manage roles (promote/demote) only. Each instructor manages their own profile and photo via the Instructor dashboard.
 
 **Migration `0006`** creates the buckets and RLS policies. Full SQL:
 
@@ -1055,7 +1055,7 @@ Protected by middleware (admin role only). One page with shadcn/ui `Tabs` to swi
 **Tab: Instruktører**
 - DataTable listing all instructors (name, email, certifications, created date)
 - "Legg til instruktør" button → Dialog with a user search/select field. The user list excludes users who already have a row in the instructors table (or whose `users.role` is `instructor` or `admin`), to avoid duplicate-instructor attempts or confusing UX. On submit, atomically creates `instructors` profile row and sets `users.role = 'instructor'`.
-- Row actions: Edit (opens Dialog with profile form), Remove (atomically deletes profile and resets role to `user`)
+- Row actions: Remove (atomically deletes profile and resets role to `user`)
 
 **Tab: Kurs**
 - DataTable listing all courses sorted by start_time (title, date + time range with "Kommende"/"Tidligere" tag derived from start_time vs now, spot, instructor, participant count / max)
@@ -1194,7 +1194,7 @@ export const publishCourseSchema = z.object({
   - `promoteToInstructor(userId)`: Calls `promote_to_instructor` RPC — creates `instructors` profile row (if missing) AND sets `users.role = 'instructor'`.
   - `promoteToAdmin(userId)`: Calls `promote_to_admin` RPC — creates `instructors` profile row (if missing) AND sets `users.role = 'admin'`. Admins always have an instructor profile so they can create courses.
   - `demoteToUser(userId)`: Calls `demote_to_user` RPC — deletes `instructors` row AND resets `users.role = 'user'`. Single action used for both removing an instructor from the Instruktører tab and demoting a user in the Brukere tab.
-  - `updateInstructorProfile(..., instructorId?)`: Accepts an optional `instructorId`; when omitted, the caller edits their own profile. When provided and the caller is admin, RLS "Admin full access" allows updating any instructor (supports the Admin tab "Edit" action for other instructors). Photo upload goes to `instructor-photos/{userId}/` bucket, URL stored in `instructors.photo_url`. See Section 2h for admin editing another instructor's profile photo handling.
+  - `updateInstructorProfile(...)`: Updates the caller's own instructor profile only. Photo upload goes to `instructor-photos/{auth.uid()}/` bucket (storage RLS enforces own-folder), URL stored in `instructors.photo_url`. Used by the Instructor dashboard Profil tab. Admins do not edit other instructors' profiles — they manage roles via promote/demote RPCs.
 - `src/lib/actions/messages.ts` -- `supabase.from('messages').insert(...)`
 - `src/lib/actions/subscriptions.ts` -- insert/delete on `subscriptions`. **Email verification logic:** If the submitted email matches the user's Google auth email, insert with `verified = true` (already verified by OAuth). If email differs, insert with `verified = false` + generate a random UUID `verification_token` + set `token_expires_at` to `now() + 24 hours`, then send a verification email via Resend with a link to `/verify-subscription?token=xxx` (landing page). The email should mention the 24-hour expiry window (e.g. "Denne lenken utløper om 24 timer").
 - `src/lib/actions/spots.ts` -- CRUD on `spots` + upload to `spot-maps` bucket (`{spotId}/{filename}`), store public URL in `map_image_url`. See Section 2h for new-spot creation flow (create → upload → update) and error handling (rollback on failure).
@@ -1363,7 +1363,7 @@ All in `src/components/`, using shadcn/ui as the base:
 - **Courses:** `CourseCard` (stateful: shows date + time range via `formatCourseTime`, "Meld på" / "Meld av" based on enrollment; "Chat" button **only when enrolled**), `CourseList`, `ParticipantList`
 - **Chat:** `ChatWindow`, `MessageBubble`, `MessageInput`
 - **Spots:** `SpotCard`, `SpotList`, `SpotFilters` (listing page with season/area/wind filters), `WindCompass` (visual compass rose), `SpotDetailPage` sections
-- **Admin:** `InstructorForm`, `CourseForm` (with date picker + start/end time inputs and searchable spot dropdown via shadcn `Combobox`), `SpotForm` (with map image upload, compass direction picker, multi-select water type), `DataTable`
+- **Admin:** `CourseForm` (with date picker + start/end time inputs and searchable spot dropdown via shadcn `Combobox`), `SpotForm` (with map image upload, compass direction picker, multi-select water type), `DataTable`
 - **Subscription:** `SubscribeDialog` (Meld på: action description, editable email, "Avbryt" + "Meld på"); `UnsubscribeDialog` (Meld av: action description, "Avbryt" + "Meld av"). If subscribed but `verified = false`, show a subtle hint: "Sjekk e-posten din for å bekrefte" instead of the normal subscribed state
 - **Enrollment:** `EnrollConfirmDialog` (Meld på: action description, display-only email field showing auth email where confirmation will be sent, "Avbryt" + "Meld på"); `UnenrollConfirmDialog` (Meld av: action description, "Avbryt" + "Meld av")
 

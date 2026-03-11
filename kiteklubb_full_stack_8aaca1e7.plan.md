@@ -746,7 +746,34 @@ Manual configuration in two places:
 ### 3b. Auth Callback Route (`src/app/auth/callback/route.ts`)
 
 1. Exchange the OAuth code for a session via `supabase.auth.exchangeCodeForSession(code)`.
-2. **Upsert into `public.users`** using the service role client: `INSERT ... ON CONFLICT (id) DO UPDATE SET email=..., name=..., avatar_url=...`. Do NOT overwrite `role` on conflict (admin-managed). Use snake_case for all Supabase SDK column names (e.g. `avatar_url`, not `avatarUrl`).
+2. **Upsert into `public.users`** using the service role client. Build the upsert payload through a Zod schema that explicitly allows only `id`, `email`, `name`, and `avatar_url` — this structurally prevents `role` from ever being included in the upsert, so an `ON CONFLICT (id) DO UPDATE` can never overwrite the admin-managed role:
+   ```ts
+   // src/lib/schemas/user-sync.ts
+   import { z } from 'zod';
+
+   /** Whitelist of fields allowed in the auth callback upsert.
+    *  `role` is intentionally excluded — it is admin-managed. */
+   export const UserSyncSchema = z.object({
+     id: z.string().uuid(),
+     email: z.string().email(),
+     name: z.string().nullable(),
+     avatar_url: z.string().url().nullable(),
+   });
+
+   // In the callback route:
+   const payload = UserSyncSchema.parse({
+     id: user.id,
+     email: user.email,
+     name: user.user_metadata.full_name ?? null,
+     avatar_url: user.user_metadata.avatar_url ?? null,
+   });
+
+   await adminClient.from('users').upsert(payload, {
+     onConflict: 'id',
+     ignoreDuplicates: false,
+   });
+   ```
+   Use snake_case for all Supabase SDK column names (e.g. `avatar_url`, not `avatarUrl`).
 3. Redirect to `/`.
 
 **Why upsert in the callback?** The trigger creates the row first (same transaction as `auth.users`), so normally the row already exists when the callback runs. The callback upsert is a safety net: if the trigger failed, if the user was created outside our flow, or if there's any edge case, the callback ensures `public.users` has the row. It also refreshes `email`/`name`/`avatar_url` from the latest Google profile on every login. Idempotent — no race: upsert handles both "row missing" and "row exists" correctly.

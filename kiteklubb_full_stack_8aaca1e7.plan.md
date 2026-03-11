@@ -245,7 +245,7 @@ All column names use snake_case (e.g. `avatar_url`, `created_at`, `user_id`).
 
 | Column     | Type          | Notes                         |
 | ---------- | ------------- | ----------------------------- |
-| id         | uuid PK       | Matches `auth.users.id`       |
+| id         | uuid PK       | Matches `auth.users.id` (no default — set from `auth.users.id` by trigger) |
 | email      | text NOT NULL |                               |
 | name       | text          |                               |
 | avatar_url | text          |                               |
@@ -275,7 +275,7 @@ All column names use snake_case (e.g. `avatar_url`, `created_at`, `user_id`).
 
 | Column           | Type          | Notes                                 |
 | ---------------- | ------------- | ------------------------------------- |
-| id               | uuid PK       |                                       |
+| id               | uuid PK       | default gen_random_uuid               |
 | title            | text NOT NULL |                                       |
 | description      | text          |                                       |
 | price            | integer       | In NOK (e.g. 500 kr)                  |
@@ -291,7 +291,7 @@ All column names use snake_case (e.g. `avatar_url`, `created_at`, `user_id`).
 
 | Column      | Type      | Notes         |
 | ----------- | --------- | ------------- |
-| id          | uuid PK   |               |
+| id          | uuid PK   | default gen_random_uuid |
 | user_id     | uuid FK NOT NULL | -> users.id, ON DELETE CASCADE   |
 | course_id   | uuid FK NOT NULL | -> courses.id, ON DELETE CASCADE |
 | enrolled_at | timestamptz | default now() |
@@ -306,7 +306,7 @@ Enrollment is handled via a Postgres RPC function (not a direct insert) to preve
 
 | Column     | Type          | Notes         |
 | ---------- | ------------- | ------------- |
-| id         | uuid PK       |               |
+| id         | uuid PK       | default gen_random_uuid |
 | user_id    | uuid FK       | -> users.id, nullable, ON DELETE SET NULL (shows "Slettet bruker" in chat) |
 | course_id  | uuid FK       | -> courses.id, ON DELETE CASCADE |
 | content    | text NOT NULL |               |
@@ -318,7 +318,7 @@ Enrollment is handled via a Postgres RPC function (not a direct insert) to preve
 
 | Column             | Type          | Notes                |
 | ------------------ | ------------- | -------------------- |
-| id                 | uuid PK       |                      |
+| id                 | uuid PK       | default gen_random_uuid |
 | user_id            | uuid FK NOT NULL | -> users.id, **unique**, ON DELETE CASCADE |
 | email              | text NOT NULL | Autofilled, editable. Not globally unique — two users may use the same notification address; `user_id` UNIQUE enforces one subscription per user. |
 | verified           | boolean       | default `false`      |
@@ -332,7 +332,7 @@ Enrollment is handled via a Postgres RPC function (not a direct insert) to preve
 
 | Column         | Type          | Notes                                                      |
 | -------------- | ------------- | ---------------------------------------------------------- |
-| id             | uuid PK       |                                                            |
+| id             | uuid PK       | default gen_random_uuid                                    |
 | name           | text NOT NULL |                                                            |
 | description    | text          | "Om spotten" text                                          |
 | season         | enum          | `summer`, `winter` (SommerSpotter / VinterSpotter)         |
@@ -663,6 +663,11 @@ begin
   -- policy on courses, so FOR UPDATE would return zero rows and skip the capacity check entirely.
   perform pg_advisory_xact_lock(hashtext(p_course_id::text));
 
+  -- Check duplicate enrollment first (most user-friendly error takes priority over "full")
+  if exists (select 1 from course_participants where user_id = auth.uid() and course_id = p_course_id) then
+    raise exception 'allerede_pameldt';
+  end if;
+
   select max_participants into max_count
     from courses where id = p_course_id;
 
@@ -673,11 +678,6 @@ begin
     if current_count >= max_count then
       raise exception 'Course is full';
     end if;
-  end if;
-
-  -- Prevent duplicate enrollment: return user-friendly error
-  if exists (select 1 from course_participants where user_id = auth.uid() and course_id = p_course_id) then
-    raise exception 'allerede_pameldt';
   end if;
 
   insert into course_participants (user_id, course_id)
@@ -995,6 +995,19 @@ export const publishCourseSchema = z.object({
 - `src/lib/actions/auth.ts` -- `signOut()`: calls `supabase.auth.signOut()`, then `redirect('/')`
 
 No application-level authorization checks needed -- RLS handles it. If a non-admin tries to insert an instructor, Postgres returns an error.
+
+**Cache invalidation (`revalidatePath`):** Every Server Action that mutates data must call `revalidatePath()` after a successful write so that Next.js re-renders affected server components with fresh data. Without this, cached pages show stale state until the cache expires. Per-action mapping:
+
+| Action | Revalidate |
+|--------|------------|
+| Enroll / unenroll | `revalidatePath('/courses')` |
+| Publish / edit / delete course | `revalidatePath('/courses')`, `revalidatePath('/instructor')`, `revalidatePath('/admin')` |
+| Update instructor profile | `revalidatePath('/instructor')`, `revalidatePath('/courses')` |
+| Spot CRUD | `revalidatePath('/spots')`, `revalidatePath('/admin')` |
+| Subscribe / unsubscribe | `revalidatePath('/courses')` |
+| Promote / demote user | `revalidatePath('/admin')` |
+
+Chat does not need `revalidatePath` — live updates are handled by Supabase Realtime on the client.
 
 ### Database Mutation Logging (`src/lib/logger.ts`)
 

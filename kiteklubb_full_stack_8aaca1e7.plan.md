@@ -1098,7 +1098,7 @@ RLS applies to Realtime events -- users only receive inserts for courses they're
 
 ### Service Role Client (`src/lib/supabase/admin.ts`)
 
-A server-only Supabase client using `SUPABASE_SERVICE_ROLE_KEY` that bypasses RLS. Used ONLY for:
+A server-only Supabase client using `SUPABASE_SERVICE_ROLE_KEY` that bypasses RLS. **Must start with `import 'server-only'`** — this makes any accidental client-component import a build-time error instead of silently leaking the key into browser JS. Used ONLY for:
 
 - **Auth callback upsert:** `INSERT ... ON CONFLICT` into `public.users` after `exchangeCodeForSession`. Service role is required because the callback runs before the user's RLS context is fully established, and we need to write to `public.users` regardless of existing policies.
 - **Admin role changes (promote/demote):** Must use Postgres RPC functions (`promote_to_instructor`, `promote_to_admin`, `demote_to_user`) via the admin's server client — never direct `users.role` update. The RPCs perform both `instructors` and `users.role` updates atomically in Postgres; direct service-role update would skip instructor sync and cause inconsistent state.
@@ -1164,7 +1164,7 @@ If email sending fails, the course is still deleted — the action logs the fail
 
 ### Email Setup
 
-- **`src/lib/email/resend.ts`** -- Resend client initialized with `RESEND_API_KEY`
+- **`src/lib/email/resend.ts`** -- Resend client initialized with `RESEND_API_KEY`. **Must start with `import 'server-only'`** to prevent accidental client-side bundling of the API key.
 - **`src/lib/email/templates/new-course.tsx`** -- Subscriber notification: new course available. Includes course title, date + time range, instructor name, price, spot link, and "Meld deg på" link.
 - **`src/lib/email/templates/enrollment-confirmation.tsx`** -- Sent to user on enrollment. Includes course details, spot link, link to course chat, and note about unenrolling at `/courses` with a link to that page.
 - **`src/lib/email/templates/course-cancellation.tsx`** -- Sent to enrolled participants when a course is deleted. Includes course title, original date + time range, instructor name, and cancellation notice.

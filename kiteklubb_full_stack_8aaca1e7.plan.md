@@ -497,7 +497,7 @@ Every policy below MUST be written as a `CREATE POLICY` statement in `supabase/m
 1. `"Users can view own enrollments"` — SELECT, `authenticated`, using: `user_id = auth.uid()`
 2. `"Instructors can view their course participants"` — SELECT, `authenticated`, using: `course_id IN (SELECT id FROM courses WHERE instructor_id IN (SELECT id FROM instructors WHERE user_id = auth.uid()))`
 3. `"Participants can see co-participants in same course"` — SELECT, `authenticated`, using: EXISTS subquery (see Chat-related RLS section below for SQL)
-4. `"Users can enroll themselves"` — INSERT, `authenticated`, withCheck: `user_id = auth.uid()` (note: enrollment primarily goes through `enroll_in_course` RPC which uses `security definer`, but this policy is still needed as a safety net)
+4. `"Users can enroll themselves"` — INSERT, `authenticated`, withCheck: `user_id = auth.uid()` (the `enroll_in_course` RPC uses `security invoker`, so this policy is evaluated on the INSERT inside the function — it enforces that users can only enroll themselves)
 5. `"Users can unenroll themselves"` — DELETE, `authenticated`, using: `user_id = auth.uid()`
 6. `"Instructors can remove participants from their courses"` — DELETE, `authenticated`, using: `course_id IN (SELECT id FROM courses WHERE instructor_id IN (SELECT id FROM instructors WHERE user_id = auth.uid()))`
 7. `"Admin full access"` — ALL, `authenticated`, using/withCheck: JWT `user_role = 'admin'`
@@ -645,7 +645,7 @@ A Postgres function that atomically checks course capacity and enrolls the user,
 
 ```sql
 create or replace function public.enroll_in_course(p_course_id uuid)
-returns void language plpgsql security definer as $$
+returns void language plpgsql security invoker as $$
 declare
   current_count int;
   max_count int;

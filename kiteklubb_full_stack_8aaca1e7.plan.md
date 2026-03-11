@@ -928,8 +928,13 @@ Sections:
 - **Not in nav.** Accessed only via the "Chat" button on the course card in `/courses` and links in the enrollment confirmation email. The "Chat" button is visible when the user is enrolled (see 5c) **or** when the user is the course's instructor or an admin. No navbar or mobile menu entry for chat.
 - Append-only message log, newest at bottom
 - Auto-scroll, live updates via **Supabase Realtime** -- client subscribes to `postgres_changes` on the `messages` table filtered by `course_id`. New messages appear instantly without polling.
-- **Realtime profile enrichment:** Realtime payloads include raw message data only (no joined user data). Strategy: (1) Pre-fetch all course participants (from `course_participants` joined with `users`) at chat load to populate the profile cache. (2) When a Realtime INSERT arrives for an unknown `user_id`, fetch that user's profile on demand (`users(id, name, avatar_url)`), add to cache, and render. Show a short-lived placeholder (generic avatar or "...") while the fetch is in progress. RLS policies on `users` and `course_participants` must allow this (see section 2 RLS).
-- Initial messages loaded server-side with joined user data; cache is seeded from that plus the pre-fetched participant list.
+- **Realtime profile enrichment:** Realtime payloads include raw message data only (no joined user data). Strategy:
+  1. **Server-side seed (instructor + messages):** The server component fetches the course's instructor profile via `courses → instructors → users` (publicly readable tables, no special RLS needed) and passes it alongside initial messages (which include joined user data) to the client component. This is critical because the instructor is **not** in `course_participants` — without this, the instructor's name/avatar would be `null` for all participants due to the co-participant RLS policy.
+  2. **Client-side prefetch (participants):** On mount, pre-fetch all course participants (from `course_participants` joined with `users`) to fill the remaining cache. **This prefetch is non-critical** — wrap in try/catch, log failure, and continue. The chat is fully functional without it; only the first message from each previously-unseen sender triggers an on-demand fetch (negligible at course scale).
+  3. **On-demand fallback:** When a Realtime INSERT arrives for an unknown `user_id`, fetch that user's profile on demand (`users(id, name, avatar_url)`), add to cache, and render. Show a placeholder (generic avatar + "...") while fetching. **If the on-demand fetch fails** (network error, RLS denial for non-co-participant like a late-joining instructor), render a permanent fallback: generic avatar + "Ukjent bruker". Optionally retry once before committing to the fallback. The message content itself always renders — only the profile chrome is degraded.
+  4. **Null `user_id` handling:** If `payload.new.user_id` is `null` (deleted user — `ON DELETE SET NULL`), render with "Slettet bruker" label and default avatar immediately, no fetch needed.
+  RLS policies on `users` and `course_participants` must allow participant reads (see section 2 RLS).
+- Initial messages loaded server-side with joined user data; the server component also fetches the course instructor's profile. Cache is seeded from both, plus the client-side participant prefetch (best-effort).
 - Messages show user avatar, name, timestamp
 
 ### 5e. Admin Dashboard (`src/app/admin/page.tsx`) -- Single page, tabbed
@@ -1009,9 +1014,9 @@ export const publishCourseSchema = z.object({
 });
 ```
 
-**Return convention:** For user-facing mutations (enroll, subscribe, unenroll, etc.), return `{ success: boolean; error?: string }` so the client can show appropriate toasts. For create/update actions (e.g. `publishCourse`), return the entity on success plus optional metadata (e.g. `notificationSent`); on failure, return `{ success: false, error }` or throw.
+**Return convention:** For user-facing mutations (enroll, subscribe, unenroll, etc.), return `{ success: boolean; error?: string }` so the client can show appropriate toasts. For create/update actions (e.g. `publishCourse`), return the entity on success plus notification counts (e.g. `{ course, notificationsSent: 48, notificationsFailed: 2 }`); on failure, return `{ success: false, error }` or throw.
 
-- `src/lib/actions/courses.ts` -- `supabase.from('courses').insert(...)`, `.update(...)`, `.delete(...)`; enrollment via direct SDK insert: (1) check capacity with `supabase.from('course_participants').select('*', { count: 'exact', head: true }).eq('course_id', courseId)` and compare against `max_participants` — if full, return `{ success: false, error: 'Kurset er fullt' }`, (2) insert with `supabase.from('course_participants').insert({ user_id, course_id })` — if the unique constraint is violated (Postgres 23505), return `{ success: false, error: 'Du er allerede påmeldt' }`. Unenrollment via `supabase.from('course_participants').delete().match({ user_id, course_id })` (RLS allows own deletion). On successful enrollment, sends a confirmation email to the user (see section 7). `deleteCourse(courseId)`: fetches enrolled participants' emails using the **service role client** (the instructor's RLS-scoped client cannot read other users' emails; parallels `publishCourse` subscriber fetch), sends cancellation emails to each (see Section 7 — Course Cancellation Email), then deletes the course (`ON DELETE CASCADE` removes participants and messages). If email sending fails, the course is still deleted — log the failure. The `publishCourse` action looks up the instructor ID via `supabase.from('instructors').select('id').eq('user_id', currentUserId).single()` before inserting the course (not from the form) and sends notification emails to all subscribers in one server-side request.
+- `src/lib/actions/courses.ts` -- `supabase.from('courses').insert(...)`, `.update(...)`, `.delete(...)`; enrollment via direct SDK insert: (1) check capacity with `supabase.from('course_participants').select('*', { count: 'exact', head: true }).eq('course_id', courseId)` and compare against `max_participants` — if full, return `{ success: false, error: 'Kurset er fullt' }`, (2) insert with `supabase.from('course_participants').insert({ user_id, course_id })` — if the unique constraint is violated (Postgres 23505), return `{ success: false, error: 'Du er allerede påmeldt' }`. Unenrollment via `supabase.from('course_participants').delete().match({ user_id, course_id })` (RLS allows own deletion). On successful enrollment, sends a confirmation email to the user (see section 7). `deleteCourse(courseId)`: fetches enrolled participants' emails using the **service role client** (the instructor's RLS-scoped client cannot read other users' emails; parallels `publishCourse` subscriber fetch), sends cancellation emails to each via `Promise.allSettled` with a single retry for failures (see Section 7 — Course Cancellation Email), then deletes the course (`ON DELETE CASCADE` removes participants and messages). Email failures are isolated per-recipient and logged — they never block deletion. The `publishCourse` action looks up the instructor ID via `supabase.from('instructors').select('id').eq('user_id', currentUserId).single()` before inserting the course (not from the form) and sends notification emails to all subscribers via `Promise.allSettled` with a single retry for failures, returning `{ course, notificationsSent, notificationsFailed }`.
 - `src/lib/actions/instructors.ts` -- **Atomic admin actions to keep `users.role` and `instructors` table in sync:** Implement via Postgres RPC functions (`promote_to_instructor`, `promote_to_admin`, `demote_to_user`) that perform both the `instructors` and `users.role` updates in a single transaction. Call `supabase.rpc('promote_to_instructor', { p_user_id })`, `supabase.rpc('promote_to_admin', { p_user_id })`, and `supabase.rpc('demote_to_user', { p_user_id })` from the admin's server client. These RPCs are defined in migration `0007`.
   - `promoteToInstructor(userId)`: Calls `promote_to_instructor` RPC — creates `instructors` profile row (if missing) AND sets `users.role = 'instructor'`.
   - `promoteToAdmin(userId)`: Calls `promote_to_admin` RPC — creates `instructors` profile row (if missing) AND sets `users.role = 'admin'`. Admins always have an instructor profile so they can create courses.
@@ -1085,14 +1090,17 @@ const channel = supabase
     table: 'messages',
     filter: `course_id=eq.${courseId}`,
   }, (payload) => {
-    // If payload.new.user_id in profile cache: enrich and append. Else: fetch user on demand, add to cache, then append (show placeholder until fetch completes).
+    // 1. If user_id is null → render "Slettet bruker" with default avatar (no fetch).
+    // 2. If user_id in profileCache → enrich and append immediately.
+    // 3. Else → show placeholder (generic avatar + "..."), fetch user on demand,
+    //    add to cache, and re-render. If fetch fails, commit fallback: generic avatar + "Ukjent bruker".
   })
   .subscribe();
 ```
 
 RLS applies to Realtime events -- users only receive inserts for courses they're enrolled in. The channel is cleaned up on unmount via `supabase.removeChannel(channel)`.
 
-**Profile cache:** Populate at load from (a) initial messages (joined user data) and (b) pre-fetch of `course_participants` joined with `users` for the course. On Realtime insert with unknown sender, fetch on demand. Requires RLS on `users` (co-participant read) and `course_participants` (participant-list read) -- see section 2.
+**Profile cache:** Populate at load from three sources: (a) initial messages (server-side joined user data), (b) the course instructor's profile (server-side via `courses → instructors → users` — needed because the instructor has no `course_participants` row and co-participant RLS won't cover them), and (c) pre-fetch of `course_participants` joined with `users` for the course (client-side, best-effort). On Realtime insert with unknown sender, fetch on demand; if the fetch fails, render "Ukjent bruker" with a generic avatar (the message content still renders). If `user_id` is null (deleted user), render "Slettet bruker" without fetching. Requires RLS on `users` (co-participant read) and `course_participants` (participant-list read) -- see section 2.
 
 **Requires a custom migration** to add `messages` to the Realtime publication (see migration `0005`).
 
@@ -1140,10 +1148,10 @@ sequenceDiagram
 The `publishCourse` Server Action:
 1. Looks up instructor ID via `supabase.from('instructors').select('id').eq('user_id', currentUserId).single()`, then inserts the course (with `instructorId`, `spotId`) via Supabase server client (RLS verifies the user is an instructor or admin)
 2. On success, fetches the linked spot data and all subscriber emails. Subscriber list uses the **service role client** (instructor's client is restricted by RLS to their own subscription only)
-3. Sends individual emails via Resend to each verified subscriber (loop or `Promise.all` over individual sends). One email per subscriber with course details (title, date + time range, description, spot name + link to `/spots/[spotId]`, and a "Meld deg på" enroll link).
-4. Returns `{ course, notificationSent: boolean }` where `notificationSent` is true only if all subscriber emails were sent successfully. If false, the client may show a warning toast; the course remains created.
+3. Sends individual emails via Resend using `Promise.allSettled` (one API call per subscriber). For any emails that fail on the first attempt, retry them once (again via `Promise.allSettled`). One email per subscriber with course details (title, date + time range, description, spot name + link to `/spots/[spotId]`, and a "Meld deg på" enroll link). Log each individual failure with subscriber count context (no PII).
+4. Returns `{ course, notificationsSent: number, notificationsFailed: number }`. The client shows a success toast if all sent; a warning toast like "Kurs opprettet, men 2 av 50 varsler feilet" if `notificationsFailed > 0`; the course remains created regardless.
 
-If the email send fails, the course is still created -- the action returns a warning about the notification failure rather than rolling back.
+Email failures never roll back the course creation — they are isolated per-recipient and reported via the partial count.
 
 ### Enrollment Confirmation Email
 
@@ -1157,10 +1165,10 @@ When a user successfully enrolls in a course, a confirmation email is sent to th
 When a course is deleted (by admin or instructor), a cancellation email is sent to all enrolled participants. The `deleteCourse` Server Action:
 1. Fetches enrolled participants with emails via `supabase.from('course_participants').select('users(email, name)').eq('course_id', courseId)`
 2. Fetches course + spot details for the email body
-3. Sends cancellation emails to each participant with: course title, original date + time range, instructor, and a note that the course has been cancelled
-4. Deletes the course (cascades remove participants and messages)
+3. Sends cancellation emails to each participant using `Promise.allSettled`. For any emails that fail on the first attempt, retry them once (again via `Promise.allSettled`). Log each individual failure.
+4. Deletes the course regardless of email outcome (cascades remove participants and messages)
 
-If email sending fails, the course is still deleted — the action logs the failure rather than rolling back.
+Email failures never block course deletion — they are isolated per-recipient and logged. The action returns `{ success: true, cancellationsSent: number, cancellationsFailed: number }`.
 
 ### Email Setup
 

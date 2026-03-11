@@ -375,15 +375,21 @@ INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_typ
   ('spot-maps', 'spot-maps', true, 5242880, ARRAY['image/jpeg','image/png','image/webp']),
   ('instructor-photos', 'instructor-photos', true, 2097152, ARRAY['image/jpeg','image/png','image/webp']);
 
--- spot-maps: public read; admin-only write
+-- spot-maps: public read; admin-only write (separate policies per operation, matching instructor-photos pattern)
 CREATE POLICY "spot-maps public read" ON storage.objects
   FOR SELECT TO public USING (bucket_id = 'spot-maps');
-CREATE POLICY "spot-maps admin write" ON storage.objects
-  FOR ALL TO authenticated USING (
+CREATE POLICY "spot-maps admin insert" ON storage.objects
+  FOR INSERT TO authenticated WITH CHECK (
     bucket_id = 'spot-maps' AND
     (current_setting('request.jwt.claims', true)::jsonb)->>'user_role' = 'admin'
-  )
-  WITH CHECK (
+  );
+CREATE POLICY "spot-maps admin update" ON storage.objects
+  FOR UPDATE TO authenticated USING (
+    bucket_id = 'spot-maps' AND
+    (current_setting('request.jwt.claims', true)::jsonb)->>'user_role' = 'admin'
+  );
+CREATE POLICY "spot-maps admin delete" ON storage.objects
+  FOR DELETE TO authenticated USING (
     bucket_id = 'spot-maps' AND
     (current_setting('request.jwt.claims', true)::jsonb)->>'user_role' = 'admin'
   );
@@ -727,6 +733,8 @@ $$;
 ```
 
 Called via `supabase.rpc('promote_to_instructor', { p_user_id })`, `supabase.rpc('promote_to_admin', { p_user_id })`, and `supabase.rpc('demote_to_user', { p_user_id })` from the admin's server client. RLS "Admin full access" allows the updates; the JWT check provides defense in depth. `demote_to_user` includes a last-admin guard — if `p_user_id` is the only remaining admin, the function raises `'Cannot demote the last admin'`; the server action returns this as `{ success: false, error: 'Kan ikke fjerne siste admin' }` and the UI shows a toast. **Note:** `instructors.user_id` must have a unique constraint for `ON CONFLICT (user_id)` to work — the schema already defines `user_id` as unique.
+
+**JWT staleness after role changes:** After a successful promote/demote, the user's JWT still contains the old `user_role` claim until the token refreshes (~1 hour). The admin dashboard should show a toast after every role change: `toast.success('Rolle endret. Brukeren må logge ut og inn igjen for å få tilgang.')`. This is a Supabase Auth limitation — `supabase.auth.refreshSession()` only works in the target user's own browser, so the admin cannot force a refresh on their behalf.
 
 ---
 
@@ -1120,12 +1128,15 @@ All in `src/components/`, using shadcn/ui as the base:
 
 ### Loading, Error & Toast UI
 
-**Loading states** — use Next.js App Router `loading.tsx` convention:
-- `src/app/loading.tsx` — global fallback with a centered spinner (reuse across all routes)
-- `src/app/courses/loading.tsx` — skeleton cards for the course list
+**Loading states** — use Next.js App Router `loading.tsx` convention. Build reusable skeleton primitives in `src/components/ui/skeletons.tsx` (`SkeletonCard`, `SkeletonTable`, `SkeletonDetail`, `SkeletonSpinner`) and compose them in each `loading.tsx` to avoid duplication:
+- `src/app/loading.tsx` — global fallback with `<SkeletonSpinner />` (centered spinner, inherited by any route without its own `loading.tsx`)
+- `src/app/courses/loading.tsx` — grid of `<SkeletonCard />` for the course list
 - `src/app/courses/[id]/chat/loading.tsx` — skeleton for message list
-- `src/app/admin/loading.tsx` — skeleton table for admin dashboard
-- `src/app/spots/loading.tsx` — skeleton cards for spots listing
+- `src/app/admin/loading.tsx` — `<SkeletonTable />` for admin dashboard
+- `src/app/instructor/loading.tsx` — `<SkeletonTable />` for instructor dashboard
+- `src/app/spots/loading.tsx` — grid of `<SkeletonCard />` for spots listing
+- `src/app/spots/[id]/loading.tsx` — `<SkeletonDetail />` for spot detail page
+- `src/app/login/loading.tsx` — `<SkeletonSpinner />` (simple centered spinner)
 
 **Error boundaries** — use Next.js `error.tsx` convention:
 - `src/app/error.tsx` — global error boundary (`"use client"`) showing "Noe gikk galt" message with a retry button (`reset()`)
@@ -1175,22 +1186,29 @@ src/
 │   ├── loading.tsx                 # Global loading spinner
 │   ├── error.tsx                   # Global error boundary ("use client")
 │   ├── not-found.tsx               # Custom 404 page
-│   ├── login/page.tsx              # Login page
-│   ├── auth/callback/route.ts      # OAuth callback
+│   ├── login/
+│   │   ├── loading.tsx              # Centered spinner
+│   │   └── page.tsx                 # Login page
+│   ├── auth/callback/route.ts       # OAuth callback
 │   ├── verify-subscription/page.tsx # Landing page for email verification (reads token from URL, shows confirm button)
 │   ├── spots/
+│   │   ├── loading.tsx              # Skeleton cards for spots listing
 │   │   ├── page.tsx                 # Spots listing with cards and filters
 │   │   └── [id]/
+│   │       ├── loading.tsx          # Skeleton for spot detail page
 │   │       └── page.tsx             # Individual spot detail page
 │   ├── courses/
-│   │   ├── page.tsx                # Courses single-page
+│   │   ├── loading.tsx              # Skeleton cards for course list
+│   │   ├── page.tsx                 # Courses single-page
 │   │   └── [id]/chat/
-│   │       ├── loading.tsx         # Skeleton for message list
-│   │       └── page.tsx            # Per-course chat
+│   │       ├── loading.tsx          # Skeleton for message list
+│   │       └── page.tsx             # Per-course chat
 │   ├── admin/
-│   │   └── page.tsx                # Admin dashboard (single tabbed page)
+│   │   ├── loading.tsx              # Skeleton table for admin dashboard
+│   │   └── page.tsx                 # Admin dashboard (single tabbed page)
 │   └── instructor/
-│       └── page.tsx                # Instructor dashboard (single tabbed page: Profil, Mine Kurs)
+│       ├── loading.tsx              # Skeleton table for instructor dashboard
+│       └── page.tsx                 # Instructor dashboard (single tabbed page: Profil, Mine Kurs)
 ├── components/
 │   ├── ui/                         # shadcn/ui primitives
 │   ├── layout/                     # Navbar, Footer, ContentCard

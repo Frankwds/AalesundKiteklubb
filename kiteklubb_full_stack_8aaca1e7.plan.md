@@ -279,7 +279,8 @@ All column names use snake_case (e.g. `avatar_url`, `created_at`, `user_id`).
 | title            | text NOT NULL |                                       |
 | description      | text          |                                       |
 | price            | integer       | In NOK (e.g. 500 kr)                  |
-| date             | timestamptz   | Stored with timezone; compare using Oslo-aware midnight (see queries section) |
+| start_time       | timestamptz NOT NULL | Course start (date + time). Stored with timezone; compare using Oslo-aware midnight for future-course filter (see queries section) |
+| end_time         | timestamptz NOT NULL | Course end (same day). Must be > `start_time`. DB CHECK constraint: `end_time > start_time` |
 | max_participants | integer       | nullable = unlimited                  |
 | instructor_id    | uuid FK       | -> instructors.id, nullable, ON DELETE SET NULL |
 | spot_id          | uuid FK       | -> spots.id, nullable, ON DELETE SET NULL |
@@ -308,7 +309,7 @@ Enrollment is handled via a Postgres RPC function (not a direct insert) to preve
 | ---------- | ------------- | ------------- |
 | id         | uuid PK       | default gen_random_uuid |
 | user_id    | uuid FK       | -> users.id, nullable, ON DELETE SET NULL (shows "Slettet bruker" in chat) |
-| course_id  | uuid FK       | -> courses.id, ON DELETE CASCADE |
+| course_id  | uuid FK NOT NULL | -> courses.id, ON DELETE CASCADE |
 | content    | text NOT NULL |               |
 | created_at | timestamptz   | default now() |
 
@@ -890,7 +891,7 @@ All content is CMS-managed by admins.
 Sections:
 
 - **Intro kurs** -- what courses are about, who the instructors are, general info text
-- **Scheduled Courses** -- list of course cards from DB. Each card shows course info (title, date, spot name linked to `/spots/[id]` when present — when `spot_id` is null, show "Ikke bestemt" and omit the link — instructor, price). When `instructor_id` is null, show "Ikke bestemt" or similar placeholder for the instructor field on the course card. The card has stateful buttons depending on the user's enrollment:
+- **Scheduled Courses** -- list of course cards from DB. Each card shows course info (title, date with time range e.g. "12. mars 2026, 10:00–14:00", spot name linked to `/spots/[id]` when present — when `spot_id` is null, show "Ikke bestemt" and omit the link — instructor, price). Use `formatCourseTime(start_time, end_time)` for the time range display. When `instructor_id` is null, show "Ikke bestemt" or similar placeholder for the instructor field on the course card. The card has stateful buttons depending on the user's enrollment:
   - **Not logged in:** "Logg inn for å melde på" (links to login)
   - **Logged in, not enrolled:** "Meld på" button opens a confirmation dialog (description of action, prefilled email field showing where confirmation will be sent — read from auth, display-only — "Avbryt" + "Meld på" buttons). On confirm, calls `enroll_in_course` RPC. On successful enrollment, a confirmation email is sent to the user (see section 7). **Do not show "Chat"** — only enrolled users see it.
   - **Logged in, enrolled:** "Meld av" button opens a confirmation dialog (description of action, "Avbryt" + "Meld av" buttons). On confirm, deletes from `course_participants`. "Chat" button links to `/courses/[id]/chat`.
@@ -917,7 +918,7 @@ Protected by middleware (admin role only). One page with shadcn/ui `Tabs` to swi
 - Row actions: Edit (opens Dialog with profile form), Remove (atomically deletes profile and resets role to `user`)
 
 **Tab: Kurs**
-- DataTable listing all courses sorted by date (title, date with "Kommende"/"Tidligere" tag derived from date vs now, spot, instructor, participant count / max)
+- DataTable listing all courses sorted by start_time (title, date + time range with "Kommende"/"Tidligere" tag derived from start_time vs now, spot, instructor, participant count / max)
 - No create button here — course creation uses the shared Instructor dashboard (see 5f). Admins see the Instructor nav item and use the same "Nytt kurs" flow there.
 - Row actions: Edit, Delete, View participants (expandable row or Dialog showing participant list with remove buttons)
 
@@ -945,8 +946,8 @@ Protected by middleware (instructor or admin role). **Shared by both** — admin
 - Edit own bio, certifications, years experience, phone, photo
 
 **Tab: Mine Kurs**
-- DataTable listing own courses sorted by date
-- "Nytt kurs" button → Dialog with course form (title, description, price, date, max participants, searchable spot dropdown). **`instructorId` is not in the form** — it is set automatically from the current user's instructor record when creating the course. Uses `publishCourse` which sends subscriber notification emails.
+- DataTable listing own courses sorted by start_time
+- "Nytt kurs" button → Dialog with course form (title, description, price, date picker + start time + end time, max participants, searchable spot dropdown). The form uses a date picker for the day and two time inputs (HH:MM) for start and end time; these are combined into `start_time` and `end_time` timestamptz values before submission. **`instructorId` is not in the form** — it is set automatically from the current user's instructor record when creating the course. Uses `publishCourse` which sends subscriber notification emails.
 - Row actions: Edit, Delete, View participants (expandable row or Dialog with remove buttons)
 
 ### 5g. Auth Pages
@@ -974,9 +975,13 @@ export const publishCourseSchema = z.object({
   title: z.string().min(1, 'Tittel er påkrevd').max(200),
   description: z.string().max(2000).optional(),
   price: z.coerce.number().int().min(0, 'Pris kan ikke være negativ').optional(),
-  date: z.coerce.date({ required_error: 'Dato er påkrevd' }),
+  startTime: z.coerce.date({ required_error: 'Starttid er påkrevd' }),
+  endTime: z.coerce.date({ required_error: 'Sluttid er påkrevd' }),
   maxParticipants: z.coerce.number().int().min(1).optional(),
   spotId: z.string().uuid().optional(),
+}).refine((data) => data.endTime > data.startTime, {
+  message: 'Sluttid må være etter starttid',
+  path: ['endTime'],
 });
 ```
 
@@ -1029,13 +1034,13 @@ Each Server Action wraps Supabase calls and logs before returning. No PII in log
 
 Query functions used by Server Components and Server Actions. Each returns typed data from Supabase SDK:
 
-- `src/lib/queries/courses.ts` -- Export three functions: `getCoursesForPublicPage()`, `getCoursesForAdmin()`, and `getCoursesForInstructor()`. `getCoursesForPublicPage()` filters to future courses only. **Timezone:** A naive `.gte('date', new Date().toISOString())` would incorrectly exclude courses on the same calendar day in Europe/Oslo when compared from UTC. Use the shared `todayOsloISO()` helper from `src/lib/utils/date.ts` to get start-of-day in Oslo. Example:
+- `src/lib/queries/courses.ts` -- Export three functions: `getCoursesForPublicPage()`, `getCoursesForAdmin()`, and `getCoursesForInstructor()`. `getCoursesForPublicPage()` filters to future courses only. **Timezone:** A naive `.gte('start_time', new Date().toISOString())` would incorrectly exclude courses on the same calendar day in Europe/Oslo when compared from UTC. Use the shared `todayOsloISO()` helper from `src/lib/utils/date.ts` to get start-of-day in Oslo. Example:
   ```ts
   import { todayOsloISO } from '@/lib/utils/date';
   const midnightOslo = `${todayOsloISO()}T00:00:00`;
-  const { data } = await supabase.from('courses').select('*').gte('date', midnightOslo);
+  const { data } = await supabase.from('courses').select('*').gte('start_time', midnightOslo);
   ```
-  `getCoursesForAdmin()` returns all courses, no date filter. `getCoursesForInstructor()` **must explicitly filter by instructor:** RLS on courses only defines "Public/Authenticated can view" with `using: true`, so instructors would receive all courses otherwise. Implementation: (1) Look up the current user's instructor ID via `supabase.from('instructors').select('id').eq('user_id', authUserId).single()`, (2) Apply `.eq('instructor_id', instructorId)` to the courses query. Use `supabase.from('courses').select('*, instructors(*), spots(*)').order('date')` with that filter. All three use the same select shape.
+  `getCoursesForAdmin()` returns all courses, no date filter. `getCoursesForInstructor()` **must explicitly filter by instructor:** RLS on courses only defines "Public/Authenticated can view" with `using: true`, so instructors would receive all courses otherwise. Implementation: (1) Look up the current user's instructor ID via `supabase.from('instructors').select('id').eq('user_id', authUserId).single()`, (2) Apply `.eq('instructor_id', instructorId)` to the courses query. Use `supabase.from('courses').select('*, instructors(*), spots(*)').order('start_time')` with that filter. All three use the same select shape.
 - `src/lib/queries/instructors.ts` -- `supabase.from('instructors').select('*, users(*)')`
 - `src/lib/queries/messages.ts` -- `supabase.from('messages').select('*, users(name, avatar_url)').eq('course_id', id).order('created_at')`
 - `src/lib/queries/subscriptions.ts` -- check if current user has a subscription row (returns `verified` status for UI). For notification sends, filter to `verified = true` only.
@@ -1110,7 +1115,7 @@ sequenceDiagram
 The `publishCourse` Server Action:
 1. Looks up instructor ID via `supabase.from('instructors').select('id').eq('user_id', currentUserId).single()`, then inserts the course (with `instructorId`, `spotId`) via Supabase server client (RLS verifies the user is an instructor or admin)
 2. On success, fetches the linked spot data and all subscriber emails. Subscriber list uses the **service role client** (instructor's client is restricted by RLS to their own subscription only)
-3. Sends individual emails via Resend to each verified subscriber (loop or `Promise.all` over individual sends). One email per subscriber with course details (title, date, description, spot name + link to `/spots/[spotId]`, and a "Meld deg på" enroll link).
+3. Sends individual emails via Resend to each verified subscriber (loop or `Promise.all` over individual sends). One email per subscriber with course details (title, date + time range, description, spot name + link to `/spots/[spotId]`, and a "Meld deg på" enroll link).
 4. Returns `{ course, notificationSent: boolean }` where `notificationSent` is true only if all subscriber emails were sent successfully. If false, the client may show a warning toast; the course remains created.
 
 If the email send fails, the course is still created -- the action returns a warning about the notification failure rather than rolling back.
@@ -1120,12 +1125,12 @@ If the email send fails, the course is still created -- the action returns a war
 When a user successfully enrolls in a course, a confirmation email is sent to them. The `enrollInCourse` Server Action:
 1. Calls `supabase.rpc('enroll_in_course', { p_course_id })` (atomic enrollment)
 2. On success, fetches course + spot details
-3. Sends a confirmation email to the user with: course title, date, instructor, spot name + link, price, link to course chat (`/courses/[id]/chat`), and a note that they can unenroll at `/courses` — with a link to that page
+3. Sends a confirmation email to the user with: course title, date + time range, instructor, spot name + link, price, link to course chat (`/courses/[id]/chat`), and a note that they can unenroll at `/courses` — with a link to that page
 
 ### Email Setup
 
 - **`src/lib/email/resend.ts`** -- Resend client initialized with `RESEND_API_KEY`
-- **`src/lib/email/templates/new-course.tsx`** -- Subscriber notification: new course available. Includes course title, date, instructor name, price, spot link, and "Meld deg på" link.
+- **`src/lib/email/templates/new-course.tsx`** -- Subscriber notification: new course available. Includes course title, date + time range, instructor name, price, spot link, and "Meld deg på" link.
 - **`src/lib/email/templates/enrollment-confirmation.tsx`** -- Sent to user on enrollment. Includes course details, spot link, link to course chat, and note about unenrolling at `/courses` with a link to that page.
 - **`src/lib/email/templates/subscription-verification.tsx`** -- Sent when a user subscribes with an email that differs from their auth email. Contains a verification link to `/verify-subscription?token=xxx` (landing page, not a direct API call) and a note that the link expires in 24 hours. User clicks the link, sees a confirmation page, and presses "Bekreft e-post" to complete verification.
 - **Sending domain** -- Use env var `RESEND_FROM_EMAIL`: default `onboarding@resend.dev` for local/testing; production must set to the verified domain address (e.g. `noreply@aalesundkiteklubb.no`). Configure the verified domain in the Resend dashboard.
@@ -1138,10 +1143,10 @@ All in `src/components/`, using shadcn/ui as the base:
 
 - **Layout:** `Navbar` (hamburger + full-screen overlay on mobile, horizontal nav on desktop), `Footer`, `ContentCard` (off-white card over panorama BG)
 - **Auth:** `LoginButton`, `UserMenu` (avatar dropdown with role badge, "Logg ut" item that calls the `signOut` server action)
-- **Courses:** `CourseCard` (stateful: shows "Meld på" / "Meld av" based on enrollment; "Chat" button **only when enrolled**), `CourseList`, `ParticipantList`
+- **Courses:** `CourseCard` (stateful: shows date + time range via `formatCourseTime`, "Meld på" / "Meld av" based on enrollment; "Chat" button **only when enrolled**), `CourseList`, `ParticipantList`
 - **Chat:** `ChatWindow`, `MessageBubble`, `MessageInput`
 - **Spots:** `SpotCard`, `SpotList`, `SpotFilters` (listing page with season/area/wind filters), `WindCompass` (visual compass rose), `SpotDetailPage` sections
-- **Admin:** `InstructorForm`, `CourseForm` (with searchable spot dropdown via shadcn `Combobox`), `SpotForm` (with map image upload, compass direction picker, multi-select water type), `DataTable`
+- **Admin:** `InstructorForm`, `CourseForm` (with date picker + start/end time inputs and searchable spot dropdown via shadcn `Combobox`), `SpotForm` (with map image upload, compass direction picker, multi-select water type), `DataTable`
 - **Subscription:** `SubscribeDialog` (Meld på: action description, editable email, "Avbryt" + "Meld på"); `UnsubscribeDialog` (Meld av: action description, "Avbryt" + "Meld av"). If subscribed but `verified = false`, show a subtle hint: "Sjekk e-posten din for å bekrefte" instead of the normal subscribed state
 - **Enrollment:** `EnrollConfirmDialog` (Meld på: action description, display-only email field showing auth email where confirmation will be sent, "Avbryt" + "Meld på"); `UnenrollConfirmDialog` (Meld av: action description, "Avbryt" + "Meld av")
 
@@ -1220,12 +1225,20 @@ export const formatTime = (d: string) =>
     minute: '2-digit',
   });
 
+/** "12. mars 2026, 10:00–14:00" — for course cards showing date + time range */
+export const formatCourseTime = (start: string, end: string) => {
+  const date = formatDate(start);
+  const startT = formatTime(start);
+  const endT = formatTime(end);
+  return `${date}, ${startT}–${endT}`;
+};
+
 /** Today's date in Oslo as YYYY-MM-DD (for DB queries) */
 export const todayOsloISO = () =>
   new Date().toLocaleDateString('sv-SE', { timeZone: TZ });
 ```
 
-**Usage:** `formatDate` for course cards, admin tables, spot pages. `formatDateTime` for enrollment dates, subscription dates. `formatTime` for chat message timestamps. `todayOsloISO` for the future-course query filter (see Section 6 queries).
+**Usage:** `formatDate` for admin tables, spot pages. `formatCourseTime` for course cards (date + time range). `formatDateTime` for enrollment dates, subscription dates. `formatTime` for chat message timestamps. `todayOsloISO` for the future-course query filter (see Section 6 queries).
 
 ---
 

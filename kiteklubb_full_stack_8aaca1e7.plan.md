@@ -93,6 +93,7 @@ isProject: false
   - [Flow](#flow)
   - [Implementation](#implementation-srclibactionscoursests)
   - [Enrollment Confirmation Email](#enrollment-confirmation-email)
+  - [Course Cancellation Email](#course-cancellation-email)
   - [Email Setup](#email-setup)
 - [8. UI Components](#8-ui-components)
   - [Loading, Error & Toast UI](#loading-error--toast-ui)
@@ -229,7 +230,7 @@ The migration files follow this structure:
 |-----------|----------|
 | `0001_initial_schema.sql` | CREATE TYPE enums, CREATE TABLE for all 7 tables |
 | `0002_rls_policies.sql` | All RLS policies for all tables |
-| `0003_user_sync_trigger.sql` | Trigger on auth.users to auto-create public.users |
+| `0003_user_sync_trigger.sql` | Triggers on auth.users to auto-create and auto-delete public.users |
 | `0004_custom_jwt_hook.sql` | Auth hook to inject role into JWT claims |
 | `0005_realtime_messages.sql` | ALTER PUBLICATION for Realtime on messages |
 | `0006_storage_buckets.sql` | spot-maps + instructor-photos buckets, storage.objects RLS |
@@ -475,11 +476,12 @@ CREATE POLICY "Admin full access" ON public.<table>
 
 Every policy below MUST be written as a `CREATE POLICY` statement in `supabase/migrations/0002_rls_policies.sql`. Use the JWT claim expressions (see above) for role checks — never subquery `users` for role. The "Admin full access" policy should be added to every table where admin access is listed.
 
-**Users table** — 3 policies:
+**Users table** — 4 policies:
 
 1. `"Users can read own profile"` — SELECT, `authenticated`, using: `id = auth.uid()`
 2. `"Co-participants can read profile fields"` — SELECT, `authenticated`, using: EXISTS subquery on `course_participants` (see Chat-related RLS section below for SQL)
-3. `"Admin full access"` — ALL, `authenticated`, using/withCheck: JWT `user_role = 'admin'`
+3. `"Instructors can read users in own courses"` — SELECT, `authenticated`, using: EXISTS subquery joining `course_participants → courses → instructors` where `instructors.user_id = auth.uid()` (see Chat-related RLS section below for SQL). Required for: chat profile enrichment, participant list display, and cancellation email fetching by instructors.
+4. `"Admin full access"` — ALL, `authenticated`, using/withCheck: JWT `user_role = 'admin'`
 
 **Note:** INSERT is handled by DB trigger; UPDATE/DELETE by admins via RPC (promote_to_instructor, etc.) using the admin's server client. Service role is not used for users table.
 
@@ -487,7 +489,7 @@ Every policy below MUST be written as a `CREATE POLICY` statement in `supabase/m
 
 1. `"Public can view instructor profiles"` — SELECT, `anon`, using: `true`
 2. `"Authenticated can view instructor profiles"` — SELECT, `authenticated`, using: `true`
-3. `"Instructors can update own profile"` — UPDATE, `authenticated`, using: `user_id = auth.uid()`
+3. `"Instructors can update own profile"` — UPDATE, `authenticated`, using: `user_id = auth.uid()`, withCheck: `user_id = auth.uid()`
 4. `"Admin full access"` — ALL, `authenticated`, using/withCheck: JWT `user_role = 'admin'`
 
 **Courses table** — 6 policies:
@@ -495,7 +497,7 @@ Every policy below MUST be written as a `CREATE POLICY` statement in `supabase/m
 1. `"Public can view courses"` — SELECT, `anon`, using: `true`
 2. `"Authenticated can view courses"` — SELECT, `authenticated`, using: `true`
 3. `"Instructors can insert own courses"` — INSERT, `authenticated`, withCheck: `instructor_id IN (SELECT id FROM instructors WHERE user_id = auth.uid())`
-4. `"Instructors can update own courses"` — UPDATE, `authenticated`, using: same instructor subquery
+4. `"Instructors can update own courses"` — UPDATE, `authenticated`, using: same instructor subquery, withCheck: same instructor subquery (prevents reassigning `instructor_id` to another instructor)
 5. `"Instructors can delete own courses"` — DELETE, `authenticated`, using: same instructor subquery
 6. `"Admin full access"` — ALL, `authenticated`, using/withCheck: JWT `user_role = 'admin'`
 
@@ -532,11 +534,11 @@ Every policy below MUST be written as a `CREATE POLICY` statement in `supabase/m
 2. `"Authenticated can view spots"` — SELECT, `authenticated`, using: `true`
 3. `"Admin full access"` — ALL, `authenticated`, using/withCheck: JWT `user_role = 'admin'`
 
-**Total: 32 policies** across 7 tables. All written as `CREATE POLICY` SQL in migration `0002`.
+**Total: 33 policies** across 7 tables. All written as `CREATE POLICY` SQL in migration `0002`.
 
 ### Chat-related RLS (users and course_participants)
 
-Chat needs to display other participants' names and avatars. Add these policies in migration `0002`:
+Chat needs to display other participants' names and avatars. Instructors also need to read participant profiles for participant lists and cancellation emails. Add these policies in migration `0002`:
 
 **Users** — co-participant read (for chat profile enrichment):
 
@@ -550,6 +552,20 @@ CREATE POLICY "Co-participants can read profile fields" ON public.users
         SELECT 1 FROM public.course_participants cp2
         WHERE cp2.course_id = cp1.course_id AND cp2.user_id = users.id
       )
+    )
+  );
+```
+
+**Users** — instructor read (for participant lists, chat profile enrichment, cancellation emails):
+
+```sql
+CREATE POLICY "Instructors can read users in own courses" ON public.users
+  FOR SELECT TO authenticated USING (
+    EXISTS (
+      SELECT 1 FROM public.course_participants cp
+      JOIN public.courses c ON c.id = cp.course_id
+      JOIN public.instructors i ON i.id = c.instructor_id
+      WHERE i.user_id = auth.uid() AND cp.user_id = users.id
     )
   );
 ```
@@ -568,7 +584,7 @@ CREATE POLICY "Participants can see co-participants in same course" ON public.co
 
 ### Supabase DB Trigger for User Sync
 
-A Postgres trigger function on `auth.users` (AFTER INSERT) automatically creates a row in `public.users` with `role = 'user'`. Migration `0003` contains:
+Postgres trigger functions on `auth.users` that keep `public.users` in sync. An AFTER INSERT trigger auto-creates a `public.users` row on signup; an AFTER DELETE trigger removes it on account deletion (cascading to `course_participants`, `subscriptions`, etc. via FK constraints). Migration `0003` contains:
 
 ```sql
 create or replace function public.handle_new_user()
@@ -589,6 +605,21 @@ $$;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
+
+-- Cleanup trigger: when a user is deleted from auth.users, remove the public.users row.
+-- FK cascades handle dependents: course_participants (CASCADE), subscriptions (CASCADE),
+-- messages.user_id (SET NULL → shows "Slettet bruker" in chat), courses.instructor_id (SET NULL).
+create or replace function public.handle_user_deleted()
+returns trigger language plpgsql security definer as $$
+begin
+  delete from public.users where id = old.id;
+  return old;
+end;
+$$;
+
+create trigger on_auth_user_deleted
+  after delete on auth.users
+  for each row execute function public.handle_user_deleted();
 ```
 
 **Timing:** The trigger runs synchronously in the same transaction as the `auth.users` insert. When Supabase commits the new user, both `auth.users` and `public.users` exist. The redirect to our callback happens after that commit, so when our callback runs, the trigger has already completed.
@@ -684,6 +715,11 @@ begin
     raise exception 'Only admins can demote users';
   end if;
 
+  -- Prevent self-demotion
+  if p_user_id = auth.uid() then
+    raise exception 'Cannot demote yourself';
+  end if;
+
   -- Prevent removing the last admin
   select count(*) into admin_count from users where role = 'admin';
   if admin_count <= 1 and exists (select 1 from users where id = p_user_id and role = 'admin') then
@@ -696,7 +732,7 @@ end;
 $$;
 ```
 
-Called via `supabase.rpc('promote_to_instructor', { p_user_id })`, `supabase.rpc('promote_to_admin', { p_user_id })`, and `supabase.rpc('demote_to_user', { p_user_id })` from the admin's server client. RLS "Admin full access" allows the updates; the JWT check provides defense in depth. `demote_to_user` includes a last-admin guard — if `p_user_id` is the only remaining admin, the function raises `'Cannot demote the last admin'`; the server action returns this as `{ success: false, error: 'Kan ikke fjerne siste admin' }` and the UI shows a toast. **Note:** `instructors.user_id` must have a unique constraint for `ON CONFLICT (user_id)` to work — the schema already defines `user_id` as unique.
+Called via `supabase.rpc('promote_to_instructor', { p_user_id })`, `supabase.rpc('promote_to_admin', { p_user_id })`, and `supabase.rpc('demote_to_user', { p_user_id })` from the admin's server client. RLS "Admin full access" allows the updates; the JWT check provides defense in depth. `demote_to_user` includes a self-demotion guard (`'Cannot demote yourself'` → `{ success: false, error: 'Du kan ikke endre din egen rolle' }`) and a last-admin guard — if `p_user_id` is the only remaining admin, the function raises `'Cannot demote the last admin'`; the server action returns this as `{ success: false, error: 'Kan ikke fjerne siste admin' }` and the UI shows a toast. **Note:** `instructors.user_id` must have a unique constraint for `ON CONFLICT (user_id)` to work — the schema already defines `user_id` as unique.
 
 **JWT staleness after role changes:** After a successful promote/demote, the user's JWT still contains the old `user_role` claim until the token refreshes (~1 hour). The admin dashboard should show a toast after every role change: `toast.success('Rolle endret. Brukeren må logge ut og inn igjen for å få tilgang.')`. This is a Supabase Auth limitation — `supabase.auth.refreshSession()` only works in the target user's own browser, so the admin cannot force a refresh on their behalf.
 
@@ -877,7 +913,7 @@ Protected by middleware (admin role only). One page with shadcn/ui `Tabs` to swi
 **Tab: Kurs**
 - DataTable listing all courses sorted by start_time (title, date + time range with "Kommende"/"Tidligere" tag derived from start_time vs now, spot, instructor, participant count / max)
 - No create button here — course creation uses the shared Instructor dashboard (see 5f). Admins see the Instructor nav item and use the same "Nytt kurs" flow there.
-- Row actions: Edit, Delete, View participants (expandable row or Dialog showing participant list with remove buttons)
+- Row actions: Edit, Delete (opens confirmation dialog; on confirm, the `deleteCourse` server action fetches enrolled participants, sends cancellation emails via Resend, then deletes the course — see Section 7), View participants (expandable row or Dialog showing participant list with remove buttons)
 
 **Tab: Spotter**
 - DataTable listing all spots (name, season, area, skill level, water type)
@@ -891,7 +927,7 @@ Protected by middleware (admin role only). One page with shadcn/ui `Tabs` to swi
 
 **Tab: Brukere**
 - DataTable listing all users (name, email, role, created date)
-- Row action: Change role (dropdown to set user/instructor/admin). Changing to instructor or admin atomically creates `instructors` profile row (if missing) and sets `users.role`. Admins always have an instructor profile so they can create courses via the Instructor dashboard.
+- Row action: Change role (dropdown to set user/instructor/admin). The dropdown is disabled for the current admin's own row (tooltip: "Du kan ikke endre din egen rolle") — the RPC also enforces this server-side. Changing to instructor or admin atomically creates `instructors` profile row (if missing) and sets `users.role`. Admins always have an instructor profile so they can create courses via the Instructor dashboard.
 
 Uses shadcn/ui `Tabs`, `DataTable`, `Dialog`, `Form`, `Combobox` components.
 
@@ -905,7 +941,7 @@ Protected by middleware (instructor or admin role). **Shared by both** — admin
 **Tab: Mine Kurs**
 - DataTable listing own courses sorted by start_time
 - "Nytt kurs" button → Dialog with course form (title, description, price, date picker + start time + end time, max participants, searchable spot dropdown). The form uses a date picker for the day and two time inputs (HH:MM) for start and end time; these are combined into `start_time` and `end_time` timestamptz values before submission. **`instructorId` is not in the form** — it is set automatically from the current user's instructor record when creating the course. Uses `publishCourse` which sends subscriber notification emails.
-- Row actions: Edit, Delete, View participants (expandable row or Dialog with remove buttons)
+- Row actions: Edit, Delete (opens confirmation dialog; on confirm, the `deleteCourse` server action fetches enrolled participants, sends cancellation emails via Resend, then deletes the course — see Section 7), View participants (expandable row or Dialog with remove buttons)
 
 ### 5g. Auth Pages
 
@@ -944,7 +980,7 @@ export const publishCourseSchema = z.object({
 
 **Return convention:** For user-facing mutations (enroll, subscribe, unenroll, etc.), return `{ success: boolean; error?: string }` so the client can show appropriate toasts. For create/update actions (e.g. `publishCourse`), return the entity on success plus optional metadata (e.g. `notificationSent`); on failure, return `{ success: false, error }` or throw.
 
-- `src/lib/actions/courses.ts` -- `supabase.from('courses').insert(...)`, `.update(...)`, `.delete(...)`; enrollment via direct SDK insert: (1) check capacity with `supabase.from('course_participants').select('*', { count: 'exact', head: true }).eq('course_id', courseId)` and compare against `max_participants` — if full, return `{ success: false, error: 'Kurset er fullt' }`, (2) insert with `supabase.from('course_participants').insert({ user_id, course_id })` — if the unique constraint is violated (Postgres 23505), return `{ success: false, error: 'Du er allerede påmeldt' }`. Unenrollment via `supabase.from('course_participants').delete().match({ user_id, course_id })` (RLS allows own deletion). On successful enrollment, sends a confirmation email to the user (see section 7). The `publishCourse` action looks up the instructor ID via `supabase.from('instructors').select('id').eq('user_id', currentUserId).single()` before inserting the course (not from the form) and sends notification emails to all subscribers in one server-side request.
+- `src/lib/actions/courses.ts` -- `supabase.from('courses').insert(...)`, `.update(...)`, `.delete(...)`; enrollment via direct SDK insert: (1) check capacity with `supabase.from('course_participants').select('*', { count: 'exact', head: true }).eq('course_id', courseId)` and compare against `max_participants` — if full, return `{ success: false, error: 'Kurset er fullt' }`, (2) insert with `supabase.from('course_participants').insert({ user_id, course_id })` — if the unique constraint is violated (Postgres 23505), return `{ success: false, error: 'Du er allerede påmeldt' }`. Unenrollment via `supabase.from('course_participants').delete().match({ user_id, course_id })` (RLS allows own deletion). On successful enrollment, sends a confirmation email to the user (see section 7). `deleteCourse(courseId)`: fetches enrolled participants' emails using the **service role client** (the instructor's RLS-scoped client cannot read other users' emails; parallels `publishCourse` subscriber fetch), sends cancellation emails to each (see Section 7 — Course Cancellation Email), then deletes the course (`ON DELETE CASCADE` removes participants and messages). If email sending fails, the course is still deleted — log the failure. The `publishCourse` action looks up the instructor ID via `supabase.from('instructors').select('id').eq('user_id', currentUserId).single()` before inserting the course (not from the form) and sends notification emails to all subscribers in one server-side request.
 - `src/lib/actions/instructors.ts` -- **Atomic admin actions to keep `users.role` and `instructors` table in sync:** Implement via Postgres RPC functions (`promote_to_instructor`, `promote_to_admin`, `demote_to_user`) that perform both the `instructors` and `users.role` updates in a single transaction. Call `supabase.rpc('promote_to_instructor', { p_user_id })`, `supabase.rpc('promote_to_admin', { p_user_id })`, and `supabase.rpc('demote_to_user', { p_user_id })` from the admin's server client. These RPCs are defined in migration `0007`.
   - `promoteToInstructor(userId)`: Calls `promote_to_instructor` RPC — creates `instructors` profile row (if missing) AND sets `users.role = 'instructor'`.
   - `promoteToAdmin(userId)`: Calls `promote_to_admin` RPC — creates `instructors` profile row (if missing) AND sets `users.role = 'admin'`. Admins always have an instructor profile so they can create courses.
@@ -954,7 +990,7 @@ export const publishCourseSchema = z.object({
 - `src/lib/actions/subscriptions.ts` -- insert/delete on `subscriptions`. **Email verification logic:** If the submitted email matches the user's Google auth email, insert with `verified = true` (already verified by OAuth). If email differs, insert with `verified = false` + generate a random UUID `verification_token` + set `token_expires_at` to `now() + 24 hours`, then send a verification email via Resend with a link to `/verify-subscription?token=xxx` (landing page). The email should mention the 24-hour expiry window (e.g. "Denne lenken utløper om 24 timer").
 - `src/lib/actions/spots.ts` -- CRUD on `spots` + upload to `spot-maps` bucket (`{spotId}/{filename}`), store public URL in `map_image_url`. See Section 2h for new-spot creation flow (create → upload → update) and error handling (rollback on failure).
 - `src/lib/actions/users.ts` -- re-exports or delegates to `instructors.ts` RPC actions (`promoteToInstructor`, `promoteToAdmin`, `demoteToUser`) for role changes in Brukere tab and Instruktører tab. Role changes must use these RPCs to keep `users.role` and `instructors` in sync atomically; direct service-role update of `users.role` would skip instructor row create/delete.
-- `src/lib/actions/auth.ts` -- `signOut()`: calls `supabase.auth.signOut()`, then `redirect('/')`
+- `src/lib/actions/auth.ts` -- `signOut()`: calls `supabase.auth.signOut()`, then `redirect('/')`. `deleteAccount()`: calls `supabase.auth.admin.deleteUser(userId)` via the service role client — the AFTER DELETE trigger on `auth.users` cascades to `public.users` and all dependent rows (see migration `0003`). Returns `{ success: true }` and redirects to `/`.
 
 No application-level authorization checks needed -- RLS handles it. If a non-admin tries to insert an instructor, Postgres returns an error.
 
@@ -964,6 +1000,7 @@ No application-level authorization checks needed -- RLS handles it. If a non-adm
 |--------|------------|
 | Enroll / unenroll | `revalidatePath('/courses')` |
 | Publish / edit / delete course | `revalidatePath('/courses')`, `revalidatePath('/instructor')`, `revalidatePath('/admin')` |
+| Delete account | `revalidatePath('/admin')` (user list) |
 | Update instructor profile | `revalidatePath('/instructor')`, `revalidatePath('/courses')` |
 | Spot CRUD | `revalidatePath('/spots')`, `revalidatePath('/admin')` |
 | Subscribe / unsubscribe | `revalidatePath('/courses')` |
@@ -1084,11 +1121,22 @@ When a user successfully enrolls in a course, a confirmation email is sent to th
 2. On success, fetches course + spot details
 3. Sends a confirmation email to the user with: course title, date + time range, instructor, spot name + link, price, link to course chat (`/courses/[id]/chat`), and a note that they can unenroll at `/courses` — with a link to that page
 
+### Course Cancellation Email
+
+When a course is deleted (by admin or instructor), a cancellation email is sent to all enrolled participants. The `deleteCourse` Server Action:
+1. Fetches enrolled participants with emails via `supabase.from('course_participants').select('users(email, name)').eq('course_id', courseId)`
+2. Fetches course + spot details for the email body
+3. Sends cancellation emails to each participant with: course title, original date + time range, instructor, and a note that the course has been cancelled
+4. Deletes the course (cascades remove participants and messages)
+
+If email sending fails, the course is still deleted — the action logs the failure rather than rolling back.
+
 ### Email Setup
 
 - **`src/lib/email/resend.ts`** -- Resend client initialized with `RESEND_API_KEY`
 - **`src/lib/email/templates/new-course.tsx`** -- Subscriber notification: new course available. Includes course title, date + time range, instructor name, price, spot link, and "Meld deg på" link.
 - **`src/lib/email/templates/enrollment-confirmation.tsx`** -- Sent to user on enrollment. Includes course details, spot link, link to course chat, and note about unenrolling at `/courses` with a link to that page.
+- **`src/lib/email/templates/course-cancellation.tsx`** -- Sent to enrolled participants when a course is deleted. Includes course title, original date + time range, instructor name, and cancellation notice.
 - **`src/lib/email/templates/subscription-verification.tsx`** -- Sent when a user subscribes with an email that differs from their auth email. Contains a verification link to `/verify-subscription?token=xxx` (landing page, not a direct API call) and a note that the link expires in 24 hours. User clicks the link, sees a confirmation page, and presses "Bekreft e-post" to complete verification.
 - **Sending domain** -- Use env var `RESEND_FROM_EMAIL`: default `onboarding@resend.dev` for local/testing; production must set to the verified domain address (e.g. `noreply@aalesundkiteklubb.no`). Configure the verified domain in the Resend dashboard.
 
@@ -1099,7 +1147,7 @@ When a user successfully enrolls in a course, a confirmation email is sent to th
 All in `src/components/`, using shadcn/ui as the base:
 
 - **Layout:** `Navbar` (hamburger + full-screen overlay on mobile, horizontal nav on desktop), `Footer`, `ContentCard` (off-white card over panorama BG)
-- **Auth:** `LoginButton`, `UserMenu` (avatar dropdown with role badge, "Logg ut" item that calls the `signOut` server action)
+- **Auth:** `LoginButton`, `UserMenu` (avatar dropdown with role badge, "Slett konto" item opens a confirmation dialog — on confirm calls `deleteAccount` server action, "Logg ut" item that calls the `signOut` server action)
 - **Courses:** `CourseCard` (stateful: shows date + time range via `formatCourseTime`, "Meld på" / "Meld av" based on enrollment; "Chat" button **only when enrolled**), `CourseList`, `ParticipantList`
 - **Chat:** `ChatWindow`, `MessageBubble`, `MessageInput`
 - **Spots:** `SpotCard`, `SpotList`, `SpotFilters` (listing page with season/area/wind filters), `WindCompass` (visual compass rose), `SpotDetailPage` sections
@@ -1267,6 +1315,7 @@ src/
 │       └── templates/
 │           ├── new-course.tsx      # Subscriber notification: new course available
 │           ├── enrollment-confirmation.tsx  # Sent to user on enrollment
+│           ├── course-cancellation.tsx  # Sent to participants when course is deleted
 │           └── subscription-verification.tsx  # Click to verify subscription email (when email ≠ auth)
 ├── types/
 │   └── database.ts                 # Generated types from Supabase (pnpm db:types)
@@ -1277,7 +1326,7 @@ supabase/
 └── migrations/                       # ALL SQL migrations (schema, RLS, triggers, functions, storage)
     ├── 0001_initial_schema.sql      # CREATE TYPE enums + CREATE TABLE for all 7 tables
     ├── 0002_rls_policies.sql        # ENABLE RLS + CREATE POLICY for all tables (32 policies)
-    ├── 0003_user_sync_trigger.sql   # Trigger on auth.users to auto-create public.users
+    ├── 0003_user_sync_trigger.sql   # Triggers on auth.users to auto-create and auto-delete public.users
     ├── 0004_custom_jwt_hook.sql     # Auth hook to inject role into JWT claims
     ├── 0005_realtime_messages.sql   # ALTER PUBLICATION supabase_realtime ADD TABLE messages
     ├── 0006_storage_buckets.sql     # spot-maps + instructor-photos buckets, storage.objects RLS

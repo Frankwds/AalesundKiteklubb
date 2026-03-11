@@ -67,7 +67,6 @@ isProject: false
   - [Supabase DB Trigger for User Sync](#supabase-db-trigger-for-user-sync)
   - [Custom JWT Claims (Auth Hook)](#custom-jwt-claims-auth-hook)
   - [Realtime Publication](#realtime-publication-migration-0005)
-  - [Atomic Enrollment Function (RPC)](#atomic-enrollment-function-rpc)
   - [Atomic Promote/Demote Functions (RPC)](#atomic-promotedemote-functions-rpc)
 - [3. Authentication](#3-authentication)
   - [3a. Supabase Auth Setup](#3a-supabase-auth-setup)
@@ -233,9 +232,8 @@ The migration files follow this structure:
 | `0003_user_sync_trigger.sql` | Trigger on auth.users to auto-create public.users |
 | `0004_custom_jwt_hook.sql` | Auth hook to inject role into JWT claims |
 | `0005_realtime_messages.sql` | ALTER PUBLICATION for Realtime on messages |
-| `0006_enroll_function.sql` | Atomic enroll_in_course() RPC function |
-| `0007_storage_buckets.sql` | spot-maps + instructor-photos buckets, storage.objects RLS |
-| `0008_promote_demote_rpcs.sql` | promote_to_instructor, promote_to_admin, demote_to_user RPCs |
+| `0006_storage_buckets.sql` | spot-maps + instructor-photos buckets, storage.objects RLS |
+| `0007_promote_demote_rpcs.sql` | promote_to_instructor, promote_to_admin, demote_to_user RPCs |
 
 ### 2a. Users
 
@@ -298,9 +296,9 @@ All column names use snake_case (e.g. `avatar_url`, `created_at`, `user_id`).
 | enrolled_at | timestamptz | default now() |
 
 
-Unique constraint on (user_id, course_id).
+Unique constraint on (user_id, course_id). The unique constraint prevents duplicate enrollment at the database level (Postgres error 23505).
 
-Enrollment is handled via a Postgres RPC function (not a direct insert) to prevent overbooking -- see migration `0006`.
+Enrollment is handled via a direct SDK insert in the server action. Capacity is checked application-side before inserting; the unique constraint prevents duplicates. No Postgres RPC function is needed — the theoretical race condition (two users passing the capacity check simultaneously) is negligible at this scale and the consequence is trivial (one extra participant).
 
 ### 2e. Messages
 
@@ -352,7 +350,7 @@ Yr and Google Maps links are generated dynamically from `latitude`/`longitude` (
 
 ### 2h. Supabase Storage (buckets + RLS)
 
-Image uploads use two public buckets. Buckets and `storage.objects` RLS policies are defined in migration `0007`.
+Image uploads use two public buckets. Buckets and `storage.objects` RLS policies are defined in migration `0006`.
 
 **Bucket: `spot-maps`**
 - **Purpose:** Admin-uploaded annotated map/satellite images for spots
@@ -370,7 +368,7 @@ Image uploads use two public buckets. Buckets and `storage.objects` RLS policies
   - UPDATE/DELETE: Same path constraint (own folder only)
 - **Admin editing another instructor's profile:** Storage RLS allows upload only to own folder (`auth.uid()`). When an admin edits another instructor's profile in the Admin tab (Instruktører), **photo changes must be self-uploaded by the target instructor** — admins cannot change another instructor's photo; the target must log in and update their photo themselves.
 
-**Migration `0007`** creates the buckets and RLS policies. Full SQL:
+**Migration `0006`** creates the buckets and RLS policies. Full SQL:
 
 ```sql
 -- Create buckets (5MB for spot-maps, 2MB for instructor-photos; jpeg, png, webp)
@@ -506,7 +504,7 @@ Every policy below MUST be written as a `CREATE POLICY` statement in `supabase/m
 1. `"Users can view own enrollments"` — SELECT, `authenticated`, using: `user_id = auth.uid()`
 2. `"Instructors can view their course participants"` — SELECT, `authenticated`, using: `course_id IN (SELECT id FROM courses WHERE instructor_id IN (SELECT id FROM instructors WHERE user_id = auth.uid()))`
 3. `"Participants can see co-participants in same course"` — SELECT, `authenticated`, using: EXISTS subquery (see Chat-related RLS section below for SQL)
-4. `"Users can enroll themselves"` — INSERT, `authenticated`, withCheck: `user_id = auth.uid()` (the `enroll_in_course` RPC uses `security invoker`, so this policy is evaluated on the INSERT inside the function — it enforces that users can only enroll themselves)
+4. `"Users can enroll themselves"` — INSERT, `authenticated`, withCheck: `user_id = auth.uid()`
 5. `"Users can unenroll themselves"` — DELETE, `authenticated`, using: `user_id = auth.uid()`
 6. `"Instructors can remove participants from their courses"` — DELETE, `authenticated`, using: `course_id IN (SELECT id FROM courses WHERE instructor_id IN (SELECT id FROM instructors WHERE user_id = auth.uid()))`
 7. `"Admin full access"` — ALL, `authenticated`, using/withCheck: JWT `user_role = 'admin'`
@@ -648,50 +646,9 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.messages;
 
 **Note:** The publication name `supabase_realtime` is the default for hosted Supabase projects. If your project uses a different publication, verify in Supabase Dashboard > Database > Replication.
 
-### Atomic Enrollment Function (RPC)
-
-A Postgres function that atomically checks course capacity and enrolls the user, preventing race conditions where two users enroll at the same moment and exceed `max_participants`. Defined in migration `0006`.
-
-```sql
-create or replace function public.enroll_in_course(p_course_id uuid)
-returns void language plpgsql security invoker as $$
-declare
-  current_count int;
-  max_count int;
-begin
-  -- Serialize concurrent enrollments for this course (advisory lock auto-released on commit).
-  -- Cannot use FOR UPDATE here: SECURITY INVOKER + RLS means regular users have no UPDATE
-  -- policy on courses, so FOR UPDATE would return zero rows and skip the capacity check entirely.
-  perform pg_advisory_xact_lock(hashtext(p_course_id::text));
-
-  -- Check duplicate enrollment first (most user-friendly error takes priority over "full")
-  if exists (select 1 from course_participants where user_id = auth.uid() and course_id = p_course_id) then
-    raise exception 'allerede_pameldt';
-  end if;
-
-  select max_participants into max_count
-    from courses where id = p_course_id;
-
-  if max_count is not null then
-    select count(*) into current_count
-      from course_participants where course_id = p_course_id;
-
-    if current_count >= max_count then
-      raise exception 'Course is full';
-    end if;
-  end if;
-
-  insert into course_participants (user_id, course_id)
-    values (auth.uid(), p_course_id);
-end;
-$$;
-```
-
-Called via `supabase.rpc('enroll_in_course', { p_course_id: courseId })` instead of a direct insert. The `pg_advisory_xact_lock` serializes concurrent enrollments, making overbooking impossible. A plain `SELECT` (not `FOR UPDATE`) is used for the capacity check because `SECURITY INVOKER` + RLS would cause `FOR UPDATE` to return zero rows for regular users (no UPDATE policy), silently skipping the capacity check.
-
 ### Atomic Promote/Demote Functions (RPC)
 
-Postgres RPC functions that atomically update both `instructors` and `users.role` in a single transaction. The Supabase JS SDK has no client-side transaction API for multi-statement operations, so these RPCs are required. Defined in migration `0008`.
+Postgres RPC functions that atomically update both `instructors` and `users.role` in a single transaction. The Supabase JS SDK has no client-side transaction API for multi-statement operations, so these RPCs are required. Defined in migration `0007`.
 
 ```sql
 create or replace function public.promote_to_instructor(p_user_id uuid)
@@ -893,7 +850,7 @@ Sections:
 - **Intro kurs** -- what courses are about, who the instructors are, general info text
 - **Scheduled Courses** -- list of course cards from DB. Each card shows course info (title, date with time range e.g. "12. mars 2026, 10:00–14:00", spot name linked to `/spots/[id]` when present — when `spot_id` is null, show "Ikke bestemt" and omit the link — instructor, price). Use `formatCourseTime(start_time, end_time)` for the time range display. When `instructor_id` is null, show "Ikke bestemt" or similar placeholder for the instructor field on the course card. The card has stateful buttons depending on the user's enrollment:
   - **Not logged in:** "Logg inn for å melde på" (links to login)
-  - **Logged in, not enrolled:** "Meld på" button opens a confirmation dialog (description of action, prefilled email field showing where confirmation will be sent — read from auth, display-only — "Avbryt" + "Meld på" buttons). On confirm, calls `enroll_in_course` RPC. On successful enrollment, a confirmation email is sent to the user (see section 7). **Do not show "Chat"** — only enrolled users see it.
+  - **Logged in, not enrolled:** "Meld på" button opens a confirmation dialog (description of action, prefilled email field showing where confirmation will be sent — read from auth, display-only — "Avbryt" + "Meld på" buttons). On confirm, calls the `enrollInCourse` server action (capacity check + direct insert). On successful enrollment, a confirmation email is sent to the user (see section 7). **Do not show "Chat"** — only enrolled users see it.
   - **Logged in, enrolled:** "Meld av" button opens a confirmation dialog (description of action, "Avbryt" + "Meld av" buttons). On confirm, deletes from `course_participants`. "Chat" button links to `/courses/[id]/chat`.
   - When no courses: muted placeholder text (e.g. `text-muted-foreground` or reduced opacity), e.g. "Kurs legges ut når forholdene ser lovende ut, ikke langt i forkant. Meld deg på for å få varsler." plus Subscribe button/link that scrolls to the Subscribe section.
 - **Subscribe** -- requires login. Clicking Subscribe opens a confirmation dialog with: description of the action (e.g. receive email when new courses are published), prefilled editable email field, "Avbryt" (cancel) and "Meld på" (confirm) buttons. On confirm, stores in subscriptions table. If already subscribed, "Meld av" opens a confirmation dialog (description, "Avbryt" + "Meld av"); on confirm, removes from subscriptions.
@@ -987,8 +944,8 @@ export const publishCourseSchema = z.object({
 
 **Return convention:** For user-facing mutations (enroll, subscribe, unenroll, etc.), return `{ success: boolean; error?: string }` so the client can show appropriate toasts. For create/update actions (e.g. `publishCourse`), return the entity on success plus optional metadata (e.g. `notificationSent`); on failure, return `{ success: false, error }` or throw.
 
-- `src/lib/actions/courses.ts` -- `supabase.from('courses').insert(...)`, `.update(...)`, `.delete(...)`; enrollment via `supabase.rpc('enroll_in_course', { p_course_id })` (atomic capacity check, no overbooking). Handle already-enrolled: if the RPC raises `allerede_pameldt` or a unique violation (Postgres 23505), return `{ success: false, error: 'Du er allerede påmeldt' }`; client shows `toast.error('Du er allerede påmeldt')`. Handle full course: when the RPC raises `Course is full`, return `{ success: false, error: 'Kurset er fullt' }`; client shows `toast.error('Kurset er fullt')`. Unenrollment via `supabase.from('course_participants').delete().match({ user_id, course_id })` (RLS allows own deletion). On successful enrollment, sends a confirmation email to the user (see section 7). The `publishCourse` action looks up the instructor ID via `supabase.from('instructors').select('id').eq('user_id', currentUserId).single()` before inserting the course (not from the form) and sends notification emails to all subscribers in one server-side request.
-- `src/lib/actions/instructors.ts` -- **Atomic admin actions to keep `users.role` and `instructors` table in sync:** Implement via Postgres RPC functions (`promote_to_instructor`, `promote_to_admin`, `demote_to_user`) that perform both the `instructors` and `users.role` updates in a single transaction, similar to `enroll_in_course`. Call `supabase.rpc('promote_to_instructor', { p_user_id })`, `supabase.rpc('promote_to_admin', { p_user_id })`, and `supabase.rpc('demote_to_user', { p_user_id })` from the admin's server client. These RPCs are defined in migration `0008`.
+- `src/lib/actions/courses.ts` -- `supabase.from('courses').insert(...)`, `.update(...)`, `.delete(...)`; enrollment via direct SDK insert: (1) check capacity with `supabase.from('course_participants').select('*', { count: 'exact', head: true }).eq('course_id', courseId)` and compare against `max_participants` — if full, return `{ success: false, error: 'Kurset er fullt' }`, (2) insert with `supabase.from('course_participants').insert({ user_id, course_id })` — if the unique constraint is violated (Postgres 23505), return `{ success: false, error: 'Du er allerede påmeldt' }`. Unenrollment via `supabase.from('course_participants').delete().match({ user_id, course_id })` (RLS allows own deletion). On successful enrollment, sends a confirmation email to the user (see section 7). The `publishCourse` action looks up the instructor ID via `supabase.from('instructors').select('id').eq('user_id', currentUserId).single()` before inserting the course (not from the form) and sends notification emails to all subscribers in one server-side request.
+- `src/lib/actions/instructors.ts` -- **Atomic admin actions to keep `users.role` and `instructors` table in sync:** Implement via Postgres RPC functions (`promote_to_instructor`, `promote_to_admin`, `demote_to_user`) that perform both the `instructors` and `users.role` updates in a single transaction. Call `supabase.rpc('promote_to_instructor', { p_user_id })`, `supabase.rpc('promote_to_admin', { p_user_id })`, and `supabase.rpc('demote_to_user', { p_user_id })` from the admin's server client. These RPCs are defined in migration `0007`.
   - `promoteToInstructor(userId)`: Calls `promote_to_instructor` RPC — creates `instructors` profile row (if missing) AND sets `users.role = 'instructor'`.
   - `promoteToAdmin(userId)`: Calls `promote_to_admin` RPC — creates `instructors` profile row (if missing) AND sets `users.role = 'admin'`. Admins always have an instructor profile so they can create courses.
   - `demoteToUser(userId)`: Calls `demote_to_user` RPC — deletes `instructors` row AND resets `users.role = 'user'`. Single action used for both removing an instructor from the Instruktører tab and demoting a user in the Brukere tab.
@@ -1123,7 +1080,7 @@ If the email send fails, the course is still created -- the action returns a war
 ### Enrollment Confirmation Email
 
 When a user successfully enrolls in a course, a confirmation email is sent to them. The `enrollInCourse` Server Action:
-1. Calls `supabase.rpc('enroll_in_course', { p_course_id })` (atomic enrollment)
+1. Checks capacity and inserts into `course_participants` via SDK (see Section 6)
 2. On success, fetches course + spot details
 3. Sends a confirmation email to the user with: course title, date + time range, instructor, spot name + link, price, link to course chat (`/courses/[id]/chat`), and a note that they can unenroll at `/courses` — with a link to that page
 
@@ -1323,9 +1280,8 @@ supabase/
     ├── 0003_user_sync_trigger.sql   # Trigger on auth.users to auto-create public.users
     ├── 0004_custom_jwt_hook.sql     # Auth hook to inject role into JWT claims
     ├── 0005_realtime_messages.sql   # ALTER PUBLICATION supabase_realtime ADD TABLE messages
-    ├── 0006_enroll_function.sql     # Atomic enroll_in_course() RPC function
-    ├── 0007_storage_buckets.sql     # spot-maps + instructor-photos buckets, storage.objects RLS
-    └── 0008_promote_demote_rpcs.sql # promote_to_instructor, promote_to_admin, demote_to_user RPCs
+    ├── 0006_storage_buckets.sql     # spot-maps + instructor-photos buckets, storage.objects RLS
+    └── 0007_promote_demote_rpcs.sql # promote_to_instructor, promote_to_admin, demote_to_user RPCs
 ```
 
 ### Migration Workflow
@@ -1338,7 +1294,7 @@ supabase/
 
 | Step | Action |
 |------|--------|
-| 0 | New projects only: `supabase init`, write migration files 0001–0008 in `supabase/migrations/` |
+| 0 | New projects only: `supabase init`, write migration files 0001–0007 in `supabase/migrations/` |
 | 1 | Manual: Create Supabase project (Dashboard) |
 | 2 | Manual: Configure Google OAuth in Supabase Auth |
 | 3 | Manual: Create OAuth credentials in Google Cloud Console |
@@ -1378,7 +1334,7 @@ Steps that must be completed manually in external dashboards and consoles before
 
 **Prerequisites:** Install Supabase CLI — `pnpm add -D supabase` or `npm install -g supabase`. Required for `supabase link`, `supabase db push`, and `supabase gen types` (used by `db:types` script).
 
-**0. New projects only:** Run `supabase init` to create the `supabase/` directory and config. Write migration files 0001–0008 in `supabase/migrations/` (content described in plan).
+**0. New projects only:** Run `supabase init` to create the `supabase/` directory and config. Write migration files 0001–0007 in `supabase/migrations/` (content described in plan).
 
 1. **Supabase project** – Create a hosted Supabase project (supabase.com). Note the project URL, anon key, and service role key.
 

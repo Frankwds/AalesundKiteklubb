@@ -658,15 +658,23 @@ revoke execute on function public.custom_access_token_hook from authenticated, a
 grant all on table public.users to supabase_auth_admin;
 ```
 
-After this, every access token issued by Supabase contains `user_role` as a top-level JWT claim. **Important:** this claim is NOT in `user.app_metadata` — it lives in the raw JWT payload. To read it on the JS side, decode the access token from the session:
+After this, every access token issued by Supabase contains `user_role` as a top-level JWT claim. **Important:** this claim is NOT in `user.app_metadata` — it lives in the raw JWT payload. To read it on the JS side, decode the access token from the session using an Edge-safe helper (Next.js middleware runs in the Edge Runtime, which has no `Buffer`):
 
 ```typescript
+// src/lib/auth/decode-jwt.ts — Edge-safe JWT payload decoder
+export function decodeJwtPayload(token: string): Record<string, unknown> {
+  const base64Url = token.split('.')[1];
+  const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+  return JSON.parse(atob(base64));
+}
+
+// Usage:
 const { data: { session } } = await supabase.auth.getSession();
-const jwt = JSON.parse(atob(session.access_token.split('.')[1]));
+const jwt = decodeJwtPayload(session.access_token);
 const role = jwt.user_role; // 'user' | 'instructor' | 'admin'
 ```
 
-**Note:** JWT payload is base64url-encoded. For reliable decoding: use `Buffer.from(part, 'base64url')` in Node, or convert base64url to base64 (replace `-` with `+`, `_` with `/`, add padding) before `atob` in the browser.
+**Why not plain `atob()`?** JWTs use base64url encoding (`-` and `_` instead of `+` and `/`, no padding). Raw `atob()` will throw on tokens containing those characters. The helper converts base64url → base64 before decoding. **Why not `Buffer.from()`?** The Edge Runtime has no `Buffer` — `atob()` with conversion is the correct portable approach.
 
 `supabase.auth.getUser()` returns the user object from the Auth API — it does **not** include custom JWT claims injected by hooks. Always use `getSession()` + token decode for role checks.
 
@@ -819,7 +827,17 @@ Manual configuration in two places:
 
 ### 3c. Middleware (`src/middleware.ts`)
 
-**Location:** With `src/` enabled, Next.js middleware lives at `src/middleware.ts` (not at project root). The Supabase session-refresh helper lives at `src/lib/supabase/middleware.ts` and is imported by the main middleware.
+**Location:** With `src/` enabled, Next.js middleware lives at `src/middleware.ts` (not at project root). The Supabase session-refresh helper lives at `src/lib/supabase/middleware.ts` and is imported by the main middleware. The helper returns both the `NextResponse` and the `supabase` client instance so the main middleware can read the session for role checks without creating a second client:
+
+```ts
+// src/lib/supabase/middleware.ts
+export async function updateSession(request: NextRequest) {
+  // ... creates supabase server client, calls supabase.auth.getUser() to validate/refresh tokens ...
+  return { supabaseResponse, supabase };
+}
+```
+
+**Security invariant:** The JWT is only trusted for role checks because `updateSession()` has already validated it with the Supabase Auth server (via `getUser()`). Never read the JWT before the session refresh completes — a raw `getSession()` reads from cookies which could be tampered with.
 
 The matcher runs on **all routes** except static assets so the Supabase session is refreshed on every navigation (including public pages where users trigger server actions like enrollment). Role-based route protection is handled inside the middleware handler, not by the matcher:
 ```ts

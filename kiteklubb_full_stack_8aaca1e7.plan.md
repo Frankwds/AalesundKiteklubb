@@ -6,7 +6,7 @@ todos:
     content: Scaffold Next.js 15 project with TypeScript, Tailwind, pnpm. Install Supabase, shadcn/ui dependencies.
     status: pending
   - id: env-config
-    content: Create .env.local.example and Supabase client setup files (client.ts, server.ts, and lib/supabase/middleware.ts for session refresh — all in lib/supabase/). The auth-flow todo covers creating src/middleware.ts that imports this helper.
+    content: Create .env.local.example and Supabase client setup files (client.ts, server.ts with async cookies() + getAll/setAll, and lib/supabase/middleware.ts with request.cookies/response.cookies for session refresh — all in lib/supabase/). The auth-flow todo covers creating src/middleware.ts that imports this helper.
     status: pending
   - id: db-schema
     content: Write all SQL migrations (tables, RLS policies, triggers, functions, storage) in supabase/migrations/. Apply via supabase db push.
@@ -36,7 +36,7 @@ todos:
     content: "Build instructor dashboard: edit own profile, CRUD own courses, view/remove participants from own courses."
     status: pending
   - id: server-actions
-    content: Implement all server actions using Supabase SDK for data access. RLS enforces authorization at DB level; actions handle session passing.
+    content: Implement all server actions using Supabase SDK for data access. Follow strict execution order: (1) Zod validation, (2) early return on failure, (3) await createClient(), (4) DB operations, (5) revalidatePath(). RLS enforces authorization at DB level; actions handle session passing.
     status: pending
   - id: polish-deploy
     content: "Final polish: mobile-first responsive design (touch-friendly, tap-based nav), loading states, error handling, SEO meta tags. Configure Vercel deployment with env vars."
@@ -203,9 +203,48 @@ pnpm dlx shadcn@latest init
 Key config files to create:
 
 - `src/lib/supabase/client.ts` -- Browser Supabase client (createBrowserClient)
-- `src/lib/supabase/server.ts` -- Server Supabase client (createServerClient with cookies). **Next.js 15 breaking change:** `cookies()` is now async -- `createClient()` must be an `async` function that `await`s `cookies()` before passing them to `createServerClient`.
-- `src/lib/supabase/middleware.ts` -- Auth session refresh
+- `src/lib/supabase/server.ts` -- Server Supabase client (createServerClient with cookies). **Next.js 15 breaking change:** `cookies()` is now async -- `createClient()` must be an `async` function that `await`s `cookies()` before passing them to `createServerClient`. **`@supabase/ssr` ≥ 0.5 breaking change:** The individual `get`/`set`/`remove` cookie methods are deprecated — use only `getAll`/`setAll`.
+- `src/lib/supabase/middleware.ts` -- Auth session refresh helper (uses `request.cookies`/`response.cookies` from NextRequest/NextResponse — **not** `cookies()` from `next/headers`)
 - `.env.local.example` -- Template for required env vars
+
+**Reference implementation — `src/lib/supabase/server.ts`:**
+
+```ts
+// src/lib/supabase/server.ts
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
+
+export async function createClient() {
+  const cookieStore = await cookies()   // Next.js 15: cookies() is async
+
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll()
+        },
+        setAll(cookiesToSet) {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options)
+            )
+          } catch {
+            // setAll is called from Server Components where cookies are read-only.
+            // This is safe to ignore — the middleware handles session refresh.
+          }
+        },
+      },
+    }
+  )
+}
+```
+
+**Key details:**
+- `cookies()` is `await`ed once, stored in `cookieStore`, then referenced inside the `getAll`/`setAll` callbacks.
+- `setAll` has a `try/catch` because `cookieStore.set()` throws in Server Components (read-only context). This is safe because the middleware handles session refresh.
+- Do NOT use the deprecated `get`/`set`/`remove` individual cookie methods — `@supabase/ssr` ≥ 0.5 requires only `getAll`/`setAll`.
 
 Environment variables needed:
 
@@ -827,14 +866,65 @@ Manual configuration in two places:
 
 ### 3c. Middleware (`src/middleware.ts`)
 
-**Location:** With `src/` enabled, Next.js middleware lives at `src/middleware.ts` (not at project root). The Supabase session-refresh helper lives at `src/lib/supabase/middleware.ts` and is imported by the main middleware. The helper returns both the `NextResponse` and the `supabase` client instance so the main middleware can read the session for role checks without creating a second client:
+**Location:** With `src/` enabled, Next.js middleware lives at `src/middleware.ts` (not at project root). The Supabase session-refresh helper lives at `src/lib/supabase/middleware.ts` and is imported by the main middleware. The helper returns both the `NextResponse` and the `supabase` client instance so the main middleware can read the session for role checks without creating a second client.
+
+**IMPORTANT:** This file uses a completely different cookie pattern than `server.ts`. It reads from `request.cookies` (synchronous NextRequest API) and writes to both `request.cookies` and `supabaseResponse.cookies` — it does NOT use `cookies()` from `next/headers`.
+
+**Reference implementation — `src/lib/supabase/middleware.ts`:**
 
 ```ts
 // src/lib/supabase/middleware.ts
+import { createServerClient } from '@supabase/ssr'
+import { NextResponse, type NextRequest } from 'next/server'
+
 export async function updateSession(request: NextRequest) {
-  // ... creates supabase server client, calls supabase.auth.getUser() to validate/refresh tokens ...
-  return { supabaseResponse, supabase };
+  // Start with a NextResponse that forwards the original request
+  let supabaseResponse = NextResponse.next({ request })
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll()   // ← synchronous, from NextRequest
+        },
+        setAll(cookiesToSet) {
+          // 1. Update request cookies (so downstream server code sees fresh tokens)
+          cookiesToSet.forEach(({ name, value }) =>
+            request.cookies.set(name, value)
+          )
+          // 2. Recreate response to pick up updated request cookies
+          supabaseResponse = NextResponse.next({ request })
+          // 3. Set cookies on the response (so the browser stores them)
+          cookiesToSet.forEach(({ name, value, options }) =>
+            supabaseResponse.cookies.set(name, value, options)
+          )
+        },
+      },
+    }
+  )
+
+  // Validate the session — this triggers token refresh if needed,
+  // which calls setAll above to update cookies on both request and response.
+  // IMPORTANT: Use getUser() not getSession() — getUser() validates with
+  // the Supabase Auth server, while getSession() only reads from cookies.
+  const { data: { user } } = await supabase.auth.getUser()
+
+  // Return both so the main middleware can read the session for role checks
+  // without creating a second client.
+  return { supabaseResponse, supabase }
 }
+```
+
+**Critical trap:** You MUST return `supabaseResponse` (the response modified by `setAll`) from your main `src/middleware.ts` — not a new `NextResponse.next()` or `NextResponse.redirect()` without forwarding cookies. If you redirect, copy cookies from `supabaseResponse` to the redirect response:
+```ts
+// In src/middleware.ts, when redirecting:
+const redirect = NextResponse.redirect(new URL('/login', request.url))
+supabaseResponse.cookies.getAll().forEach(cookie =>
+  redirect.cookies.set(cookie.name, cookie.value)
+)
+return redirect
 ```
 
 **Security invariant:** The JWT is only trusted for role checks because `updateSession()` has already validated it with the Supabase Auth server (via `getUser()`). Never read the JWT before the session refresh completes — a raw `getSession()` reads from cookies which could be tampered with.
@@ -1015,9 +1105,69 @@ All data access uses the Supabase SDK. **Supabase SDK uses snake_case for column
 
 ### Server Actions (`src/lib/actions/`)
 
-Server Actions (`"use server"`) for mutations. Each creates a Supabase server client, calls SDK methods, and logs success/failure via `src/lib/logger.ts`.
+Server Actions (`"use server"`) for mutations. **All actions follow this strict execution order:**
 
-**Input validation:** Every Server Action validates its input with Zod before touching the database. Schemas live in `src/lib/validations/` (one file per domain: `courses.ts`, `spots.ts`, `subscriptions.ts`, `instructors.ts`). On validation failure the action returns `{ success: false, error: issues[0].message }` immediately — no DB call. Example:
+1. **Zod validation** — pure input parsing, no infrastructure touched
+2. **Early return on failure** — `{ success: false, error }` with the first issue message
+3. **`await createClient()`** — create the Supabase server client (only after validation passes)
+4. **DB operations** — queries and mutations via the Supabase SDK
+5. **`revalidatePath()`** — cache invalidation for affected routes
+6. **Return** — success response with data, or error response
+
+This order ensures Zod validation acts as a pure gate before any cookie access or DB connection.
+
+**Canonical action skeleton** (all actions in `src/lib/actions/` must follow this pattern):
+
+```ts
+// src/lib/actions/courses.ts
+'use server'
+
+import { createClient } from '@/lib/supabase/server'
+import { publishCourseSchema } from '@/lib/validations/courses'
+import { revalidatePath } from 'next/cache'
+import { log, logError } from '@/lib/logger'
+
+export async function publishCourse(formData: FormData) {
+  // 1. Validate — pure, no infrastructure
+  const parsed = publishCourseSchema.safeParse({
+    title: formData.get('title'),
+    description: formData.get('description'),
+    price: formData.get('price'),
+    startTime: formData.get('startTime'),
+    endTime: formData.get('endTime'),
+    maxParticipants: formData.get('maxParticipants'),
+    spotId: formData.get('spotId'),
+  })
+
+  // 2. Early return on invalid input
+  if (!parsed.success) {
+    return { success: false as const, error: parsed.error.issues[0].message }
+  }
+
+  // 3. Create Supabase client (only after validation passes)
+  const supabase = await createClient()
+
+  // 4. DB operations
+  const { data, error } = await supabase.from('courses').insert({ ... }).select().single()
+  if (error) {
+    logError('insert', 'courses', error.message, {})
+    return { success: false as const, error: 'Kunne ikke opprette kurs' }
+  }
+  log('insert', 'courses', data.id, '...')
+
+  // 5. Cache invalidation
+  revalidatePath('/courses')
+  revalidatePath('/instructor')
+  revalidatePath('/admin')
+
+  // 6. Return success
+  return { success: true as const, course: data }
+}
+```
+
+Each action logs success/failure via `src/lib/logger.ts`.
+
+**Input validation:** Every Server Action validates its input with Zod before touching the database. Schemas live in `src/lib/validations/` (one file per domain: `courses.ts`, `spots.ts`, `subscriptions.ts`, `instructors.ts`). On validation failure the action returns `{ success: false, error: issues[0].message }` immediately — no DB call, no cookie access. Example:
 
 ```ts
 // src/lib/validations/courses.ts
@@ -1364,15 +1514,15 @@ src/
 ├── lib/
 │   ├── supabase/
 │   │   ├── client.ts               # Browser Supabase client (createBrowserClient)
-│   │   ├── server.ts               # Server Supabase client (createServerClient + cookies)
+│   │   ├── server.ts               # Server Supabase client (async createClient with await cookies() + getAll/setAll)
 │   │   ├── admin.ts                # Service role client (bypasses RLS, server-only)
-│   │   └── middleware.ts           # Session refresh helper
+│   │   └── middleware.ts           # Session refresh helper (request.cookies/response.cookies, NOT next/headers cookies())
 │   ├── auth/index.ts               # getCurrentUser() helper via Supabase SDK
 │   ├── utils/
 │   │   └── date.ts                 # Shared date/time formatting (Europe/Oslo, nb-NO)
 │   ├── logger.ts                   # DB mutation logging (success/failure, no PII)
 │   ├── validations/                # Zod schemas for server action input validation
-│   ├── actions/                    # Server actions (mutations via Supabase SDK)
+│   ├── actions/                    # Server actions (order: Zod → createClient → DB → revalidatePath)
 │   ├── queries/                    # Query functions (reads via Supabase SDK)
 │   └── email/
 │       ├── resend.ts               # Resend client instance

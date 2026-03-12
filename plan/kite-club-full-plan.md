@@ -6,7 +6,7 @@ todos:
     content: Scaffold Next.js 15 project with TypeScript, Tailwind, pnpm. Install Supabase, shadcn/ui dependencies.
     status: pending
   - id: env-config
-    content: Create .env.local.example and Supabase client setup files (client.ts, server.ts with async cookies() + getAll/setAll, and lib/supabase/middleware.ts with request.cookies/response.cookies for session refresh — all in lib/supabase/). The auth-flow todo covers creating src/middleware.ts that imports this helper.
+    content: Create .env.local.example and Supabase client setup files (client.ts, server.ts with async cookies() + getAll/setAll, and lib/supabase/middleware.ts with request.cookies/response.cookies for session refresh — all in lib/supabase/). The auth-flow todo covers creating src/proxy.ts that imports this helper.
     status: pending
   - id: db-schema
     content: Write all SQL migrations (tables, RLS policies, triggers, functions, storage) in supabase/migrations/. Apply via supabase db push.
@@ -85,7 +85,7 @@ Admins have full control over the site: managing all spots, courses, instructors
 - [3. Authentication](#3-authentication)
   - [3a. Supabase Auth Setup](#3a-supabase-auth-setup)
   - [3b. Auth Callback Route](#3b-auth-callback-route-srcappauthcallbackroutets)
-  - [3c. Middleware](#3c-middleware-srcmiddlewarets)
+  - [3c. Proxy](#3c-proxy-srcproxyts)
   - [3d. Auth Helpers](#3d-auth-helpers)
 - [4. Authorization Model](#4-authorization-model)
 - [5. Pages and Routes](#5-pages-and-routes)
@@ -904,9 +904,9 @@ Manual configuration in two places:
 
 **Why upsert in the callback?** The trigger creates the row first (same transaction as `auth.users`), so normally the row already exists when the callback runs. The callback upsert is a safety net: if the trigger failed, if the user was created outside our flow, or if there's any edge case, the callback ensures `public.users` has the row. It also refreshes `email`/`name`/`avatar_url` from the latest Google profile on every login. Idempotent — no race: upsert handles both "row missing" and "row exists" correctly.
 
-### 3c. Middleware (`src/middleware.ts`)
+### 3c. Proxy (`src/proxy.ts`)
 
-**Location:** With `src/` enabled, Next.js middleware lives at `src/middleware.ts` (not at project root). The Supabase session-refresh helper lives at `src/lib/supabase/middleware.ts` and is imported by the main middleware. The helper returns both the `NextResponse` and the `supabase` client instance so the main middleware can read the session for role checks without creating a second client.
+**Location:** With `src/` enabled, Next.js 16 proxy lives at `src/proxy.ts` (not at project root). Next.js 16 renamed `middleware.ts` to `proxy.ts` and the default export from `middleware` to `proxy`. The Supabase session-refresh helper lives at `src/lib/supabase/middleware.ts` and is imported by the proxy. The helper returns both the `NextResponse` and the `supabase` client instance so the proxy can read the session for role checks without creating a second client.
 
 **IMPORTANT:** This file uses a completely different cookie pattern than `server.ts`. It reads from `request.cookies` (synchronous NextRequest API) and writes to both `request.cookies` and `supabaseResponse.cookies` — it does NOT use `cookies()` from `next/headers`.
 
@@ -957,9 +957,9 @@ export async function updateSession(request: NextRequest) {
 }
 ```
 
-**Critical trap:** You MUST return `supabaseResponse` (the response modified by `setAll`) from your main `src/middleware.ts` — not a new `NextResponse.next()` or `NextResponse.redirect()` without forwarding cookies. If you redirect, copy cookies from `supabaseResponse` to the redirect response:
+**Critical trap:** You MUST return `supabaseResponse` (the response modified by `setAll`) from your main `src/proxy.ts` — not a new `NextResponse.next()` or `NextResponse.redirect()` without forwarding cookies. If you redirect, copy cookies from `supabaseResponse` to the redirect response:
 ```ts
-// In src/middleware.ts, when redirecting:
+// In src/proxy.ts, when redirecting:
 const redirect = NextResponse.redirect(new URL('/login', request.url))
 supabaseResponse.cookies.getAll().forEach(cookie =>
   redirect.cookies.set(cookie.name, cookie.value)
@@ -969,7 +969,7 @@ return redirect
 
 **Security invariant:** The JWT is only trusted for role checks because `updateSession()` has already validated it with the Supabase Auth server (via `getUser()`). Never read the JWT before the session refresh completes — a raw `getSession()` reads from cookies which could be tampered with.
 
-The matcher runs on **all routes** except static assets so the Supabase session is refreshed on every navigation (including public pages where users trigger server actions like enrollment). Role-based route protection is handled inside the middleware handler, not by the matcher:
+The matcher runs on **all routes** except static assets so the Supabase session is refreshed on every navigation (including public pages where users trigger server actions like enrollment). Role-based route protection is handled inside the proxy handler, not by the matcher:
 ```ts
 export const config = {
   matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
@@ -1567,7 +1567,7 @@ src/
 │           └── course-cancellation.tsx  # Sent to participants when course is deleted
 ├── types/
 │   └── database.ts                 # Generated types from Supabase (pnpm db:types)
-└── middleware.ts                   # Next.js middleware (session refresh + route protection)
+└── proxy.ts                       # Next.js proxy (session refresh + route protection) — renamed from middleware.ts in Next.js 16
 
 # Root-level (outside src/)
 supabase/

@@ -102,17 +102,17 @@ Progress tracker for the full-stack implementation. Work top to bottom — later
 
 ## Phase 5 — Design System & Root Layout
 
-- [ ] Set up Tailwind design tokens: blue palette (`sky-600`, `sky-800`), off-white (`#FAFAF8`), Inter font via `next/font`
-- [ ] Create `src/lib/utils/date.ts` — `formatDate`, `formatDateTime`, `formatTime`, `formatCourseTime`, `todayOsloISO` (all `Europe/Oslo`, `nb-NO`)
-- [ ] Create `src/lib/logger.ts` — `log()` and `logError()` structured console output (no PII)
-- [ ] Create `src/app/layout.tsx` — root layout: panorama background, off-white content card, sticky navbar, footer, `<Sonner />` toast provider
-- [ ] Build `Navbar` component — sticky top, centered items; hamburger + full-screen overlay on mobile; horizontal on desktop
-- [ ] Build `Footer` component
-- [ ] Build `ContentCard` component — off-white card over panorama background
-- [ ] Create `src/app/loading.tsx` — global `<SkeletonSpinner />`
-- [ ] Create `src/app/error.tsx` — global error boundary with retry button
-- [ ] Create `src/app/not-found.tsx` — custom 404 page
-- [ ] Create `src/components/ui/skeletons.tsx` — `SkeletonCard`, `SkeletonTable`, `SkeletonDetail`, `SkeletonSpinner`
+- [x] Set up Tailwind design tokens: blue palette (`sky-600`, `sky-800`), off-white (`#FAFAF8`), Inter font via `next/font`
+- [x] Create `src/lib/utils/date.ts` — `formatDate`, `formatDateTime`, `formatTime`, `formatCourseTime`, `todayOsloISO` (all `Europe/Oslo`, `nb-NO`)
+- [x] Create `src/lib/logger.ts` — `log()` and `logError()` structured console output (no PII)
+- [x] Create `src/app/layout.tsx` — root layout: panorama background, off-white content card, sticky navbar, footer, `<Sonner />` toast provider
+- [x] Build `Navbar` component — sticky top, centered items; hamburger + full-screen overlay on mobile; horizontal on desktop
+- [x] Build `Footer` component
+- [x] Build `ContentCard` component — off-white card over panorama background
+- [x] Create `src/app/loading.tsx` — global `<SkeletonSpinner />`
+- [x] Create `src/app/error.tsx` — global error boundary with retry button
+- [x] Create `src/app/not-found.tsx` — custom 404 page
+- [x] Create `src/components/ui/skeletons.tsx` — `SkeletonCard`, `SkeletonTable`, `SkeletonDetail`, `SkeletonSpinner`
 
 ---
 

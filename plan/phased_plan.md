@@ -13,7 +13,7 @@ todos:
     status: completed
   - id: step-04
     content: "Step 4: Design System, Root Layout and Shared Components (Phase 5) -- Tailwind tokens, layout, navbar, footer, skeletons, error/404 pages"
-    status: pending
+    status: completed
   - id: step-05
     content: "Step 5: Validation Schemas, Data Queries and Email Templates (Phases 6/7/8) -- Zod schemas, all query functions, Resend client, 3 email templates"
     status: pending

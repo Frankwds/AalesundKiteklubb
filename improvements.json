@@ -1,1 +1,72 @@
-[]
+[
+  {
+    "id": "ERR-001",
+    "category": "error",
+    "rating": "IMPORTANT",
+    "location": "Section 6, Data Queries — src/lib/queries/courses.ts, future-course filter example",
+    "description": "The future-course query constructs `${todayOsloISO()}T00:00:00` but omits a timezone offset. Supabase Postgres sessions default to UTC, so Postgres interprets this as UTC midnight — not Oslo midnight. Oslo midnight is 1–2 hours earlier (UTC+1 CET / UTC+2 CEST). Result: courses starting between Oslo midnight and UTC midnight (e.g. a 00:30 CET course) are incorrectly excluded from the 'future courses' list. This contradicts the plan's own timezone guidance ('compare using Oslo-aware midnight').",
+    "suggestion": "Either (a) append the Oslo offset so the string resolves to Oslo midnight — e.g. build the offset dynamically or hardcode a conservative `+01:00` — or (b) simplify: drop start-of-day semantics and filter with `new Date().toISOString()` (shows courses that haven't started yet, which is arguably better UX and avoids the timezone edge case entirely). If option (b), update the `todayOsloISO` helper doc and the 'Timezone' note in Section 2c accordingly.",
+    "confidence": "high"
+  },
+  {
+    "id": "INCON-001",
+    "category": "inconsistency",
+    "rating": "IMPORTANT",
+    "location": "Section 2, Users table RLS — 'Note' paragraph; vs Section 3b and Section 6 Service Role Client",
+    "description": "The Note under the Users table RLS says 'Service role is not used for users table.' However, Section 3b explicitly uses the service role client (`adminClient`) for the auth callback upsert into `public.users`, and the Service Role Client section in Section 6 lists 'Auth callback upsert' as one of its uses. These directly contradict the RLS note.",
+    "suggestion": "Rewrite the Users table RLS note to: 'INSERT for new users is handled by the DB trigger; the auth callback upsert (service role) is a safety net that also refreshes profile fields. UPDATE/DELETE for role changes are handled by admins via RPC using the regular server client.' This reconciles with Sections 3b and 6.",
+    "confidence": "high"
+  },
+  {
+    "id": "INCON-002",
+    "category": "inconsistency",
+    "rating": "LOW",
+    "location": "Section 6, Service Role Client — 'Used ONLY for' list",
+    "description": "The Service Role Client section states it is 'Used ONLY for: Auth callback upsert, publishCourse subscriber fetch.' But at least two other uses exist in the plan: (1) `deleteAccount()` in `actions/auth.ts` calls `supabase.auth.admin.deleteUser()` which requires the service role client, and (2) `queries/users.ts` is described as 'admin queries with service role client for user management.' The 'ONLY' claim is incomplete.",
+    "suggestion": "Add the missing uses to the bullet list: '• Account deletion: `supabase.auth.admin.deleteUser()` in `deleteAccount()`' and '• Admin user queries: reading all users for the Brukere tab in `queries/users.ts`.' Remove the word 'ONLY' or replace with 'Primary uses include:'.",
+    "confidence": "high"
+  },
+  {
+    "id": "MISS-001",
+    "category": "missing_info",
+    "rating": "IMPORTANT",
+    "location": "Section 2b (Instructors), 2c (Courses), 2g (Spots) — schema tables",
+    "description": "The `created_at` column in the Instructors, Courses, and Spots tables does not specify `default now()` in the Notes column. Other tables (Users, Course Participants, Messages, Subscriptions) explicitly state this default. If the SQL migration mirrors the plan and omits the default, these columns will be NULL unless explicitly set on insert, which would be a silent bug.",
+    "suggestion": "Add `default now()` to the Notes column for `created_at` in the Instructors, Courses, and Spots schema tables, matching the convention used in the other four tables.",
+    "confidence": "high"
+  },
+  {
+    "id": "MISS-002",
+    "category": "missing_info",
+    "rating": "IMPORTANT",
+    "location": "Section 5e, Admin Dashboard — Tab: Brukere, role dropdown behavior",
+    "description": "The Brukere tab describes confirmation dialogs for 'instructor → user' and 'admin → instructor' role transitions, but does not specify a confirmation dialog for 'admin → user'. Demoting an admin to user is a destructive action (removes admin access AND deletes the instructor profile + detaches courses), yet no dialog text or behavior is documented for this transition.",
+    "suggestion": "Add a confirmation dialog specification for admin → user: 'When the dropdown is changed from admin to user, show a confirmation dialog: \"Denne brukeren er admin. Å endre rollen til bruker vil fjerne admin-tilgangen og slette instruktørprofilen. Kurs tilknyttet denne brukeren vil miste sin instruktørtilknytning. Vil du fortsette?\" with \"Avbryt\" and \"Bekreft\". On confirm, call `demote_to_user(userId)`.'",
+    "confidence": "high"
+  },
+  {
+    "id": "CLAR-002",
+    "category": "clarity",
+    "rating": "LOW",
+    "location": "Section 2a, Users — opening line",
+    "description": "The opening line says 'Synced from Supabase Auth on first login via auth callback.' The primary sync mechanism is actually the DB trigger (migration 0003, AFTER INSERT on auth.users), which runs before the callback. The callback upsert is a safety net + profile refresh. The current wording implies the callback is the primary sync path, which is misleading and contradicts the detailed explanation in the trigger section.",
+    "suggestion": "Replace with: 'Synced from Supabase Auth automatically via DB trigger (migration 0003). The auth callback upsert (Section 3b) acts as a safety net and refreshes profile fields on each login.'",
+    "confidence": "medium"
+  }
+]
+
+---
+## Plan-Editor Agent Summary (2026-03-12)
+
+**Total items: 6 | Applied: 6 | Skipped: 0 | Modified: 0**
+
+### Applied Items:
+- **ERR-001: Applied** — Simplified future-course query to use `new Date().toISOString()` directly. This avoids the timezone edge case entirely and provides better UX (shows courses that haven't started yet, regardless of timezone). Updated both the query example in Section 6 and the `todayOsloISO` usage note in Section 9.
+- **INCON-001: Applied** — Rewrote Users table RLS note to accurately reflect that the auth callback upsert uses the service role client as a safety net, while role changes use RPCs via the regular server client.
+- **INCON-002: Applied** — Added missing service role client uses (account deletion via `deleteAccount()`, admin user queries in `queries/users.ts`) and replaced "Used ONLY for:" with "Primary uses include:".
+- **MISS-001: Applied** — Added `default now()` to the Notes column for `created_at` in the Instructors, Courses, and Spots schema tables, matching the convention in other tables.
+- **MISS-002: Applied** — Added confirmation dialog specification for admin → user demotion in the Brukere tab, with appropriate Norwegian text warning about loss of admin access and instructor profile deletion.
+- **CLAR-002: Applied** — Clarified the Users sync mechanism in Section 2a to explain that the DB trigger is the primary mechanism and the callback upsert is a safety net + profile refresh.
+
+### Notes:
+All 6 items were high-value improvements with clear fixes. The reviewer's suggestions were accurate and addressed real issues in the plan.

@@ -279,7 +279,7 @@ The migration files follow this structure:
 
 ### 2a. Users
 
-Synced from Supabase Auth on first login via auth callback.
+Synced from Supabase Auth automatically via DB trigger (migration 0003). The auth callback upsert (Section 3b) acts as a safety net and refreshes profile fields on each login.
 
 All column names use snake_case (e.g. `avatar_url`, `created_at`).
 
@@ -305,7 +305,7 @@ All column names use snake_case (e.g. `avatar_url`, `created_at`).
 | years_experience | integer   |                         |
 | phone            | text      |                         |
 | photo_url        | text      | Supabase Storage public URL from `instructor-photos` bucket |
-| created_at       | timestamptz |                         |
+| created_at       | timestamptz | default now()           |
 
 **Sync invariant:** Users with `role = 'instructor'` or `role = 'admin'` always have a row in `instructors`. Admins automatically get an instructor profile when promoted (so they can create courses using the same UI). These are created atomically via admin actions (see section 6). The JWT claim (`user_role`) handles fast permission checks (middleware, UI). The `instructors` table holds profile data and provides the FK for `courses.instructor_id`.
 
@@ -324,7 +324,7 @@ All column names use snake_case (e.g. `avatar_url`, `created_at`).
 | max_participants | integer       | nullable = unlimited                  |
 | instructor_id    | uuid FK       | -> instructors.id, nullable, ON DELETE SET NULL |
 | spot_id          | uuid FK       | -> spots.id, nullable, ON DELETE SET NULL |
-| created_at       | timestamptz   |                                       |
+| created_at       | timestamptz   | default now()                         |
 
 
 ### 2d. Course Participants
@@ -382,7 +382,7 @@ Enrollment is handled via a direct SDK insert in the server action. Capacity is 
 | skill_level     | enum          | `beginner`, `experienced`                                  |
 | skill_notes     | text          | e.g. "Du må kunne ta høyde, ikke veldig langgrunt"         |
 | water_type      | text[]        | Array: "chop", "flat", "waves"                             |
-| created_at      | timestamptz   |                                                            |
+| created_at      | timestamptz   | default now()                                              |
 
 Yr and Google Maps links are generated dynamically from `latitude`/`longitude` (no stored URLs needed). **When `latitude` or `longitude` is null:** hide the Værmelding and Veibeskrivelse sections, or show a placeholder message (e.g. "Kartlenker ikke tilgjengelig").
 
@@ -521,7 +521,7 @@ Every policy below MUST be written as a `CREATE POLICY` statement in `supabase/m
 3. `"Instructors can read users in own courses"` — SELECT, `authenticated`, using: EXISTS subquery joining `course_participants → courses → instructors` where `instructors.user_id = auth.uid()` (see Chat-related RLS section below for SQL). Required for: chat profile enrichment, participant list display, and cancellation email fetching by instructors.
 4. `"Admin full access"` — ALL, `authenticated`, using/withCheck: JWT `user_role = 'admin'`
 
-**Note:** INSERT is handled by DB trigger; UPDATE/DELETE by admins via RPC (promote_to_instructor, etc.) using the admin's server client. Service role is not used for users table.
+**Note:** INSERT for new users is handled by the DB trigger (migration 0003). The auth callback upsert (service role) acts as a safety net and refreshes profile fields on each login (see Section 3b). UPDATE/DELETE for role changes are handled by admins via RPC (promote_to_instructor, etc.) using the regular server client.
 
 **Instructors table** — 4 policies:
 
@@ -1099,7 +1099,7 @@ Protected by middleware (admin role only). One page with shadcn/ui `Tabs` to swi
 
 **Tab: Brukere**
 - DataTable listing all users (name, email, role, created date)
-- Row action: Change role (dropdown to set user/instructor/admin). The dropdown is disabled for the current admin's own row (tooltip: "Du kan ikke endre din egen rolle") — the RPC also enforces this server-side. Changing to instructor or admin atomically creates `instructors` profile row (if missing) and sets `users.role`. Admins always have an instructor profile so they can create courses via the Instructor dashboard. **Instructor → user demotion:** When the dropdown is changed from `instructor` to `user`, the UI must show a **confirmation dialog** before calling `demote_to_user`: "Denne brukeren er instruktør. Å endre rollen til bruker vil slette instruktørprofilen. Kurs tilknyttet denne instruktøren vil miste sin instruktørtilknytning. Vil du fortsette?" with "Avbryt" and "Bekreft" buttons.
+- Row action: Change role (dropdown to set user/instructor/admin). The dropdown is disabled for the current admin's own row (tooltip: "Du kan ikke endre din egen rolle") — the RPC also enforces this server-side. Changing to instructor or admin atomically creates `instructors` profile row (if missing) and sets `users.role`. Admins always have an instructor profile so they can create courses via the Instructor dashboard. **Instructor → user demotion:** When the dropdown is changed from `instructor` to `user`, the UI must show a **confirmation dialog** before calling `demote_to_user`: "Denne brukeren er instruktør. Å endre rollen til bruker vil slette instruktørprofilen. Kurs tilknyttet denne instruktøren vil miste sin instruktørtilknytning. Vil du fortsette?" with "Avbryt" and "Bekreft" buttons. **Admin → user demotion:** When the dropdown is changed from `admin` to `user`, show a **confirmation dialog**: "Denne brukeren er admin. Å endre rollen til bruker vil fjerne admin-tilgangen og slette instruktørprofilen. Kurs tilknyttet denne brukeren vil miste sin instruktørtilknytning. Vil du fortsette?" with "Avbryt" and "Bekreft" buttons. On confirm, call `demote_to_user(userId)`.
 
 Uses shadcn/ui `Tabs`, `DataTable`, `Dialog`, `Form`, `Combobox` components.
 
@@ -1263,11 +1263,9 @@ Each Server Action wraps Supabase calls and logs before returning. No PII in log
 
 Query functions used by Server Components and Server Actions. Each returns typed data from Supabase SDK:
 
-- `src/lib/queries/courses.ts` -- Export three functions: `getCoursesForPublicPage()`, `getCoursesForAdmin()`, and `getCoursesForInstructor()`. `getCoursesForPublicPage()` filters to future courses only. **Timezone:** A naive `.gte('start_time', new Date().toISOString())` would incorrectly exclude courses on the same calendar day in Europe/Oslo when compared from UTC. Use the shared `todayOsloISO()` helper from `src/lib/utils/date.ts` to get start-of-day in Oslo. Example:
+- `src/lib/queries/courses.ts` -- Export three functions: `getCoursesForPublicPage()`, `getCoursesForAdmin()`, and `getCoursesForInstructor()`. `getCoursesForPublicPage()` filters to future courses only. **Timezone:** A naive `.gte('start_time', new Date().toISOString())` would incorrectly exclude courses on the same calendar day in Europe/Oslo when compared from UTC. Use `new Date().toISOString()` to filter for courses that haven't started yet (regardless of day). This is simpler and avoids timezone edge cases — a course at 00:30 CET that hasn't started yet will correctly appear in the list. Example:
   ```ts
-  import { todayOsloISO } from '@/lib/utils/date';
-  const midnightOslo = `${todayOsloISO()}T00:00:00`;
-  const { data } = await supabase.from('courses').select('*').gte('start_time', midnightOslo);
+  const { data } = await supabase.from('courses').select('*').gte('start_time', new Date().toISOString());
   ```
   `getCoursesForAdmin()` returns all courses, no date filter. `getCoursesForInstructor()` **must explicitly filter by instructor:** RLS on courses only defines "Public/Authenticated can view" with `using: true`, so instructors would receive all courses otherwise. Implementation: (1) Look up the current user's instructor ID via `supabase.from('instructors').select('id').eq('user_id', authUserId).single()`, (2) Apply `.eq('instructor_id', instructorId)` to the courses query. Use `supabase.from('courses').select('*, instructors(*), spots(*)').order('start_time')` with that filter. All three use the same select shape.
 - `src/lib/queries/instructors.ts` -- `supabase.from('instructors').select('*, users(*)')`
@@ -1305,10 +1303,12 @@ RLS applies to Realtime events -- users only receive inserts for courses they're
 
 ### Service Role Client (`src/lib/supabase/admin.ts`)
 
-A server-only Supabase client using `SUPABASE_SERVICE_ROLE_KEY` that bypasses RLS. **Must start with `import 'server-only'`** — this makes any accidental client-component import a build-time error instead of silently leaking the key into browser JS. Used ONLY for:
+A server-only Supabase client using `SUPABASE_SERVICE_ROLE_KEY` that bypasses RLS. **Must start with `import 'server-only'`** — this makes any accidental client-component import a build-time error instead of silently leaking the key into browser JS. Primary uses include:
 
 - **Auth callback upsert:** `INSERT ... ON CONFLICT` into `public.users` after `exchangeCodeForSession`. Service role is required because the callback runs before the user's RLS context is fully established, and we need to write to `public.users` regardless of existing policies.
 - **publishCourse subscriber fetch:** The instructor's Supabase client has RLS that limits `subscriptions` to their own row. To send notification emails, we need all subscriber emails. Use the service role client for this single query: `adminClient.from('subscriptions').select('email')` — all subscribers receive notifications (email is always the verified Google auth email).
+- **Account deletion:** `supabase.auth.admin.deleteUser()` in `deleteAccount()` requires the service role client.
+- **Admin user queries:** Reading all users for the Brukere tab in `queries/users.ts`.
 
 This key is NEVER exposed to the client. Environment variable: `SUPABASE_SERVICE_ROLE_KEY` (server-only, not `NEXT_PUBLIC_`).
 
@@ -1472,12 +1472,12 @@ export const formatCourseTime = (start: string, end: string) => {
   return `${date}, ${startT}–${endT}`;
 };
 
-/** Today's date in Oslo as YYYY-MM-DD (for DB queries) */
+/** Today's date in Oslo as YYYY-MM-DD (for DB queries that need date-based filtering) */
 export const todayOsloISO = () =>
   new Date().toLocaleDateString('sv-SE', { timeZone: TZ });
 ```
 
-**Usage:** `formatDate` for admin tables, spot pages. `formatCourseTime` for course cards (date + time range). `formatDateTime` for enrollment dates, subscription dates. `formatTime` for chat message timestamps. `todayOsloISO` for the future-course query filter (see Section 6 queries).
+**Usage:** `formatDate` for admin tables, spot pages. `formatCourseTime` for course cards (date + time range). `formatDateTime` for enrollment dates, subscription dates. `formatTime` for chat message timestamps. `todayOsloISO` available for any date-based filtering in Oslo timezone (the future-course query uses `new Date().toISOString()` directly for simplicity).
 
 ---
 

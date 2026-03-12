@@ -33,6 +33,12 @@ The following topics have been reviewed and addressed in previous iterations. Do
 
 - **Service Role Client bullet for promote/demote RPCs (CLAR-001):** The contradictory "Admin role changes" bullet was removed from the Service Role Client section. RPCs use the regular server client (not service role), as already documented in the RPCs section and actions/instructors.ts.
 - **next.config.ts for Supabase Storage images (MISS-001):** `next.config.ts` with `images.remotePatterns` for the Supabase Storage domain has been added to the "Key config files to create" list in Section 1.
+- **Future-course query timezone (ERR-001):** The query now uses `new Date().toISOString()` directly to filter for courses that haven't started yet. This avoids the timezone edge case where Oslo midnight differs from UTC midnight.
+- **Users table RLS note re: service role (INCON-001):** The note now correctly states that the auth callback upsert uses the service role client as a safety net, while role changes use RPCs via the regular server client.
+- **Service Role Client complete usage list (INCON-002):** The Service Role Client section now lists all uses: auth callback upsert, subscriber fetch, account deletion, and admin user queries. "ONLY" was replaced with "Primary uses include:".
+- **created_at default now() for all tables (MISS-001):** Instructors, Courses, and Spots tables now have `default now()` in the Notes column for `created_at`, matching the convention in other tables.
+- **Admin → user demotion confirmation dialog (MISS-002):** The Brukere tab now specifies a confirmation dialog for demoting an admin to user, in addition to the existing instructor → user and admin → instructor dialogs.
+- **Users sync mechanism wording (CLAR-002):** Section 2a now clarifies that the DB trigger (migration 0003) is the primary sync mechanism, with the auth callback upsert acting as a safety net and profile refresh.
 
 ## Output format
 

@@ -1639,10 +1639,12 @@ Steps that must be completed manually in external dashboards and consoles before
 
 7. **Supabase Auth Hook – Custom Access Token** – After applying migrations (via `supabase db push`), go to Supabase Dashboard > Authentication > Hooks. Add a Custom Access Token hook; in the Hooks panel, select or enter `public.custom_access_token_hook` as the function to invoke (the function is created by migration 0004). Apply all migrations and configure this hook before testing role-gated features; until then, `user_role` will be undefined in tokens.
 
-8. **Bootstrap first admin** – After applying migrations and configuring the Auth Hook (steps 6–7), log in once via Google OAuth so the trigger creates your `public.users` row. Then manually set your role via the Supabase Dashboard SQL Editor:
+8. **Bootstrap first admin** – After applying migrations and configuring the Auth Hook (steps 6–7), log in once via Google OAuth so the trigger creates your `public.users` row. Then manually set your role and create the required instructor profile via the Supabase Dashboard SQL Editor:
    ```sql
    UPDATE public.users SET role = 'admin' WHERE email = 'your@email.com';
+   INSERT INTO public.instructors (user_id)
+     SELECT id FROM public.users WHERE email = 'your@email.com';
    ```
-   Log out and back in to get the updated JWT with `user_role = 'admin'`. You can now use the admin dashboard to promote other users.
+   This mirrors what `promote_to_admin` does atomically — the instructor row is required by the sync invariant (Section 2b) so the admin can access the Instructor dashboard and create courses. Log out and back in to get the updated JWT with `user_role = 'admin'`. You can now use the admin dashboard to promote other users.
 
 9. **Vercel** – Connect the GitHub repo, configure the project, and set all environment variables in the Vercel dashboard.

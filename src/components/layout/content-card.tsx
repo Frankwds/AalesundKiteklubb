@@ -10,7 +10,7 @@ export function ContentCard({
   return (
     <main
       className={cn(
-        'relative mx-auto w-full max-w-5xl bg-offwhite px-4 py-8 sm:px-6 lg:px-8 min-h-[calc(100vh-8rem)]',
+        'relative mx-auto w-full max-w-5xl flex-1 rounded-t-2xl bg-white/60 px-4 py-8 shadow-sm backdrop-blur-sm sm:px-6 lg:px-8',
         className,
       )}
     >

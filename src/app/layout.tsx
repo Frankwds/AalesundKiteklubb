@@ -28,8 +28,8 @@ export default async function RootLayout({
   return (
     <html lang="nb">
       <body className={`${inter.variable} antialiased`}>
-        {/* Panorama background — replace gradient with real image later */}
-        <div className="fixed inset-0 -z-10 bg-gradient-to-b from-sky-200 via-sky-100 to-sky-50" />
+        <div className="fixed inset-0 -z-10 bg-gradient-to-br from-sky-100 via-blue-50 to-slate-50" />
+        <div className="fixed inset-0 -z-10 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(120,190,255,0.15),transparent)]" />
 
         <div className="relative flex min-h-screen flex-col">
           <Navbar user={user} />

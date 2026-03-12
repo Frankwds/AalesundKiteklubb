@@ -27,6 +27,18 @@ Read the entire plan (including YAML frontmatter, markdown sections, code blocks
     - Places where examples would help
     - Overly long paragraphs that could be split or simplified
 
+## Already reviewed and resolved (do not re-flag)
+
+The following topics have been reviewed and addressed in previous iterations. Do not suggest changes for these unless a new, distinct issue is found:
+
+- Admin → instructor demotion flow (ERR-001): resolved with dedicated `demote_admin_to_instructor` RPC that preserves instructor profile and course ownership
+- First admin bootstrapping (MISS-001): resolved with Manual Setup step 8 (SQL UPDATE + re-login)
+- `deleteAccount()` return vs redirect (AMB-001): resolved — description now states `redirect()` throws, no return value
+- Timezone handling for course form date+time inputs (MISS-002): resolved with explicit Europe/Oslo offset note in Section 5f
+- Chat profile enrichment over-engineering (CLAR-001): simplified to 2-level strategy (server-side seed + on-demand fallback)
+- Supabase client `Database` type generic (MISS-003): resolved — `createServerClient<Database>()` and `createBrowserClient<Database>()` now documented
+- JWT `decodeJwtPayload` base64url padding (ERR-003): resolved with `.padEnd()` padding restoration
+
 ## Output format
 
 Return a JSON array of improvement items in /improvements.json. Each item must have:

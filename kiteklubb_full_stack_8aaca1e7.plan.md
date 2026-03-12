@@ -202,7 +202,7 @@ pnpm dlx shadcn@latest init
 
 Key config files to create:
 
-- `src/lib/supabase/client.ts` -- Browser Supabase client (createBrowserClient)
+- `src/lib/supabase/client.ts` -- Browser Supabase client (`createBrowserClient<Database>()` — import `Database` from `@/types/database` for full type inference)
 - `src/lib/supabase/server.ts` -- Server Supabase client (createServerClient with cookies). **Next.js 15 breaking change:** `cookies()` is now async -- `createClient()` must be an `async` function that `await`s `cookies()` before passing them to `createServerClient`. **`@supabase/ssr` ≥ 0.5 breaking change:** The individual `get`/`set`/`remove` cookie methods are deprecated — use only `getAll`/`setAll`.
 - `src/lib/supabase/middleware.ts` -- Auth session refresh helper (uses `request.cookies`/`response.cookies` from NextRequest/NextResponse — **not** `cookies()` from `next/headers`)
 - `.env.local.example` -- Template for required env vars
@@ -213,11 +213,12 @@ Key config files to create:
 // src/lib/supabase/server.ts
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import type { Database } from '@/types/database'
 
 export async function createClient() {
   const cookieStore = await cookies()   // Next.js 15: cookies() is async
 
-  return createServerClient(
+  return createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -273,7 +274,7 @@ The migration files follow this structure:
 | `0004_custom_jwt_hook.sql` | Auth hook to inject role into JWT claims |
 | `0005_realtime_messages.sql` | ALTER PUBLICATION for Realtime on messages |
 | `0006_storage_buckets.sql` | spot-maps + instructor-photos buckets, storage.objects RLS |
-| `0007_promote_demote_rpcs.sql` | promote_to_instructor, promote_to_admin, demote_to_user RPCs |
+| `0007_promote_demote_rpcs.sql` | promote_to_instructor, promote_to_admin, demote_to_user, demote_admin_to_instructor RPCs |
 
 ### 2a. Users
 
@@ -701,7 +702,8 @@ After this, every access token issued by Supabase contains `user_role` as a top-
 export function decodeJwtPayload(token: string): Record<string, unknown> {
   const base64Url = token.split('.')[1];
   const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-  return JSON.parse(atob(base64));
+  const padded = base64.padEnd(base64.length + (4 - base64.length % 4) % 4, '=');
+  return JSON.parse(atob(padded));
 }
 
 // Usage:
@@ -791,9 +793,34 @@ begin
   update users set role = 'user' where id = p_user_id;
 end;
 $$;
+
+create or replace function public.demote_admin_to_instructor(p_user_id uuid)
+returns void language plpgsql security invoker as $$
+declare
+  admin_count int;
+begin
+  if (current_setting('request.jwt.claims', true)::jsonb)->>'user_role' != 'admin' then
+    raise exception 'Only admins can change roles';
+  end if;
+
+  -- Prevent self-demotion
+  if p_user_id = auth.uid() then
+    raise exception 'Cannot demote yourself';
+  end if;
+
+  -- Prevent removing the last admin
+  select count(*) into admin_count from users where role = 'admin';
+  if admin_count <= 1 and exists (select 1 from users where id = p_user_id and role = 'admin') then
+    raise exception 'Cannot demote the last admin';
+  end if;
+
+  -- Only update role — preserve the existing instructors row (profile data + course ownership)
+  update users set role = 'instructor' where id = p_user_id;
+end;
+$$;
 ```
 
-Called via `supabase.rpc('promote_to_instructor', { p_user_id })`, `supabase.rpc('promote_to_admin', { p_user_id })`, and `supabase.rpc('demote_to_user', { p_user_id })` from the admin's server client. RLS "Admin full access" allows the updates; the JWT check provides defense in depth. `demote_to_user` includes a self-demotion guard (`'Cannot demote yourself'` → `{ success: false, error: 'Du kan ikke endre din egen rolle' }`) and a last-admin guard — if `p_user_id` is the only remaining admin, the function raises `'Cannot demote the last admin'`; the server action returns this as `{ success: false, error: 'Kan ikke fjerne siste admin' }` and the UI shows a toast. `promote_to_instructor` includes an admin-downgrade guard — if the target user is already an admin, the function raises `'Cannot change an admin role via promotion'`; the server action returns `{ success: false, error: 'Kan ikke nedgradere en admin via forfremming — bruk nedgradering først' }`. **Note:** `instructors.user_id` must have a unique constraint for `ON CONFLICT (user_id)` to work — the schema already defines `user_id` as unique.
+Called via `supabase.rpc('promote_to_instructor', { p_user_id })`, `supabase.rpc('promote_to_admin', { p_user_id })`, `supabase.rpc('demote_to_user', { p_user_id })`, and `supabase.rpc('demote_admin_to_instructor', { p_user_id })` from the admin's server client. RLS "Admin full access" allows the updates; the JWT check provides defense in depth. `demote_to_user` includes a self-demotion guard (`'Cannot demote yourself'` → `{ success: false, error: 'Du kan ikke endre din egen rolle' }`) and a last-admin guard — if `p_user_id` is the only remaining admin, the function raises `'Cannot demote the last admin'`; the server action returns this as `{ success: false, error: 'Kan ikke fjerne siste admin' }` and the UI shows a toast. `promote_to_instructor` includes an admin-downgrade guard — if the target user is already an admin, the function raises `'Cannot change an admin role via promotion'`; the server action returns `{ success: false, error: 'Kan ikke nedgradere en admin via forfremming — bruk nedgradering først' }`. **Note:** `instructors.user_id` must have a unique constraint for `ON CONFLICT (user_id)` to work — the schema already defines `user_id` as unique.
 
 **JWT staleness after role changes:** After a successful promote/demote, the user's JWT still contains the old `user_role` claim until the token refreshes (~1 hour). The admin dashboard should show a context-specific toast after each role change. This is a Supabase Auth limitation — `supabase.auth.refreshSession()` only works in the target user's own browser, so the admin cannot force a refresh on their behalf.
 
@@ -805,11 +832,12 @@ Called via `supabase.rpc('promote_to_instructor', { p_user_id })`, `supabase.rpc
 | Promote user/instructor → admin | `toast.success('Bruker forfremmet til admin. De må logge ut og inn igjen for å få tilgang.')` |
 | Demote instructor → user | `toast.success('Instruktør nedgradert til bruker. De må logge ut og inn igjen.')` |
 | Demote admin → user | `toast.success('Admin nedgradert til bruker. De må logge ut og inn igjen.')` |
+| Demote admin → instructor | `toast.success('Admin nedgradert til instruktør. De må logge ut og inn igjen.')` |
 | Self-demotion attempt | `toast.error('Du kan ikke endre din egen rolle')` |
 | Last-admin demotion | `toast.error('Kan ikke fjerne siste admin')` |
 | Admin-downgrade via promote | `toast.error('Kan ikke nedgradere en admin via forfremming — bruk nedgradering først')` |
 
-**Admin → instructor demotion (Brukere tab):** When the admin selects "Instruktør" for a user whose current role is `admin`, the UI must show a **confirmation dialog** before calling `demote_to_user` + `promote_to_instructor`: "Denne brukeren er admin. Å endre rollen til instruktør vil fjerne admin-tilgangen. Instruktør-profilen beholdes. Vil du fortsette?" with "Avbryt" and "Bekreft" buttons. On confirm, call `demote_to_user(userId)` first, then `promote_to_instructor(userId)` (two sequential RPCs — the first removes admin + deletes instructor row, the second re-creates instructor row and sets role). On success, show `toast.success('Admin nedgradert til instruktør. De må logge ut og inn igjen.')`.
+**Admin → instructor demotion (Brukere tab):** When the admin selects "Instruktør" for a user whose current role is `admin`, the UI must show a **confirmation dialog** before calling `demote_admin_to_instructor`: "Denne brukeren er admin. Å endre rollen til instruktør vil fjerne admin-tilgangen. Instruktør-profilen og kurstilknytninger beholdes. Vil du fortsette?" with "Avbryt" and "Bekreft" buttons. On confirm, call `demote_admin_to_instructor(userId)` (single RPC — only updates `users.role` to `'instructor'`, preserving the existing `instructors` row with all profile data and keeping `courses.instructor_id` intact). On success, show `toast.success('Admin nedgradert til instruktør. De må logge ut og inn igjen.')`.
 
 ---
 
@@ -1033,13 +1061,12 @@ Sections:
 - **Not in nav.** Accessed only via the "Chat" button on the course card in `/courses` and links in the enrollment confirmation email. The "Chat" button is visible when the user is enrolled (see 5c) **or** when the user is the course's instructor or an admin. No navbar or mobile menu entry for chat.
 - Append-only message log, newest at bottom
 - Auto-scroll, live updates via **Supabase Realtime** -- client subscribes to `postgres_changes` on the `messages` table filtered by `course_id`. New messages appear instantly without polling.
-- **Realtime profile enrichment:** Realtime payloads include raw message data only (no joined user data). Strategy:
-  1. **Server-side seed (instructor + messages):** The server component fetches the course's instructor profile via `courses → instructors → users` (publicly readable tables, no special RLS needed) and passes it alongside initial messages (which include joined user data) to the client component. This is critical because the instructor is **not** in `course_participants` — without this, the instructor's name/avatar would be `null` for all participants due to the co-participant RLS policy.
-  2. **Client-side prefetch (participants):** On mount, pre-fetch all course participants (from `course_participants` joined with `users`) to fill the remaining cache. **This prefetch is non-critical** — wrap in try/catch, log failure, and continue. The chat is fully functional without it; only the first message from each previously-unseen sender triggers an on-demand fetch (negligible at course scale).
-  3. **On-demand fallback:** When a Realtime INSERT arrives for an unknown `user_id`, fetch that user's profile on demand (`users(id, name, avatar_url)`), add to cache, and render. Show a placeholder (generic avatar + "...") while fetching. **If the on-demand fetch fails** (network error, RLS denial for non-co-participant like a late-joining instructor), render a permanent fallback: generic avatar + "Ukjent bruker". Optionally retry once before committing to the fallback. The message content itself always renders — only the profile chrome is degraded.
-  4. **Null `user_id` handling:** If `payload.new.user_id` is `null` (deleted user — `ON DELETE SET NULL`), render with "Slettet bruker" label and default avatar immediately, no fetch needed.
+- **Realtime profile enrichment:** Realtime payloads include raw message data only (no joined user data). Strategy (two levels — sufficient at club scale with 5–15 participants per course):
+  1. **Server-side seed (instructor + messages):** The server component fetches the course's instructor profile via `courses → instructors → users` (publicly readable tables, no special RLS needed) and passes it alongside initial messages (which include joined user data) to the client component. This seeds the profile cache with every user who has already sent a message, plus the instructor (who is **not** in `course_participants` and would otherwise be uncached due to co-participant RLS).
+  2. **On-demand fallback:** When a Realtime INSERT arrives for a `user_id` not in the cache, fetch that user's profile on demand (`users(id, name, avatar_url)`), add to cache, and render. Show a placeholder (generic avatar + "...") while fetching. If the fetch fails, render "Ukjent bruker" with a generic avatar — the message content always renders regardless.
+  3. **Null `user_id` handling:** If `payload.new.user_id` is `null` (deleted user — `ON DELETE SET NULL`), render with "Slettet bruker" label and default avatar immediately, no fetch needed.
   RLS policies on `users` and `course_participants` must allow participant reads (see section 2 RLS).
-- Initial messages loaded server-side with joined user data; the server component also fetches the course instructor's profile. Cache is seeded from both, plus the client-side participant prefetch (best-effort).
+- Initial messages loaded server-side with joined user data; the server component also fetches the course instructor's profile. Cache is seeded from both.
 - Messages show user avatar, name, timestamp
 - **Optimistic send (trade-off):** For simplicity, message sending does NOT use optimistic UI. The flow is: insert via server action → Realtime fires INSERT → message appears. The sender sees a brief delay (~200-500ms). This is acceptable at club scale. If snappier feel is desired later, add a local optimistic append (push message into local state immediately, reconcile when Realtime confirms) — but skip for v1.
 
@@ -1086,7 +1113,7 @@ Protected by middleware (instructor or admin role). **Shared by both** — admin
 
 **Tab: Mine Kurs**
 - DataTable listing own courses sorted by start_time
-- "Nytt kurs" button → Dialog with course form (title, description, price, date picker + start time + end time, max participants, searchable spot dropdown). The form uses a date picker for the day and two time inputs (HH:MM) for start and end time; these are combined into `start_time` and `end_time` timestamptz values before submission. **`instructorId` is not in the form** — it is set automatically from the current user's instructor record when creating the course. Uses `publishCourse` which sends subscriber notification emails.
+- "Nytt kurs" button → Dialog with course form (title, description, price, date picker + start time + end time, max participants, searchable spot dropdown). The form uses a date picker for the day and two time inputs (HH:MM) for start and end time; these are combined into `start_time` and `end_time` timestamptz values before submission. **Timezone handling:** When combining the date picker value with start/end time inputs, explicitly construct the ISO string with the Europe/Oslo offset (e.g. `2026-03-12T10:00:00+01:00` in winter, `+02:00` in summer) before sending to the server action. This prevents misinterpretation when the browser's timezone differs from Europe/Oslo. **`instructorId` is not in the form** — it is set automatically from the current user's instructor record when creating the course. Uses `publishCourse` which sends subscriber notification emails.
 - Row actions: Edit, Delete (opens confirmation dialog; on confirm, the `deleteCourse` server action fetches enrolled participants, sends cancellation emails via Resend, then deletes the course — see Section 7), View participants (expandable row or Dialog with remove buttons)
 
 ### 5g. Auth Pages
@@ -1190,13 +1217,14 @@ export const publishCourseSchema = z.object({
 - `src/lib/actions/instructors.ts` -- **Atomic admin actions to keep `users.role` and `instructors` table in sync:** Implement via Postgres RPC functions (`promote_to_instructor`, `promote_to_admin`, `demote_to_user`) that perform both the `instructors` and `users.role` updates in a single transaction. Call `supabase.rpc('promote_to_instructor', { p_user_id })`, `supabase.rpc('promote_to_admin', { p_user_id })`, and `supabase.rpc('demote_to_user', { p_user_id })` from the admin's server client. These RPCs are defined in migration `0007`.
   - `promoteToInstructor(userId)`: Calls `promote_to_instructor` RPC — creates `instructors` profile row (if missing) AND sets `users.role = 'instructor'`.
   - `promoteToAdmin(userId)`: Calls `promote_to_admin` RPC — creates `instructors` profile row (if missing) AND sets `users.role = 'admin'`. Admins always have an instructor profile so they can create courses.
-  - `demoteToUser(userId)`: Calls `demote_to_user` RPC — deletes `instructors` row AND resets `users.role = 'user'`. Single action used for both removing an instructor from the Instruktører tab and demoting a user in the Brukere tab.
+  - `demoteToUser(userId)`: Calls `demote_to_user` RPC — deletes `instructors` row AND resets `users.role = 'user'`. Used for removing an instructor from the Instruktører tab and demoting a non-admin user in the Brukere tab.
+  - `demoteAdminToInstructor(userId)`: Calls `demote_admin_to_instructor` RPC — only updates `users.role` to `'instructor'` WITHOUT deleting the `instructors` row, preserving profile data (bio, certifications, photo, etc.) and course ownership (`courses.instructor_id` stays intact). Used when demoting an admin to instructor in the Brukere tab.
   - `updateInstructorProfile(...)`: Updates the caller's own instructor profile only. Photo upload goes to `instructor-photos/{auth.uid()}/` bucket (storage RLS enforces own-folder), URL stored in `instructors.photo_url`. Used by the Instructor dashboard Profil tab. Admins do not edit other instructors' profiles — they manage roles via promote/demote RPCs.
 - `src/lib/actions/messages.ts` -- `supabase.from('messages').insert(...)`
 - `src/lib/actions/subscriptions.ts` -- insert/delete on `subscriptions`. On subscribe, the action auto-fills `email` from the user's auth session (Google email) — no editable email field, no verification needed.
 - `src/lib/actions/spots.ts` -- CRUD on `spots` + upload to `spot-maps` bucket (`{spotId}/{filename}`), store public URL in `map_image_url`. See Section 2h for new-spot creation flow (create → upload → update) and error handling (rollback on failure).
-- `src/lib/actions/users.ts` -- re-exports or delegates to `instructors.ts` RPC actions (`promoteToInstructor`, `promoteToAdmin`, `demoteToUser`) for role changes in Brukere tab and Instruktører tab. Role changes must use these RPCs to keep `users.role` and `instructors` in sync atomically; direct service-role update of `users.role` would skip instructor row create/delete.
-- `src/lib/actions/auth.ts` -- `signOut()`: calls `supabase.auth.signOut()`, then `redirect('/')`. `deleteAccount()`: calls `supabase.auth.admin.deleteUser(userId)` via the service role client — the AFTER DELETE trigger on `auth.users` cascades to `public.users` and all dependent rows (see migration `0003`). Returns `{ success: true }` and redirects to `/`.
+- `src/lib/actions/users.ts` -- re-exports or delegates to `instructors.ts` RPC actions (`promoteToInstructor`, `promoteToAdmin`, `demoteToUser`, `demoteAdminToInstructor`) for role changes in Brukere tab and Instruktører tab. Role changes must use these RPCs to keep `users.role` and `instructors` in sync atomically; direct service-role update of `users.role` would skip instructor row create/delete.
+- `src/lib/actions/auth.ts` -- `signOut()`: calls `supabase.auth.signOut()`, then `redirect('/')`. `deleteAccount()`: calls `supabase.auth.admin.deleteUser(userId)` via the service role client — the AFTER DELETE trigger on `auth.users` cascades to `public.users` and all dependent rows (see migration `0003`). Calls `redirect('/')` on success — since `redirect()` throws in Next.js, the function never returns a value.
 
 No application-level authorization checks needed -- RLS handles it. If a non-admin tries to insert an instructor, Postgres returns an error.
 
@@ -1270,7 +1298,7 @@ const channel = supabase
 
 RLS applies to Realtime events -- users only receive inserts for courses they're enrolled in. The channel is cleaned up on unmount via `supabase.removeChannel(channel)`.
 
-**Profile cache:** Populate at load from three sources: (a) initial messages (server-side joined user data), (b) the course instructor's profile (server-side via `courses → instructors → users` — needed because the instructor has no `course_participants` row and co-participant RLS won't cover them), and (c) pre-fetch of `course_participants` joined with `users` for the course (client-side, best-effort). On Realtime insert with unknown sender, fetch on demand; if the fetch fails, render "Ukjent bruker" with a generic avatar (the message content still renders). If `user_id` is null (deleted user), render "Slettet bruker" without fetching. Requires RLS on `users` (co-participant read) and `course_participants` (participant-list read) -- see section 2.
+**Profile cache:** Populate at load from two sources: (a) initial messages (server-side joined user data), and (b) the course instructor's profile (server-side via `courses → instructors → users` — needed because the instructor has no `course_participants` row and co-participant RLS won't cover them). On Realtime insert with unknown sender, fetch on demand; if the fetch fails, render "Ukjent bruker" with a generic avatar (the message content still renders). If `user_id` is null (deleted user), render "Slettet bruker" without fetching. Requires RLS on `users` (co-participant read) and `course_participants` (participant-list read) -- see section 2.
 
 **Requires a custom migration** to add `messages` to the Realtime publication (see migration `0005`).
 
@@ -1611,4 +1639,10 @@ Steps that must be completed manually in external dashboards and consoles before
 
 7. **Supabase Auth Hook – Custom Access Token** – After applying migrations (via `supabase db push`), go to Supabase Dashboard > Authentication > Hooks. Add a Custom Access Token hook; in the Hooks panel, select or enter `public.custom_access_token_hook` as the function to invoke (the function is created by migration 0004). Apply all migrations and configure this hook before testing role-gated features; until then, `user_role` will be undefined in tokens.
 
-8. **Vercel** – Connect the GitHub repo, configure the project, and set all environment variables in the Vercel dashboard.
+8. **Bootstrap first admin** – After applying migrations and configuring the Auth Hook (steps 6–7), log in once via Google OAuth so the trigger creates your `public.users` row. Then manually set your role via the Supabase Dashboard SQL Editor:
+   ```sql
+   UPDATE public.users SET role = 'admin' WHERE email = 'your@email.com';
+   ```
+   Log out and back in to get the updated JWT with `user_role = 'admin'`. You can now use the admin dashboard to promote other users.
+
+9. **Vercel** – Connect the GitHub repo, configure the project, and set all environment variables in the Vercel dashboard.

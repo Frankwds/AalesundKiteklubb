@@ -279,7 +279,7 @@ The migration files follow this structure:
 
 Synced from Supabase Auth on first login via auth callback.
 
-All column names use snake_case (e.g. `avatar_url`, `created_at`, `user_id`).
+All column names use snake_case (e.g. `avatar_url`, `created_at`).
 
 | Column     | Type          | Notes                         |
 | ---------- | ------------- | ----------------------------- |
@@ -359,10 +359,7 @@ Enrollment is handled via a direct SDK insert in the server action. Capacity is 
 | ------------------ | ------------- | -------------------- |
 | id                 | uuid PK       | default gen_random_uuid |
 | user_id            | uuid FK NOT NULL | -> users.id, **unique**, ON DELETE CASCADE |
-| email              | text NOT NULL | Autofilled, editable. Not globally unique — two users may use the same notification address; `user_id` UNIQUE enforces one subscription per user. |
-| verified           | boolean       | default `false`      |
-| verification_token | uuid          | nullable, unique. Generated when email ≠ auth email |
-| token_expires_at   | timestamptz   | nullable. Set to `now() + interval '24 hours'` when `verification_token` is generated. Null when no token is active. |
+| email              | text NOT NULL | Auto-filled from the user's Google auth email. One subscription per user (`user_id` UNIQUE). |
 | created_at         | timestamptz   | default now()        |
 
 
@@ -565,7 +562,7 @@ Every policy below MUST be written as a `CREATE POLICY` statement in `supabase/m
 3. `"Users can delete own subscription"` — DELETE, `authenticated`, using: `user_id = auth.uid()`
 4. `"Admin full access"` — ALL, `authenticated`, using/withCheck: JWT `user_role = 'admin'`
 
-**Note:** Subscription email is immutable after creation. To change email, the user must delete and re-subscribe (with verification if the new email differs from auth).
+**Note:** Subscription email is always the user's Google auth email. To change notification email, the user must update their Google account.
 
 **Spots table** — 3 policies:
 
@@ -834,7 +831,7 @@ Manual configuration in two places:
 1. Exchange the OAuth code for a session via `supabase.auth.exchangeCodeForSession(code)`.
 2. **Upsert into `public.users`** using the service role client. Build the upsert payload through a Zod schema that explicitly allows only `id`, `email`, `name`, and `avatar_url` — this structurally prevents `role` from ever being included in the upsert, so an `ON CONFLICT (id) DO UPDATE` can never overwrite the admin-managed role:
    ```ts
-   // src/lib/schemas/user-sync.ts
+   // src/lib/validations/user-sync.ts
    import { z } from 'zod';
 
    /** Whitelist of fields allowed in the auth callback upsert.
@@ -1028,7 +1025,7 @@ Sections:
   - **Logged in, not enrolled:** "Meld på" button opens a confirmation dialog (description of action, prefilled email field showing where confirmation will be sent — read from auth, display-only — "Avbryt" + "Meld på" buttons). On confirm, calls the `enrollInCourse` server action (capacity check + direct insert). On successful enrollment, a confirmation email is sent to the user (see section 7). **Do not show "Chat"** — only enrolled users see it.
   - **Logged in, enrolled:** "Meld av" button opens a confirmation dialog (description of action, "Avbryt" + "Meld av" buttons). On confirm, deletes from `course_participants`. "Chat" button links to `/courses/[id]/chat`.
   - When no courses: muted placeholder text (e.g. `text-muted-foreground` or reduced opacity), e.g. "Kurs legges ut når forholdene ser lovende ut, ikke langt i forkant. Meld deg på for å få varsler." plus Subscribe button/link that scrolls to the Subscribe section.
-- **Subscribe** -- requires login. Clicking Subscribe opens a confirmation dialog with: description of the action (e.g. receive email when new courses are published), prefilled editable email field, "Avbryt" (cancel) and "Meld på" (confirm) buttons. On confirm, stores in subscriptions table. If already subscribed, "Meld av" opens a confirmation dialog (description, "Avbryt" + "Meld av"); on confirm, removes from subscriptions.
+- **Subscribe** -- requires login. Clicking Subscribe opens a confirmation dialog with: description of the action (e.g. receive email when new courses are published), display-only email field showing the user's Google auth email, "Avbryt" (cancel) and "Meld på" (confirm) buttons. On confirm, stores in subscriptions table (email auto-filled from auth). If already subscribed, "Meld av" opens a confirmation dialog (description, "Avbryt" + "Meld av"); on confirm, removes from subscriptions.
 
 ### 5d. Course Chat (`src/app/courses/[id]/chat/page.tsx`)
 
@@ -1189,14 +1186,14 @@ export const publishCourseSchema = z.object({
 
 **Return convention:** For user-facing mutations (enroll, subscribe, unenroll, etc.), return `{ success: boolean; error?: string }` so the client can show appropriate toasts. For create/update actions (e.g. `publishCourse`), return the entity on success plus notification counts (e.g. `{ course, notificationsSent: 48, notificationsFailed: 2 }`); on failure, return `{ success: false, error }` or throw.
 
-- `src/lib/actions/courses.ts` -- `supabase.from('courses').insert(...)`, `.update(...)`, `.delete(...)`; enrollment via direct SDK insert: (1) check capacity with `supabase.from('course_participants').select('*', { count: 'exact', head: true }).eq('course_id', courseId)` and compare against `max_participants` — if full, return `{ success: false, error: 'Kurset er fullt' }`, (2) insert with `supabase.from('course_participants').insert({ user_id, course_id })` — if the unique constraint is violated (Postgres 23505), return `{ success: false, error: 'Du er allerede påmeldt' }`. Unenrollment via `supabase.from('course_participants').delete().match({ user_id, course_id })` (RLS allows own deletion). On successful enrollment, sends a confirmation email to the user (see section 7). `deleteCourse(courseId)`: fetches enrolled participants' emails using the **service role client** (the instructor's RLS-scoped client cannot read other users' emails; parallels `publishCourse` subscriber fetch), sends cancellation emails to each via `Promise.allSettled` with a single retry for failures (see Section 7 — Course Cancellation Email), then deletes the course (`ON DELETE CASCADE` removes participants and messages). Email failures are isolated per-recipient and logged — they never block deletion. The `publishCourse` action looks up the instructor ID via `supabase.from('instructors').select('id').eq('user_id', currentUserId).single()` before inserting the course (not from the form) and sends notification emails to all subscribers via `Promise.allSettled` with a single retry for failures, returning `{ course, notificationsSent, notificationsFailed }`.
+- `src/lib/actions/courses.ts` -- `supabase.from('courses').insert(...)`, `.update(...)`, `.delete(...)`; enrollment via direct SDK insert: (1) check capacity with `supabase.from('course_participants').select('*', { count: 'exact', head: true }).eq('course_id', courseId)` and compare against `max_participants` — if full, return `{ success: false, error: 'Kurset er fullt' }`, (2) insert with `supabase.from('course_participants').insert({ user_id, course_id })` — if the unique constraint is violated (Postgres 23505), return `{ success: false, error: 'Du er allerede påmeldt' }`. Unenrollment via `supabase.from('course_participants').delete().match({ user_id, course_id })` (RLS allows own deletion). On successful enrollment, sends a confirmation email to the user (see section 7). `deleteCourse(courseId)`: fetches enrolled participants' emails using the **regular server client** (the instructor's RLS includes "Instructors can read users in own courses" which grants access to participant emails), sends cancellation emails to each via `Promise.allSettled` with a single retry for failures (see Section 7 — Course Cancellation Email), then deletes the course (`ON DELETE CASCADE` removes participants and messages). Email failures are isolated per-recipient and logged — they never block deletion. The `publishCourse` action looks up the instructor ID via `supabase.from('instructors').select('id').eq('user_id', currentUserId).single()` before inserting the course (not from the form) and sends notification emails to all subscribers via `Promise.allSettled` with a single retry for failures, returning `{ course, notificationsSent, notificationsFailed }`.
 - `src/lib/actions/instructors.ts` -- **Atomic admin actions to keep `users.role` and `instructors` table in sync:** Implement via Postgres RPC functions (`promote_to_instructor`, `promote_to_admin`, `demote_to_user`) that perform both the `instructors` and `users.role` updates in a single transaction. Call `supabase.rpc('promote_to_instructor', { p_user_id })`, `supabase.rpc('promote_to_admin', { p_user_id })`, and `supabase.rpc('demote_to_user', { p_user_id })` from the admin's server client. These RPCs are defined in migration `0007`.
   - `promoteToInstructor(userId)`: Calls `promote_to_instructor` RPC — creates `instructors` profile row (if missing) AND sets `users.role = 'instructor'`.
   - `promoteToAdmin(userId)`: Calls `promote_to_admin` RPC — creates `instructors` profile row (if missing) AND sets `users.role = 'admin'`. Admins always have an instructor profile so they can create courses.
   - `demoteToUser(userId)`: Calls `demote_to_user` RPC — deletes `instructors` row AND resets `users.role = 'user'`. Single action used for both removing an instructor from the Instruktører tab and demoting a user in the Brukere tab.
   - `updateInstructorProfile(...)`: Updates the caller's own instructor profile only. Photo upload goes to `instructor-photos/{auth.uid()}/` bucket (storage RLS enforces own-folder), URL stored in `instructors.photo_url`. Used by the Instructor dashboard Profil tab. Admins do not edit other instructors' profiles — they manage roles via promote/demote RPCs.
 - `src/lib/actions/messages.ts` -- `supabase.from('messages').insert(...)`
-- `src/lib/actions/subscriptions.ts` -- insert/delete on `subscriptions`. **Email verification logic:** If the submitted email matches the user's Google auth email, insert with `verified = true` (already verified by OAuth). If email differs, insert with `verified = false` + generate a random UUID `verification_token` + set `token_expires_at` to `now() + 24 hours`, then send a verification email via Resend with a link to `/verify-subscription?token=xxx` (landing page). The email should mention the 24-hour expiry window (e.g. "Denne lenken utløper om 24 timer").
+- `src/lib/actions/subscriptions.ts` -- insert/delete on `subscriptions`. On subscribe, the action auto-fills `email` from the user's auth session (Google email) — no editable email field, no verification needed.
 - `src/lib/actions/spots.ts` -- CRUD on `spots` + upload to `spot-maps` bucket (`{spotId}/{filename}`), store public URL in `map_image_url`. See Section 2h for new-spot creation flow (create → upload → update) and error handling (rollback on failure).
 - `src/lib/actions/users.ts` -- re-exports or delegates to `instructors.ts` RPC actions (`promoteToInstructor`, `promoteToAdmin`, `demoteToUser`) for role changes in Brukere tab and Instruktører tab. Role changes must use these RPCs to keep `users.role` and `instructors` in sync atomically; direct service-role update of `users.role` would skip instructor row create/delete.
 - `src/lib/actions/auth.ts` -- `signOut()`: calls `supabase.auth.signOut()`, then `redirect('/')`. `deleteAccount()`: calls `supabase.auth.admin.deleteUser(userId)` via the service role client — the AFTER DELETE trigger on `auth.users` cascades to `public.users` and all dependent rows (see migration `0003`). Returns `{ success: true }` and redirects to `/`.
@@ -1246,7 +1243,7 @@ Query functions used by Server Components and Server Actions. Each returns typed
   `getCoursesForAdmin()` returns all courses, no date filter. `getCoursesForInstructor()` **must explicitly filter by instructor:** RLS on courses only defines "Public/Authenticated can view" with `using: true`, so instructors would receive all courses otherwise. Implementation: (1) Look up the current user's instructor ID via `supabase.from('instructors').select('id').eq('user_id', authUserId).single()`, (2) Apply `.eq('instructor_id', instructorId)` to the courses query. Use `supabase.from('courses').select('*, instructors(*), spots(*)').order('start_time')` with that filter. All three use the same select shape.
 - `src/lib/queries/instructors.ts` -- `supabase.from('instructors').select('*, users(*)')`
 - `src/lib/queries/messages.ts` -- `supabase.from('messages').select('*, users(name, avatar_url)').eq('course_id', id).order('created_at')`
-- `src/lib/queries/subscriptions.ts` -- check if current user has a subscription row (returns `verified` status for UI). For notification sends, filter to `verified = true` only.
+- `src/lib/queries/subscriptions.ts` -- check if current user has a subscription row. For notification sends, fetch all subscriber emails via the service role client.
 - `src/lib/queries/spots.ts` -- `supabase.from('spots').select('*')`; fetches all spots for the listing page. Filtering is client-side: fetch all spots, filter in JS by season/area/wind. URL params (e.g. `?season=summer&area=Giske`) are read on load and applied to filter state; shareable links restore filters.
 - `src/lib/queries/users.ts` -- admin queries with service role client for user management
 
@@ -1283,11 +1280,7 @@ A server-only Supabase client using `SUPABASE_SERVICE_ROLE_KEY` that bypasses RL
 
 - **Auth callback upsert:** `INSERT ... ON CONFLICT` into `public.users` after `exchangeCodeForSession`. Service role is required because the callback runs before the user's RLS context is fully established, and we need to write to `public.users` regardless of existing policies.
 - **Admin role changes (promote/demote):** Must use Postgres RPC functions (`promote_to_instructor`, `promote_to_admin`, `demote_to_user`) via the admin's server client — never direct `users.role` update. The RPCs perform both `instructors` and `users.role` updates atomically in Postgres; direct service-role update would skip instructor sync and cause inconsistent state.
-- **publishCourse subscriber fetch:** The instructor's Supabase client has RLS that limits `subscriptions` to their own row. To send notification emails, we need all subscriber emails. Use the service role client for this single query: `adminClient.from('subscriptions').select('email').eq('verified', true)` — only verified emails receive notifications.
-- **Subscription email verification:** Two-step flow to prevent email-scanner bots from auto-verifying tokens:
-  1. **Landing page** `src/app/verify-subscription/page.tsx` — a client page that reads `token` from the URL search params and shows a "Bekreft e-post" button. This is what the email link (`/verify-subscription?token=xxx`) opens. A GET request alone does nothing; the user must click the button, which calls the server action below.
-  2. **Server action** `src/lib/actions/subscriptions.ts` → `verifySubscriptionToken(token)` — looks up the subscription by `verification_token` using the service role client. Checks: (a) token exists and is not already used, (b) `token_expires_at` is not in the past. If valid: sets `verified = true`, clears `verification_token` and `token_expires_at`, returns `{ success: true }`. If expired: deletes the subscription row (user must re-subscribe) and returns `{ success: false, error: 'expired' }`. If invalid/already used: returns `{ success: false, error: 'invalid' }`. The landing page shows a success message with a link to `/courses`, or an error message with appropriate guidance.
-  Service role needed because the request is unauthenticated (user clicking an email link).
+- **publishCourse subscriber fetch:** The instructor's Supabase client has RLS that limits `subscriptions` to their own row. To send notification emails, we need all subscriber emails. Use the service role client for this single query: `adminClient.from('subscriptions').select('email')` — all subscribers receive notifications (email is always the verified Google auth email).
 
 This key is NEVER exposed to the client. Environment variable: `SUPABASE_SERVICE_ROLE_KEY` (server-only, not `NEXT_PUBLIC_`).
 
@@ -1349,7 +1342,6 @@ Email failures never block course deletion — they are isolated per-recipient a
 - **`src/lib/email/templates/new-course.tsx`** -- Subscriber notification: new course available. Includes course title, date + time range, instructor name, price, spot link, and "Meld deg på" link.
 - **`src/lib/email/templates/enrollment-confirmation.tsx`** -- Sent to user on enrollment. Includes course details, spot link, link to course chat, and note about unenrolling at `/courses` with a link to that page.
 - **`src/lib/email/templates/course-cancellation.tsx`** -- Sent to enrolled participants when a course is deleted. Includes course title, original date + time range, instructor name, and cancellation notice.
-- **`src/lib/email/templates/subscription-verification.tsx`** -- Sent when a user subscribes with an email that differs from their auth email. Contains a verification link to `/verify-subscription?token=xxx` (landing page, not a direct API call) and a note that the link expires in 24 hours. User clicks the link, sees a confirmation page, and presses "Bekreft e-post" to complete verification.
 - **Sending domain** -- Use env var `RESEND_FROM_EMAIL`: default `onboarding@resend.dev` for local/testing; production must set to the verified domain address (e.g. `noreply@aalesundkiteklubb.no`). Configure the verified domain in the Resend dashboard.
 
 ---
@@ -1364,7 +1356,7 @@ All in `src/components/`, using shadcn/ui as the base:
 - **Chat:** `ChatWindow`, `MessageBubble`, `MessageInput`
 - **Spots:** `SpotCard`, `SpotList`, `SpotFilters` (listing page with season/area/wind filters), `WindCompass` (visual compass rose), `SpotDetailPage` sections
 - **Admin:** `CourseForm` (with date picker + start/end time inputs and searchable spot dropdown via shadcn `Combobox`), `SpotForm` (with map image upload, compass direction picker, multi-select water type), `DataTable`
-- **Subscription:** `SubscribeDialog` (Meld på: action description, editable email, "Avbryt" + "Meld på"); `UnsubscribeDialog` (Meld av: action description, "Avbryt" + "Meld av"). If subscribed but `verified = false`, show a subtle hint: "Sjekk e-posten din for å bekrefte" instead of the normal subscribed state
+- **Subscription:** `SubscribeDialog` (Meld på: action description, display-only email showing auth email, "Avbryt" + "Meld på"); `UnsubscribeDialog` (Meld av: action description, "Avbryt" + "Meld av")
 - **Enrollment:** `EnrollConfirmDialog` (Meld på: action description, display-only email field showing auth email where confirmation will be sent, "Avbryt" + "Meld på"); `UnenrollConfirmDialog` (Meld av: action description, "Avbryt" + "Meld av")
 
 ### Loading, Error & Toast UI
@@ -1484,7 +1476,6 @@ src/
 │   │   ├── loading.tsx              # Centered spinner
 │   │   └── page.tsx                 # Login page
 │   ├── auth/callback/route.ts       # OAuth callback
-│   ├── verify-subscription/page.tsx # Landing page for email verification (reads token from URL, shows confirm button)
 │   ├── spots/
 │   │   ├── loading.tsx              # Skeleton cards for spots listing
 │   │   ├── page.tsx                 # Spots listing with cards and filters
@@ -1517,7 +1508,9 @@ src/
 │   │   ├── server.ts               # Server Supabase client (async createClient with await cookies() + getAll/setAll)
 │   │   ├── admin.ts                # Service role client (bypasses RLS, server-only)
 │   │   └── middleware.ts           # Session refresh helper (request.cookies/response.cookies, NOT next/headers cookies())
-│   ├── auth/index.ts               # getCurrentUser() helper via Supabase SDK
+│   ├── auth/
+│   │   ├── index.ts               # getCurrentUser() helper via Supabase SDK
+│   │   └── decode-jwt.ts           # Edge-safe JWT payload decoder (base64url → JSON)
 │   ├── utils/
 │   │   └── date.ts                 # Shared date/time formatting (Europe/Oslo, nb-NO)
 │   ├── logger.ts                   # DB mutation logging (success/failure, no PII)
@@ -1529,8 +1522,7 @@ src/
 │       └── templates/
 │           ├── new-course.tsx      # Subscriber notification: new course available
 │           ├── enrollment-confirmation.tsx  # Sent to user on enrollment
-│           ├── course-cancellation.tsx  # Sent to participants when course is deleted
-│           └── subscription-verification.tsx  # Click to verify subscription email (when email ≠ auth)
+│           └── course-cancellation.tsx  # Sent to participants when course is deleted
 ├── types/
 │   └── database.ts                 # Generated types from Supabase (pnpm db:types)
 └── middleware.ts                   # Next.js middleware (session refresh + route protection)
@@ -1539,7 +1531,7 @@ src/
 supabase/
 └── migrations/                       # ALL SQL migrations (schema, RLS, triggers, functions, storage)
     ├── 0001_initial_schema.sql      # CREATE TYPE enums + CREATE TABLE for all 7 tables
-    ├── 0002_rls_policies.sql        # ENABLE RLS + CREATE POLICY for all tables (32 policies)
+    ├── 0002_rls_policies.sql        # ENABLE RLS + CREATE POLICY for all tables (33 policies)
     ├── 0003_user_sync_trigger.sql   # Triggers on auth.users to auto-create and auto-delete public.users
     ├── 0004_custom_jwt_hook.sql     # Auth hook to inject role into JWT claims
     ├── 0005_realtime_messages.sql   # ALTER PUBLICATION supabase_realtime ADD TABLE messages

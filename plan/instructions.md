@@ -1,0 +1,1 @@
+We are in the process of building the system one step/phase at the time. Build the next part of the system according to the plan and the checklist. The checklist tracks the current progress of the plan. If something diverges from the full-plan during the development phase, update to full-plan to reflect the changes. When tasks are complete check them as complete in the checklist.

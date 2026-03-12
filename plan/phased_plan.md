@@ -4,7 +4,7 @@ overview: Break the validated full-plan into 11 distinct, sequential build steps
 todos:
   - id: step-01
     content: "Step 1: Project Scaffold and Configuration (Phase 2) -- Next.js init, deps, Supabase clients, env config, next.config.ts"
-    status: pending
+    status: completed
   - id: step-02
     content: "Step 2: Database Migrations (Phase 3) -- 7 SQL migration files: schema, RLS, triggers, JWT hook, Realtime, storage, RPCs"
     status: pending

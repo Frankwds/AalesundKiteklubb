@@ -15,18 +15,18 @@ Progress tracker for the full-stack implementation. Work top to bottom — later
 
 ## Phase 2 — Project Scaffold
 
-- [ ] Init Next.js 15 with TypeScript, Tailwind, App Router, `src/` dir, pnpm
-- [ ] Install runtime dependencies: `@supabase/supabase-js`, `@supabase/ssr`, `resend`, `@react-email/components`, `sonner`, `zod`
-- [ ] Install dev dependency: `supabase` CLI
-- [ ] Init shadcn/ui (`pnpm dlx shadcn@latest init`)
-- [ ] Create `.env.local.example` with all required env vars (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `NEXT_PUBLIC_SITE_URL`)
-- [ ] Create `.env.local` with real values
-- [ ] Create `src/lib/supabase/client.ts` — browser client (`createBrowserClient`)
-- [ ] Create `src/lib/supabase/server.ts` — async server client with `await cookies()` + `getAll`/`setAll`
-- [ ] Create `src/lib/supabase/middleware.ts` — session refresh helper using `request.cookies`/`response.cookies`
-- [ ] Create `src/lib/supabase/admin.ts` — service role client (`import 'server-only'`)
-- [ ] Configure `next.config.ts` — `images.remotePatterns` for Supabase Storage domain
-- [ ] Add `db:push`, `db:types`, `db:sync` scripts to `package.json`
+- [x] Init Next.js 15 with TypeScript, Tailwind, App Router, `src/` dir, pnpm
+- [x] Install runtime dependencies: `@supabase/supabase-js`, `@supabase/ssr`, `resend`, `@react-email/components`, `sonner`, `zod`
+- [x] Install dev dependency: `supabase` CLI
+- [x] Init shadcn/ui (`pnpm dlx shadcn@latest init`)
+- [x] Create `.env.local.example` with all required env vars (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `NEXT_PUBLIC_SITE_URL`)
+- [x] Create `.env.local` with real values
+- [x] Create `src/lib/supabase/client.ts` — browser client (`createBrowserClient`)
+- [x] Create `src/lib/supabase/server.ts` — async server client with `await cookies()` + `getAll`/`setAll`
+- [x] Create `src/lib/supabase/middleware.ts` — session refresh helper using `request.cookies`/`response.cookies`
+- [x] Create `src/lib/supabase/admin.ts` — service role client (`import 'server-only'`)
+- [x] Configure `next.config.ts` — `images.remotePatterns` for Supabase Storage domain
+- [x] Add `db:push`, `db:types`, `db:sync` scripts to `package.json`
 
 ---
 

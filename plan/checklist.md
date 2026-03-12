@@ -78,9 +78,9 @@ Progress tracker for the full-stack implementation. Work top to bottom — later
 - [x] `demote_admin_to_instructor(p_user_id)` — sets `users.role = 'instructor'` only (preserves `instructors` row); guards: self-demotion, last-admin
 
 ### Apply & Type-gen
-- [ ] Run `supabase db push` to apply all migrations **(dev Supabase project)**
-- [ ] Configure Auth Hook in Supabase Dashboard (Authentication > Hooks > Custom Access Token → `public.custom_access_token_hook`) **(dev Supabase project)**
-- [ ] Run `pnpm db:types` to generate `src/types/database.ts`
+- [x] Run `supabase db push` to apply all migrations **(dev Supabase project)**
+- [x] Configure Auth Hook in Supabase Dashboard (Authentication > Hooks > Custom Access Token → `public.custom_access_token_hook`) **(dev Supabase project)**
+- [x] Run `pnpm db:types` to generate `src/types/database.ts`
 - [ ] Bootstrap first admin: log in via Google, then via SQL Editor set `users.role = 'admin'` and insert `instructors` row; re-login to get updated JWT
 
 ---

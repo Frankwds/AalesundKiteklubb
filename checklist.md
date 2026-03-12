@@ -1,0 +1,232 @@
+# Ålesund Kiteklubb — Build Checklist
+
+Progress tracker for the full-stack implementation. Work top to bottom — later sections depend on earlier ones.
+
+---
+
+## Phase 1 — External Setup (Manual)
+
+- [ ] Create Supabase hosted project; note URL, anon key, service role key
+- [ ] Enable Google OAuth in Supabase Dashboard (Authentication > Providers > Google); add redirect URL `/auth/callback`
+- [ ] Create OAuth 2.0 credentials in Google Cloud Console; add Supabase callback URL to Authorized redirect URIs; paste Client ID + Secret into Supabase
+- [ ] Set up Resend account; verify sending domain (or use `onboarding@resend.dev` for dev); obtain API key
+
+---
+
+## Phase 2 — Project Scaffold
+
+- [ ] Init Next.js 15 with TypeScript, Tailwind, App Router, `src/` dir, pnpm
+- [ ] Install runtime dependencies: `@supabase/supabase-js`, `@supabase/ssr`, `resend`, `@react-email/components`, `sonner`, `zod`
+- [ ] Install dev dependency: `supabase` CLI
+- [ ] Init shadcn/ui (`pnpm dlx shadcn@latest init`)
+- [ ] Create `.env.local.example` with all required env vars (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `NEXT_PUBLIC_SITE_URL`)
+- [ ] Create `.env.local` with real values
+- [ ] Create `src/lib/supabase/client.ts` — browser client (`createBrowserClient`)
+- [ ] Create `src/lib/supabase/server.ts` — async server client with `await cookies()` + `getAll`/`setAll`
+- [ ] Create `src/lib/supabase/middleware.ts` — session refresh helper using `request.cookies`/`response.cookies`
+- [ ] Create `src/lib/supabase/admin.ts` — service role client (`import 'server-only'`)
+- [ ] Configure `next.config.ts` — `images.remotePatterns` for Supabase Storage domain
+- [ ] Add `db:push`, `db:types`, `db:sync` scripts to `package.json`
+
+---
+
+## Phase 3 — Database Migrations
+
+- [ ] Run `supabase init` and `supabase link` to connect local project to hosted Supabase
+
+### Migration 0001 — Initial Schema
+- [ ] Create enums: `user_role` (`user`, `instructor`, `admin`), `season` (`summer`, `winter`), `skill_level` (`beginner`, `experienced`)
+- [ ] Create `users` table
+- [ ] Create `instructors` table
+- [ ] Create `courses` table (with `end_time > start_time` CHECK constraint)
+- [ ] Create `course_participants` table (with unique constraint on `user_id, course_id`)
+- [ ] Create `messages` table (`user_id` nullable with `ON DELETE SET NULL`)
+- [ ] Create `subscriptions` table (`user_id` unique)
+- [ ] Create `spots` table (`wind_directions text[]`, `water_type text[]`)
+
+### Migration 0002 — RLS Policies (33 total)
+- [ ] Enable RLS on all 7 tables
+- [ ] **Users** — 4 policies: own read, co-participant read, instructor read own courses, admin full access
+- [ ] **Instructors** — 4 policies: public read (anon), authenticated read, own update, admin full access
+- [ ] **Courses** — 6 policies: public read (anon), authenticated read, instructor insert/update/delete own, admin full access
+- [ ] **Course Participants** — 7 policies: own enrollments, instructor view own course participants, co-participant read, self-enroll, self-unenroll, instructor remove from own, admin full access
+- [ ] **Messages** — 5 policies: participant read, instructor read own courses, participant insert, instructor insert own courses, admin full access
+- [ ] **Subscriptions** — 4 policies: own read, own insert, own delete, admin full access
+- [ ] **Spots** — 3 policies: public read (anon), authenticated read, admin full access
+
+### Migration 0003 — User Sync Trigger
+- [ ] `handle_new_user()` function + `on_auth_user_created` AFTER INSERT trigger on `auth.users`
+- [ ] `handle_user_deleted()` function + `on_auth_user_deleted` AFTER DELETE trigger on `auth.users`
+
+### Migration 0004 — Custom JWT Claims Hook
+- [ ] `custom_access_token_hook()` function (SECURITY DEFINER, with `EXCEPTION WHEN OTHERS` fallback)
+- [ ] Grant `supabase_auth_admin` usage on schema, execute on function, all on `users` table; revoke from `authenticated`/`anon`/`public`
+
+### Migration 0005 — Realtime Publication
+- [ ] `ALTER PUBLICATION supabase_realtime ADD TABLE public.messages`
+
+### Migration 0006 — Storage Buckets
+- [ ] Create `spot-maps` bucket (5 MB, jpeg/png/webp, public)
+- [ ] Create `instructor-photos` bucket (2 MB, jpeg/png/webp, public)
+- [ ] `spot-maps` RLS: public SELECT; admin-only INSERT, UPDATE, DELETE (JWT `user_role = 'admin'`)
+- [ ] `instructor-photos` RLS: public SELECT; instructor/admin INSERT to own folder; own folder UPDATE/DELETE
+
+### Migration 0007 — Promote/Demote RPCs
+- [ ] `promote_to_instructor(p_user_id)` — creates `instructors` row + sets `users.role = 'instructor'`
+- [ ] `promote_to_admin(p_user_id)` — creates `instructors` row + sets `users.role = 'admin'`
+- [ ] `demote_to_user(p_user_id)` — deletes `instructors` row + sets `users.role = 'user'`; guards: self-demotion, last-admin
+- [ ] `demote_admin_to_instructor(p_user_id)` — sets `users.role = 'instructor'` only (preserves `instructors` row); guards: self-demotion, last-admin
+
+### Apply & Type-gen
+- [ ] Run `supabase db push` to apply all migrations **(dev Supabase project)**
+- [ ] Configure Auth Hook in Supabase Dashboard (Authentication > Hooks > Custom Access Token → `public.custom_access_token_hook`) **(dev Supabase project)**
+- [ ] Run `pnpm db:types` to generate `src/types/database.ts`
+- [ ] Bootstrap first admin: log in via Google, then via SQL Editor set `users.role = 'admin'` and insert `instructors` row; re-login to get updated JWT
+
+---
+
+## Phase 4 — Authentication & Middleware
+
+- [ ] Create `src/app/auth/callback/route.ts` — exchange code for session, upsert `public.users` via service role client (Zod `UserSyncSchema` whitelist, no `role` field), redirect to `/`
+- [ ] Create `src/lib/validations/user-sync.ts` — `UserSyncSchema` (id, email, name, avatar_url only)
+- [ ] Create `src/lib/auth/decode-jwt.ts` — Edge-safe base64url → JSON decoder
+- [ ] Create `src/lib/auth/index.ts` — `getCurrentUser()` using `getSession()` + JWT decode for `user_role`
+- [ ] Create `src/middleware.ts` — calls `updateSession()`, reads JWT for role, applies route guards:
+  - `/admin/*` → admin only
+  - `/instructor/*` → instructor or admin
+  - `/courses/*/chat` → authenticated only (enrollment checked at page level)
+  - Copy cookies from `supabaseResponse` onto any redirect response
+- [ ] Create `src/app/login/page.tsx` — "Sign in with Google" button
+
+---
+
+## Phase 5 — Design System & Root Layout
+
+- [ ] Set up Tailwind design tokens: blue palette (`sky-600`, `sky-800`), off-white (`#FAFAF8`), Inter font via `next/font`
+- [ ] Create `src/lib/utils/date.ts` — `formatDate`, `formatDateTime`, `formatTime`, `formatCourseTime`, `todayOsloISO` (all `Europe/Oslo`, `nb-NO`)
+- [ ] Create `src/lib/logger.ts` — `log()` and `logError()` structured console output (no PII)
+- [ ] Create `src/app/layout.tsx` — root layout: panorama background, off-white content card, sticky navbar, footer, `<Sonner />` toast provider
+- [ ] Build `Navbar` component — sticky top, centered items; hamburger + full-screen overlay on mobile; horizontal on desktop
+- [ ] Build `Footer` component
+- [ ] Build `ContentCard` component — off-white card over panorama background
+- [ ] Create `src/app/loading.tsx` — global `<SkeletonSpinner />`
+- [ ] Create `src/app/error.tsx` — global error boundary with retry button
+- [ ] Create `src/app/not-found.tsx` — custom 404 page
+- [ ] Create `src/components/ui/skeletons.tsx` — `SkeletonCard`, `SkeletonTable`, `SkeletonDetail`, `SkeletonSpinner`
+
+---
+
+## Phase 6 — Validation Schemas & Server Actions
+
+- [ ] Create `src/lib/validations/courses.ts` — `publishCourseSchema` (with `endTime > startTime` refine)
+- [ ] Create `src/lib/validations/spots.ts`
+- [ ] Create `src/lib/validations/instructors.ts`
+- [ ] Create `src/lib/validations/subscriptions.ts`
+
+### Server Actions
+- [ ] `src/lib/actions/courses.ts`:
+  - [ ] `publishCourse` — lookup instructorId from auth, insert course, fetch subscribers via service role client, send notification emails via `Promise.allSettled` + single retry; return `{ course, notificationsSent, notificationsFailed }`; `revalidatePath('/courses', '/instructor', '/admin')`
+  - [ ] `enrollInCourse` — capacity check, insert; on 23505 return "already enrolled"; send enrollment confirmation email; `revalidatePath('/courses')`
+  - [ ] `unenrollFromCourse` — delete own `course_participants` row; `revalidatePath('/courses')`
+  - [ ] `updateCourse` — update own course; `revalidatePath('/courses', '/instructor', '/admin')`
+  - [ ] `deleteCourse` — fetch participant emails (regular client), send cancellation emails via `Promise.allSettled` + single retry, delete course; `revalidatePath('/courses', '/instructor', '/admin')`
+- [ ] `src/lib/actions/instructors.ts`:
+  - [ ] `promoteToInstructor` — `supabase.rpc('promote_to_instructor', ...)`; `revalidatePath('/admin')`
+  - [ ] `promoteToAdmin` — `supabase.rpc('promote_to_admin', ...)`; `revalidatePath('/admin')`
+  - [ ] `demoteToUser` — `supabase.rpc('demote_to_user', ...)`; `revalidatePath('/admin')`
+  - [ ] `demoteAdminToInstructor` — `supabase.rpc('demote_admin_to_instructor', ...)`; `revalidatePath('/admin')`
+  - [ ] `updateInstructorProfile` — update own instructor row; upload photo to `instructor-photos/{uid}/` if provided; `revalidatePath('/instructor', '/courses')`
+- [ ] `src/lib/actions/messages.ts` — `sendMessage` — insert into `messages`; no `revalidatePath` (Realtime handles updates)
+- [ ] `src/lib/actions/subscriptions.ts` — `subscribe` / `unsubscribe`; `revalidatePath('/courses')`
+- [ ] `src/lib/actions/spots.ts` — `createSpot` (create row → upload image → update `map_image_url`; rollback spot row on upload failure), `updateSpot`, `deleteSpot`; `revalidatePath('/spots', '/admin')`
+- [ ] `src/lib/actions/users.ts` — re-exports role-change RPCs for use in Brukere tab
+- [ ] `src/lib/actions/auth.ts` — `signOut` (signOut + `redirect('/')`), `deleteAccount` (service role `deleteUser` + `redirect('/')`) — **v1 scope decision:** `deleteAccount` is implemented but has no UI entry point; add a "Delete account" button to the courses page or defer to a future account settings page (`src/app/account/page.tsx`)
+
+---
+
+## Phase 7 — Data Queries
+
+- [ ] `src/lib/queries/courses.ts` — `getCoursesForPublicPage()` (future only, `gte(new Date().toISOString())`), `getCoursesForAdmin()` (all), `getCoursesForInstructor()` (lookup instructor ID first, then filter by `instructor_id`)
+- [ ] `src/lib/queries/instructors.ts` — `getInstructors()` with joined `users(*)`
+- [ ] `src/lib/queries/messages.ts` — `getMessages(courseId)` with joined `users(name, avatar_url)`, ordered by `created_at`
+- [ ] `src/lib/queries/subscriptions.ts` — `getUserSubscription(userId)` (own row); `getAllSubscriberEmails()` via service role client
+- [ ] `src/lib/queries/spots.ts` — `getSpots()` (all spots, filtering done client-side); `getSpot(id)`
+- [ ] `src/lib/queries/users.ts` — `getAllUsers()` via service role client (admin Brukere tab)
+
+---
+
+## Phase 8 — Email Templates
+
+- [ ] Create `src/lib/email/resend.ts` — Resend client (`import 'server-only'`)
+- [ ] Create `src/lib/email/templates/new-course.tsx` — subscriber notification (title, date/time range, instructor, price, spot link, enroll link)
+- [ ] Create `src/lib/email/templates/enrollment-confirmation.tsx` — user confirmation on enroll (course details, spot link, chat link, unenroll note)
+- [ ] Create `src/lib/email/templates/course-cancellation.tsx` — enrolled participant notification on course deletion
+
+---
+
+## Phase 9 — Pages
+
+### Front Page
+- [ ] `src/app/page.tsx` — hero (Giske panorama + club name), about section, Facebook/chat links
+
+### Spots
+- [ ] `src/app/spots/loading.tsx` — `SkeletonCard` grid
+- [ ] `src/app/spots/page.tsx` — filter drawer (season, area, wind direction — URL param sync), spot card grid, empty state
+- [ ] `src/app/spots/[id]/loading.tsx` — `SkeletonDetail`
+- [ ] `src/app/spots/[id]/page.tsx` — wind compass, description, map image, Yr link, Google Maps link (null guards), skill level + notes, water type badges
+- [ ] Build `SpotCard`, `SpotList`, `SpotFilters`, `WindCompass` components
+
+### Courses
+- [ ] `src/app/courses/loading.tsx` — `SkeletonCard` grid
+- [ ] `src/app/courses/page.tsx`:
+  - [ ] Intro section
+  - [ ] Course card list (instructor, date/time via `formatCourseTime`, spot link, price; null-guards for `instructor_id` and `spot_id`)
+  - [ ] Enroll / unenroll buttons with confirmation dialogs (display-only email field in enroll dialog)
+  - [ ] "Chat" button visible only when enrolled / instructor / admin
+  - [ ] Empty state with subscribe CTA
+  - [ ] Subscribe / unsubscribe section (login required, confirmation dialogs)
+  - [ ] Read `?error=not_enrolled` param and show toast
+
+### Course Chat
+- [ ] `src/app/courses/[id]/chat/loading.tsx` — skeleton for message list
+- [ ] `src/app/courses/[id]/chat/page.tsx`:
+  - [ ] Page-level access check (enrolled OR instructor OR admin); redirect with error param if not
+  - [ ] Server-side: fetch initial messages with joined user data; fetch instructor profile
+  - [ ] Pass seed data to client component (profile cache)
+  - [ ] Build `ChatWindow` — append-only message log, newest at bottom, auto-scroll
+  - [ ] Build `MessageBubble` — avatar, name, timestamp (`formatTime`)
+  - [ ] Build `MessageInput` — form that calls `sendMessage` action; no optimistic UI in v1
+  - [ ] Supabase Realtime subscription (`postgres_changes` on `messages` filtered by `course_id`)
+  - [ ] Profile cache: seed from initial messages + instructor; on-demand fetch on cache miss; placeholder while fetching; "Ukjent bruker" on fetch failure; "Slettet bruker" for `null` user_id
+
+### Admin Dashboard
+- [ ] `src/app/admin/loading.tsx` — `SkeletonTable`
+- [ ] `src/app/admin/page.tsx` — server component fetches all tab data upfront; passes as props
+- [ ] **Tab: Instruktører** — DataTable; "Legg til instruktør" dialog (user search/select, excludes existing instructors); remove action with confirmation dialog
+- [ ] **Tab: Kurs** — DataTable with "Kommende"/"Tidligere" tags; delete action (confirmation + cancellation emails); view participants dialog with remove buttons
+- [ ] **Tab: Spotter** — DataTable with season/area filters; "Ny spot" dialog; edit/delete row actions *(spot admin CMS — server actions implemented in Phase 6: `createSpot`, `updateSpot`, `deleteSpot`)*
+- [ ] **Tab: Abonnenter** — read-only DataTable
+- [ ] **Tab: Brukere** — DataTable; role change dropdown (disabled for own row); confirmation dialogs for instructor→user, admin→user, admin→instructor demotions; toast messages per operation
+
+### Instructor Dashboard
+- [ ] `src/app/instructor/loading.tsx` — `SkeletonTable`
+- [ ] `src/app/instructor/page.tsx` — server component fetches profile + courses
+- [ ] **Tab: Profil** — edit bio, certifications, years experience, phone, photo upload
+- [ ] **Tab: Mine Kurs** — DataTable; "Nytt kurs" dialog (date picker + HH:MM start/end time, spot Combobox, Oslo timezone ISO construction); edit/delete row actions (delete sends cancellation emails); view participants drawer/dialog with remove buttons
+
+---
+
+## Phase 10 — Polish & Deploy
+
+- [ ] Add `loading.tsx` to all remaining routes (`/login`, etc.)
+- [ ] Confirm all mutation buttons use `useTransition` + `isPending` spinner; dialog-close-then-toast sequence
+- [ ] Mobile-first responsive audit: hamburger nav, touch targets, single-column card stacks, tap-friendly forms
+- [ ] SEO meta tags in layout and key pages
+- [ ] Connect GitHub repo to Vercel; configure project settings
+- [ ] Set all environment variables in Vercel dashboard (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `NEXT_PUBLIC_SITE_URL`)
+- [ ] Run `supabase db push` against production Supabase project **(production Supabase project)**
+- [ ] Configure Auth Hook in production Supabase Dashboard **(production Supabase project)**
+- [ ] Bootstrap first admin in production via SQL Editor
+- [ ] Verify Google OAuth redirect URIs include production domain
+- [ ] Verify Resend sending domain for production `RESEND_FROM_EMAIL`
+- [ ] Smoke test: sign in, enroll in course, access chat, send message, sign out

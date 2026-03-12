@@ -38,6 +38,8 @@ The following topics have been reviewed and addressed in previous iterations. Do
 - Chat profile enrichment over-engineering (CLAR-001): simplified to 2-level strategy (server-side seed + on-demand fallback)
 - Supabase client `Database` type generic (MISS-003): resolved — `createServerClient<Database>()` and `createBrowserClient<Database>()` now documented
 - JWT `decodeJwtPayload` base64url padding (ERR-003): resolved with `.padEnd()` padding restoration
+- Missing `demote_admin_to_instructor` in file structure comment, Section 6 instructors.ts intro, and Service Role Client section (ERR-004): resolved — all three locations now list all 4 RPCs consistently
+- Instructor→user demotion missing confirmation dialog (MISS-004): resolved — confirmation dialogs added for both Brukere tab dropdown and Instruktører tab Remove action, warning about course orphaning
 
 ## Output format
 

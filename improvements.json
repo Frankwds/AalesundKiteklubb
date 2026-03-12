@@ -1,1 +1,29 @@
-[]
+[
+  {
+    "id": "ERR-004",
+    "category": "inconsistency",
+    "location": "Section 2 — Migration table row for 0007; File Structure Overview — supabase/migrations/0007 comment",
+    "description": "Migration 0007 description lists only 3 RPCs (promote_to_instructor, promote_to_admin, demote_to_user) but the actual SQL and Section 6 reference 4 RPCs — `demote_admin_to_instructor` is missing from both the migration table and the file structure comment.",
+    "suggestion": "Update the migration table row for 0007 to: `promote_to_instructor, promote_to_admin, demote_to_user, demote_admin_to_instructor RPCs`. Update the file structure comment for 0007 to match.",
+    "confidence": "high"
+  },
+  {
+    "id": "MISS-004",
+    "category": "missing_info",
+    "location": "Section 5e — Admin Dashboard, Tab: Brukere; Section 5e — Tab: Instruktører (Remove action)",
+    "description": "Demoting an instructor to user (via Brukere dropdown or Instruktører 'Remove') calls `demote_to_user` which deletes the `instructors` row, causing all their courses to lose their `instructor_id` (ON DELETE SET NULL). The admin→instructor demotion has a detailed confirmation dialog explaining consequences, but the instructor→user demotion has no confirmation dialog and no warning about course orphaning.",
+    "suggestion": "Add a confirmation dialog for instructor→user demotion (both from Brukere tab and Instruktører tab Remove action) with text like: 'Denne brukeren er instruktør. Å endre rollen til bruker vil slette instruktørprofilen. Kurs tilknyttet denne instruktøren vil miste sin instruktørtilknytning. Vil du fortsette?' with 'Avbryt' and 'Bekreft' buttons.",
+    "confidence": "medium"
+  },
+  {
+    "summary": {
+      "applied": 1,
+      "modified": 1,
+      "skipped": 0,
+      "details": [
+        "ERR-004: MODIFIED — Migration table row was already correct (reviewer wrong); fixed the 3 other locations (file structure comment, Section 6 instructors.ts intro, Service Role Client section) that were missing demote_admin_to_instructor.",
+        "MISS-004: APPLIED — Added confirmation dialogs for instructor→user demotion in both Instruktører tab Remove action and Brukere tab role dropdown, warning about course orphaning."
+      ]
+    }
+  }
+]

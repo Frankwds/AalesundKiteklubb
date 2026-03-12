@@ -205,6 +205,7 @@ Key config files to create:
 - `src/lib/supabase/client.ts` -- Browser Supabase client (`createBrowserClient<Database>()` — import `Database` from `@/types/database` for full type inference)
 - `src/lib/supabase/server.ts` -- Server Supabase client (createServerClient with cookies). **Next.js 15 breaking change:** `cookies()` is now async -- `createClient()` must be an `async` function that `await`s `cookies()` before passing them to `createServerClient`. **`@supabase/ssr` ≥ 0.5 breaking change:** The individual `get`/`set`/`remove` cookie methods are deprecated — use only `getAll`/`setAll`.
 - `src/lib/supabase/middleware.ts` -- Auth session refresh helper (uses `request.cookies`/`response.cookies` from NextRequest/NextResponse — **not** `cookies()` from `next/headers`)
+- `next.config.ts` -- Configure `images.remotePatterns` to allow the Supabase Storage domain so `next/image` (`<Image>`) can optimize remote images: `{ protocol: 'https', hostname: '<project-ref>.supabase.co', pathname: '/storage/v1/object/public/**' }`
 - `.env.local.example` -- Template for required env vars
 
 **Reference implementation — `src/lib/supabase/server.ts`:**
@@ -1307,7 +1308,6 @@ RLS applies to Realtime events -- users only receive inserts for courses they're
 A server-only Supabase client using `SUPABASE_SERVICE_ROLE_KEY` that bypasses RLS. **Must start with `import 'server-only'`** — this makes any accidental client-component import a build-time error instead of silently leaking the key into browser JS. Used ONLY for:
 
 - **Auth callback upsert:** `INSERT ... ON CONFLICT` into `public.users` after `exchangeCodeForSession`. Service role is required because the callback runs before the user's RLS context is fully established, and we need to write to `public.users` regardless of existing policies.
-- **Admin role changes (promote/demote):** Must use Postgres RPC functions (`promote_to_instructor`, `promote_to_admin`, `demote_to_user`, `demote_admin_to_instructor`) via the admin's server client — never direct `users.role` update. The RPCs perform both `instructors` and `users.role` updates atomically in Postgres; direct service-role update would skip instructor sync and cause inconsistent state.
 - **publishCourse subscriber fetch:** The instructor's Supabase client has RLS that limits `subscriptions` to their own row. To send notification emails, we need all subscriber emails. Use the service role client for this single query: `adminClient.from('subscriptions').select('email')` — all subscribers receive notifications (email is always the verified Google auth email).
 
 This key is NEVER exposed to the client. Environment variable: `SUPABASE_SERVICE_ROLE_KEY` (server-only, not `NEXT_PUBLIC_`).

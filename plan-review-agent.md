@@ -31,6 +31,9 @@ Read the entire plan (including YAML frontmatter, markdown sections, code blocks
 
 The following topics have been reviewed and addressed in previous iterations. Do not suggest changes for these unless a new, distinct issue is found:
 
+- **Service Role Client bullet for promote/demote RPCs (CLAR-001):** The contradictory "Admin role changes" bullet was removed from the Service Role Client section. RPCs use the regular server client (not service role), as already documented in the RPCs section and actions/instructors.ts.
+- **next.config.ts for Supabase Storage images (MISS-001):** `next.config.ts` with `images.remotePatterns` for the Supabase Storage domain has been added to the "Key config files to create" list in Section 1.
+
 ## Output format
 
 Return a JSON array of improvement items in /improvements.json. Each item must have:

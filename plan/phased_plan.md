@@ -7,7 +7,7 @@ todos:
     status: completed
   - id: step-02
     content: "Step 2: Database Migrations (Phase 3) -- 7 SQL migration files: schema, RLS, triggers, JWT hook, Realtime, storage, RPCs"
-    status: pending
+    status: completed
   - id: step-03
     content: "Step 3: Authentication and Middleware (Phase 4) -- OAuth callback, JWT decode, auth helpers, middleware route guards, login page"
     status: pending

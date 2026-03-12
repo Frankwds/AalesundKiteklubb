@@ -32,50 +32,50 @@ Progress tracker for the full-stack implementation. Work top to bottom — later
 
 ## Phase 3 — Database Migrations
 
-- [ ] Run `supabase init` and `supabase link` to connect local project to hosted Supabase
+- [x] Run `supabase init` and `supabase link` to connect local project to hosted Supabase
 
 ### Migration 0001 — Initial Schema
-- [ ] Create enums: `user_role` (`user`, `instructor`, `admin`), `season` (`summer`, `winter`), `skill_level` (`beginner`, `experienced`)
-- [ ] Create `users` table
-- [ ] Create `instructors` table
-- [ ] Create `courses` table (with `end_time > start_time` CHECK constraint)
-- [ ] Create `course_participants` table (with unique constraint on `user_id, course_id`)
-- [ ] Create `messages` table (`user_id` nullable with `ON DELETE SET NULL`)
-- [ ] Create `subscriptions` table (`user_id` unique)
-- [ ] Create `spots` table (`wind_directions text[]`, `water_type text[]`)
+- [x] Create enums: `user_role` (`user`, `instructor`, `admin`), `season` (`summer`, `winter`), `skill_level` (`beginner`, `experienced`)
+- [x] Create `users` table
+- [x] Create `instructors` table
+- [x] Create `courses` table (with `end_time > start_time` CHECK constraint)
+- [x] Create `course_participants` table (with unique constraint on `user_id, course_id`)
+- [x] Create `messages` table (`user_id` nullable with `ON DELETE SET NULL`)
+- [x] Create `subscriptions` table (`user_id` unique)
+- [x] Create `spots` table (`wind_directions text[]`, `water_type text[]`)
 
 ### Migration 0002 — RLS Policies (33 total)
-- [ ] Enable RLS on all 7 tables
-- [ ] **Users** — 4 policies: own read, co-participant read, instructor read own courses, admin full access
-- [ ] **Instructors** — 4 policies: public read (anon), authenticated read, own update, admin full access
-- [ ] **Courses** — 6 policies: public read (anon), authenticated read, instructor insert/update/delete own, admin full access
-- [ ] **Course Participants** — 7 policies: own enrollments, instructor view own course participants, co-participant read, self-enroll, self-unenroll, instructor remove from own, admin full access
-- [ ] **Messages** — 5 policies: participant read, instructor read own courses, participant insert, instructor insert own courses, admin full access
-- [ ] **Subscriptions** — 4 policies: own read, own insert, own delete, admin full access
-- [ ] **Spots** — 3 policies: public read (anon), authenticated read, admin full access
+- [x] Enable RLS on all 7 tables
+- [x] **Users** — 4 policies: own read, co-participant read, instructor read own courses, admin full access
+- [x] **Instructors** — 4 policies: public read (anon), authenticated read, own update, admin full access
+- [x] **Courses** — 6 policies: public read (anon), authenticated read, instructor insert/update/delete own, admin full access
+- [x] **Course Participants** — 7 policies: own enrollments, instructor view own course participants, co-participant read, self-enroll, self-unenroll, instructor remove from own, admin full access
+- [x] **Messages** — 5 policies: participant read, instructor read own courses, participant insert, instructor insert own courses, admin full access
+- [x] **Subscriptions** — 4 policies: own read, own insert, own delete, admin full access
+- [x] **Spots** — 3 policies: public read (anon), authenticated read, admin full access
 
 ### Migration 0003 — User Sync Trigger
-- [ ] `handle_new_user()` function + `on_auth_user_created` AFTER INSERT trigger on `auth.users`
-- [ ] `handle_user_deleted()` function + `on_auth_user_deleted` AFTER DELETE trigger on `auth.users`
+- [x] `handle_new_user()` function + `on_auth_user_created` AFTER INSERT trigger on `auth.users`
+- [x] `handle_user_deleted()` function + `on_auth_user_deleted` AFTER DELETE trigger on `auth.users`
 
 ### Migration 0004 — Custom JWT Claims Hook
-- [ ] `custom_access_token_hook()` function (SECURITY DEFINER, with `EXCEPTION WHEN OTHERS` fallback)
-- [ ] Grant `supabase_auth_admin` usage on schema, execute on function, all on `users` table; revoke from `authenticated`/`anon`/`public`
+- [x] `custom_access_token_hook()` function (SECURITY DEFINER, with `EXCEPTION WHEN OTHERS` fallback)
+- [x] Grant `supabase_auth_admin` usage on schema, execute on function, all on `users` table; revoke from `authenticated`/`anon`/`public`
 
 ### Migration 0005 — Realtime Publication
-- [ ] `ALTER PUBLICATION supabase_realtime ADD TABLE public.messages`
+- [x] `ALTER PUBLICATION supabase_realtime ADD TABLE public.messages`
 
 ### Migration 0006 — Storage Buckets
-- [ ] Create `spot-maps` bucket (5 MB, jpeg/png/webp, public)
-- [ ] Create `instructor-photos` bucket (2 MB, jpeg/png/webp, public)
-- [ ] `spot-maps` RLS: public SELECT; admin-only INSERT, UPDATE, DELETE (JWT `user_role = 'admin'`)
-- [ ] `instructor-photos` RLS: public SELECT; instructor/admin INSERT to own folder; own folder UPDATE/DELETE
+- [x] Create `spot-maps` bucket (5 MB, jpeg/png/webp, public)
+- [x] Create `instructor-photos` bucket (2 MB, jpeg/png/webp, public)
+- [x] `spot-maps` RLS: public SELECT; admin-only INSERT, UPDATE, DELETE (JWT `user_role = 'admin'`)
+- [x] `instructor-photos` RLS: public SELECT; instructor/admin INSERT to own folder; own folder UPDATE/DELETE
 
 ### Migration 0007 — Promote/Demote RPCs
-- [ ] `promote_to_instructor(p_user_id)` — creates `instructors` row + sets `users.role = 'instructor'`
-- [ ] `promote_to_admin(p_user_id)` — creates `instructors` row + sets `users.role = 'admin'`
-- [ ] `demote_to_user(p_user_id)` — deletes `instructors` row + sets `users.role = 'user'`; guards: self-demotion, last-admin
-- [ ] `demote_admin_to_instructor(p_user_id)` — sets `users.role = 'instructor'` only (preserves `instructors` row); guards: self-demotion, last-admin
+- [x] `promote_to_instructor(p_user_id)` — creates `instructors` row + sets `users.role = 'instructor'`
+- [x] `promote_to_admin(p_user_id)` — creates `instructors` row + sets `users.role = 'admin'`
+- [x] `demote_to_user(p_user_id)` — deletes `instructors` row + sets `users.role = 'user'`; guards: self-demotion, last-admin
+- [x] `demote_admin_to_instructor(p_user_id)` — sets `users.role = 'instructor'` only (preserves `instructors` row); guards: self-demotion, last-admin
 
 ### Apply & Type-gen
 - [ ] Run `supabase db push` to apply all migrations **(dev Supabase project)**

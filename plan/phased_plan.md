@@ -10,7 +10,7 @@ todos:
     status: completed
   - id: step-03
     content: "Step 3: Authentication and Middleware (Phase 4) -- OAuth callback, JWT decode, auth helpers, middleware route guards, login page"
-    status: pending
+    status: completed
   - id: step-04
     content: "Step 4: Design System, Root Layout and Shared Components (Phase 5) -- Tailwind tokens, layout, navbar, footer, skeletons, error/404 pages"
     status: pending

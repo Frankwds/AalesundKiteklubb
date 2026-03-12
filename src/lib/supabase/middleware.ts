@@ -25,9 +25,9 @@ export async function updateSession(request: NextRequest) {
     },
   )
 
-  // IMPORTANT: Do not add logic between createServerClient and supabase.auth.getUser().
-  // A simple mistake could make it very hard to debug session issues.
+  // Validate the session — triggers token refresh if needed,
+  // which calls setAll above to update cookies on both request and response.
   await supabase.auth.getUser()
 
-  return supabaseResponse
+  return { supabaseResponse, supabase }
 }

@@ -81,22 +81,22 @@ Progress tracker for the full-stack implementation. Work top to bottom — later
 - [x] Run `supabase db push` to apply all migrations **(dev Supabase project)**
 - [x] Configure Auth Hook in Supabase Dashboard (Authentication > Hooks > Custom Access Token → `public.custom_access_token_hook`) **(dev Supabase project)**
 - [x] Run `pnpm db:types` to generate `src/types/database.ts`
-- [ ] Bootstrap first admin: log in via Google, then via SQL Editor set `users.role = 'admin'` and insert `instructors` row; re-login to get updated JWT
+- [x] Bootstrap first admin: log in via Google, then via SQL Editor set `users.role = 'admin'` and insert `instructors` row; re-login to get updated JWT
 
 ---
 
 ## Phase 4 — Authentication & Middleware
 
-- [ ] Create `src/app/auth/callback/route.ts` — exchange code for session, upsert `public.users` via service role client (Zod `UserSyncSchema` whitelist, no `role` field), redirect to `/`
-- [ ] Create `src/lib/validations/user-sync.ts` — `UserSyncSchema` (id, email, name, avatar_url only)
-- [ ] Create `src/lib/auth/decode-jwt.ts` — Edge-safe base64url → JSON decoder
-- [ ] Create `src/lib/auth/index.ts` — `getCurrentUser()` using `getSession()` + JWT decode for `user_role`
-- [ ] Create `src/middleware.ts` — calls `updateSession()`, reads JWT for role, applies route guards:
+- [x] Create `src/app/auth/callback/route.ts` — exchange code for session, upsert `public.users` via service role client (Zod `UserSyncSchema` whitelist, no `role` field), redirect to `/`
+- [x] Create `src/lib/validations/user-sync.ts` — `UserSyncSchema` (id, email, name, avatar_url only)
+- [x] Create `src/lib/auth/decode-jwt.ts` — Edge-safe base64url → JSON decoder
+- [x] Create `src/lib/auth/index.ts` — `getCurrentUser()` using `getSession()` + JWT decode for `user_role`
+- [x] Create `src/proxy.ts` — calls `updateSession()`, reads JWT for role, applies route guards:
   - `/admin/*` → admin only
   - `/instructor/*` → instructor or admin
   - `/courses/*/chat` → authenticated only (enrollment checked at page level)
   - Copy cookies from `supabaseResponse` onto any redirect response
-- [ ] Create `src/app/login/page.tsx` — "Sign in with Google" button
+- [x] Create `src/app/login/page.tsx` — "Sign in with Google" button
 
 ---
 

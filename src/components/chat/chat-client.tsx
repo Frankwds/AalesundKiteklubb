@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState, useCallback } from "react"
+import { useEffect, useRef, useState, useCallback, useMemo } from "react"
 import Link from "next/link"
 import { ArrowLeft, MessageCircle } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
@@ -28,6 +28,37 @@ interface ChatClientProps {
   instructorProfile: { id: string; name: string | null; avatarUrl: string | null } | null
 }
 
+function buildInitialCache(
+  initialMessages: InitialMessage[],
+  currentUser: CurrentUser,
+  instructorProfile: ChatClientProps["instructorProfile"]
+): Map<string, UserProfile> {
+  const cache = new Map<string, UserProfile>()
+
+  for (const msg of initialMessages) {
+    if (msg.user_id && msg.users) {
+      cache.set(msg.user_id, {
+        name: msg.users.name,
+        avatarUrl: msg.users.avatar_url,
+      })
+    }
+  }
+
+  cache.set(currentUser.id, {
+    name: currentUser.name,
+    avatarUrl: currentUser.avatarUrl,
+  })
+
+  if (instructorProfile) {
+    cache.set(instructorProfile.id, {
+      name: instructorProfile.name,
+      avatarUrl: instructorProfile.avatarUrl,
+    })
+  }
+
+  return cache
+}
+
 export function ChatClient({
   courseId,
   courseTitle,
@@ -36,34 +67,14 @@ export function ChatClient({
   instructorProfile,
 }: ChatClientProps) {
   const [messages, setMessages] = useState<Message[]>(initialMessages)
-  const profileCache = useRef<Map<string, UserProfile>>(new Map())
+  const initialCache = useMemo(
+    () => buildInitialCache(initialMessages, currentUser, instructorProfile),
+    [initialMessages, currentUser, instructorProfile]
+  )
+  const profileCache = useRef(initialCache)
   const [profileVersion, setProfileVersion] = useState(0)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
-
-  // Seed profile cache from initial messages + instructor
-  useEffect(() => {
-    for (const msg of initialMessages) {
-      if (msg.user_id && msg.users) {
-        profileCache.current.set(msg.user_id, {
-          name: msg.users.name,
-          avatarUrl: msg.users.avatar_url,
-        })
-      }
-    }
-
-    profileCache.current.set(currentUser.id, {
-      name: currentUser.name,
-      avatarUrl: currentUser.avatarUrl,
-    })
-
-    if (instructorProfile) {
-      profileCache.current.set(instructorProfile.id, {
-        name: instructorProfile.name,
-        avatarUrl: instructorProfile.avatarUrl,
-      })
-    }
-  }, [initialMessages, currentUser, instructorProfile])
 
   const isNearBottom = useCallback(() => {
     const el = scrollContainerRef.current

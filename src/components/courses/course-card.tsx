@@ -25,7 +25,6 @@ export function CourseCard({ course, user, isEnrolled }: CourseCardProps) {
     isEnrolled ||
     (user && (user.role === "instructor" || user.role === "admin"))
 
-
   return (
     <div className="rounded-lg border border-border bg-white p-5 transition-all hover:shadow-md">
       <div className="space-y-3">

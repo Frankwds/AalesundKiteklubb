@@ -188,16 +188,16 @@ Progress tracker for the full-stack implementation. Work top to bottom — later
   - [x] Read `?error=not_enrolled` param and show toast
 
 ### Course Chat
-- [ ] `src/app/courses/[id]/chat/loading.tsx` — skeleton for message list
-- [ ] `src/app/courses/[id]/chat/page.tsx`:
-  - [ ] Page-level access check (enrolled OR instructor OR admin); redirect with error param if not
-  - [ ] Server-side: fetch initial messages with joined user data; fetch instructor profile
-  - [ ] Pass seed data to client component (profile cache)
-  - [ ] Build `ChatWindow` — append-only message log, newest at bottom, auto-scroll
-  - [ ] Build `MessageBubble` — avatar, name, timestamp (`formatTime`)
-  - [ ] Build `MessageInput` — form that calls `sendMessage` action; no optimistic UI in v1
-  - [ ] Supabase Realtime subscription (`postgres_changes` on `messages` filtered by `course_id`)
-  - [ ] Profile cache: seed from initial messages + instructor; on-demand fetch on cache miss; placeholder while fetching; "Ukjent bruker" on fetch failure; "Slettet bruker" for `null` user_id
+- [x] `src/app/courses/[id]/chat/loading.tsx` — skeleton for message list
+- [x] `src/app/courses/[id]/chat/page.tsx`:
+  - [x] Page-level access check (enrolled OR instructor OR admin); redirect with error param if not
+  - [x] Server-side: fetch initial messages with joined user data; fetch instructor profile
+  - [x] Pass seed data to client component (profile cache)
+  - [x] Build `ChatWindow` — append-only message log, newest at bottom, auto-scroll
+  - [x] Build `MessageBubble` — avatar, name, timestamp (`formatTime`)
+  - [x] Build `MessageInput` — form that calls `sendMessage` action; no optimistic UI in v1
+  - [x] Supabase Realtime subscription (`postgres_changes` on `messages` filtered by `course_id`)
+  - [x] Profile cache: seed from initial messages + instructor; on-demand fetch on cache miss; placeholder while fetching; "Ukjent bruker" on fetch failure; "Slettet bruker" for `null` user_id
 
 ### Admin Dashboard
 - [ ] `src/app/admin/loading.tsx` — `SkeletonTable`

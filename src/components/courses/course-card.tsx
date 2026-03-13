@@ -18,7 +18,7 @@ interface CourseCardProps {
 }
 
 export function CourseCard({ course, user, isEnrolled }: CourseCardProps) {
-  const instructorName = course.instructors?.users?.name ?? null
+  const instructorLabel = course.instructors?.certifications ?? (course.instructors ? "Instruktør" : null)
   const spotName = course.spots?.name ?? null
   const dateTime = formatCourseTime(course.start_time, course.end_time)
   const showChat =
@@ -60,7 +60,7 @@ export function CourseCard({ course, user, isEnrolled }: CourseCardProps) {
 
           <div className="flex items-center gap-1.5">
             <User className="h-3.5 w-3.5 flex-shrink-0" />
-            <span>{instructorName ?? "Ikke bestemt"}</span>
+            <span>{instructorLabel ?? "Ikke bestemt"}</span>
           </div>
         </div>
 

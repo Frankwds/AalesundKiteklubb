@@ -1,7 +1,7 @@
 import { getCurrentUser } from "@/lib/auth"
-import { NavbarClient } from "./navbar-client"
+import { NavbarClientLoader } from "./navbar-client-loader"
 
 export async function Navbar() {
   const user = await getCurrentUser()
-  return <NavbarClient user={user} />
+  return <NavbarClientLoader user={user} />
 }

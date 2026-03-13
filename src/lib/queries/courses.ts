@@ -1,9 +1,20 @@
 import { createClient } from "@/lib/supabase/server"
 import { logError } from "@/lib/logger"
+import type { Database } from "@/types/database"
 
-const COURSE_SELECT = "*, instructors(*), spots(*)" as const
+const COURSE_SELECT = "*, instructors(*, users(name)), spots(name)" as const
 
-export async function getCoursesForPublicPage() {
+type CourseRow = Database["public"]["Tables"]["courses"]["Row"]
+type InstructorRow = Database["public"]["Tables"]["instructors"]["Row"]
+
+export type CourseWithRelations = CourseRow & {
+  instructors:
+    | (InstructorRow & { users: { name: string | null } | null })
+    | null
+  spots: { name: string } | null
+}
+
+export async function getCoursesForPublicPage(): Promise<CourseWithRelations[]> {
   const supabase = await createClient()
 
   const { data, error } = await supabase
@@ -17,10 +28,10 @@ export async function getCoursesForPublicPage() {
     return []
   }
 
-  return data
+  return data as unknown as CourseWithRelations[]
 }
 
-export async function getCoursesForAdmin() {
+export async function getCoursesForAdmin(): Promise<CourseWithRelations[]> {
   const supabase = await createClient()
 
   const { data, error } = await supabase
@@ -33,7 +44,7 @@ export async function getCoursesForAdmin() {
     return []
   }
 
-  return data
+  return data as unknown as CourseWithRelations[]
 }
 
 export async function getCoursesForInstructor() {
@@ -70,5 +81,5 @@ export async function getCoursesForInstructor() {
     return []
   }
 
-  return data
+  return data as unknown as CourseWithRelations[]
 }

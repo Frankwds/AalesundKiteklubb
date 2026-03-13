@@ -177,15 +177,15 @@ Progress tracker for the full-stack implementation. Work top to bottom — later
 - [x] Build `SpotCard`, `SpotList`, `SpotFilters`, `WindCompass` components
 
 ### Courses
-- [ ] `src/app/courses/loading.tsx` — `SkeletonCard` grid
-- [ ] `src/app/courses/page.tsx`:
-  - [ ] Intro section
-  - [ ] Course card list (instructor, date/time via `formatCourseTime`, spot link, price; null-guards for `instructor_id` and `spot_id`)
-  - [ ] Enroll / unenroll buttons with confirmation dialogs (display-only email field in enroll dialog)
-  - [ ] "Chat" button visible only when enrolled / instructor / admin
-  - [ ] Empty state with subscribe CTA
-  - [ ] Subscribe / unsubscribe section (login required, confirmation dialogs)
-  - [ ] Read `?error=not_enrolled` param and show toast
+- [x] `src/app/courses/loading.tsx` — `SkeletonCard` grid
+- [x] `src/app/courses/page.tsx`:
+  - [x] Intro section
+  - [x] Course card list (instructor, date/time via `formatCourseTime`, spot link, price; null-guards for `instructor_id` and `spot_id`)
+  - [x] Enroll / unenroll buttons with confirmation dialogs (display-only email field in enroll dialog)
+  - [x] "Chat" button visible only when enrolled / instructor / admin
+  - [x] Empty state with subscribe CTA
+  - [x] Subscribe / unsubscribe section (login required, confirmation dialogs)
+  - [x] Read `?error=not_enrolled` param and show toast
 
 ### Course Chat
 - [ ] `src/app/courses/[id]/chat/loading.tsx` — skeleton for message list

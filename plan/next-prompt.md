@@ -1,102 +1,110 @@
-Task: Implement Phase 9 — Spots Pages & Components
+Task: Implement Phase 9 — Courses Page & Components
 
 Read these files first:
 
-plan/checklist.md — progress tracker. Phases 1–8 and Phase 6 Server Actions are complete. The Front Page (`src/app/page.tsx`) is already built — check it off under Phase 9 → Front Page. Then build the Spots section items and check them off as you complete them.
+plan/checklist.md — progress tracker. Phases 1–8, Phase 6 Server Actions, and Phase 9 Spots are complete. Build the Courses section items and check them off as you complete them.
 plan/instructions.md — general workflow instructions.
-plan/kite-club-full-plan.md — Section 5b (lines ~1036–1045) for the spots listing page spec, Section 5b-ii (lines ~1047–1059) for the spot detail page spec, Section 8 (lines ~1391–1403) for the UI component list (SpotCard, SpotList, SpotFilters, WindCompass), Section 9 (lines ~1434–1494) for the design system (mobile-first, off-white card, blue accents, Inter font).
+plan/kite-club-full-plan.md — Section 5c (lines ~1061–1071) for the courses page spec, Section 8 (lines ~1391–1403) for the UI component list (CourseCard, CourseList, EnrollConfirmDialog, UnenrollConfirmDialog, SubscribeDialog, UnsubscribeDialog), Section 9 (lines ~1434–1494) for the design system. Also read lines ~1420–1431 for the form submission pending-state and toast conventions.
 
 Files you must read before writing any code:
 
 src/app/layout.tsx — root layout with panorama background, off-white content card, Navbar, Footer, Sonner toast provider. Content is rendered inside a `max-w-6xl` container with `bg-[#FAFAF8]` card.
-src/app/page.tsx — existing front page (hero, about, quick links). Use as a reference for the visual style and how pages render inside the content card.
-src/components/ui/skeletons.tsx — exports `SkeletonCard`, `SkeletonTable`, `SkeletonDetail`, `SkeletonSpinner`. Use these in `loading.tsx` files.
-src/components/ui/card.tsx — shadcn Card component.
-src/components/ui/badge.tsx — shadcn Badge component.
-src/components/ui/button.tsx — shadcn Button component.
-src/components/ui/separator.tsx — shadcn Separator component.
-src/lib/queries/spots.ts — `getSpots()` returns all spots (filtering is done client-side); `getSpot(id)` returns a single spot or null.
-src/lib/utils/date.ts — date formatting helpers (not heavily used for spots, but available).
-src/lib/utils.ts — `cn()` utility for merging Tailwind classes.
-src/types/database.ts — the `spots` table type: `id`, `name`, `description`, `area`, `season` (enum: 'summer'|'winter'|null), `skill_level` (enum: 'beginner'|'experienced'|null), `skill_notes`, `latitude`, `longitude`, `wind_directions` (string[]|null), `water_type` (string[]|null), `map_image_url`, `created_at`.
+src/app/page.tsx — front page for visual style reference.
+src/app/spots/page.tsx — spots page for how server components pass data to client components with Suspense.
+src/components/spots/spot-list.tsx — example of a client component that reads URL search params (for the `?error=not_enrolled` toast pattern).
+src/components/ui/skeletons.tsx — exports `SkeletonCard`. Use in `loading.tsx`.
+src/components/ui/dialog.tsx — shadcn Dialog using @base-ui/react. Exports: `Dialog`, `DialogTrigger`, `DialogContent`, `DialogHeader`, `DialogFooter`, `DialogTitle`, `DialogDescription`, `DialogClose`. Note: `DialogClose` wraps `@base-ui/react DialogPrimitive.Close` — use it to close dialogs from footer buttons.
+src/components/ui/card.tsx — shadcn Card.
+src/components/ui/badge.tsx — shadcn Badge.
+src/components/ui/button.tsx — shadcn Button (uses `render` prop pattern from base-ui).
+src/components/ui/button-variants.ts — cva button variants (use `buttonVariants()` for Link-based buttons).
+src/lib/queries/courses.ts — `getCoursesForPublicPage()` returns future courses with joined `instructors(*)` and `spots(*)` via `select("*, instructors(*), spots(*)")`. Returns `Database['public']['Tables']['courses']['Row']` extended with `instructors` and `spots` relations.
+src/lib/queries/subscriptions.ts — `getUserSubscription(userId)` returns the user's subscription row or null.
+src/lib/actions/courses.ts — `enrollInCourse(courseId)` (capacity check + insert + confirmation email; returns `{ success, error? }`), `unenrollFromCourse(courseId)` (delete + returns `{ success, error? }`).
+src/lib/actions/subscriptions.ts — `subscribe()` and `unsubscribe()` (both auto-read user from auth; return `{ success, error? }`).
+src/lib/auth/index.ts — `getCurrentUser()` returns `{ id, email, name, avatarUrl, role }` or null. Role is `'user' | 'instructor' | 'admin'`.
+src/lib/utils/date.ts — `formatCourseTime(start, end)` returns `"12. mars 2026, 10:00–14:00"`.
+src/lib/utils.ts — `cn()` for merging Tailwind classes.
+src/types/database.ts — full DB types. Course row: `id`, `title`, `description`, `start_time`, `end_time`, `price`, `max_participants`, `instructor_id`, `spot_id`, `created_at`. Subscription row: `id`, `user_id`, `email`, `created_at`.
 
-What to build (8 files):
+What to build (2 page files + components):
 
-1. src/app/spots/loading.tsx
-   - Import and render a grid of `SkeletonCard` components (e.g. 6 cards in a responsive grid).
+1. src/app/courses/loading.tsx
+   - Import and render a grid of `SkeletonCard` components (e.g. 6 cards).
 
-2. src/app/spots/page.tsx
-   - Server component that calls `getSpots()` and passes the data to a client component (`SpotList`).
-   - The page itself is simple — heading, description text, then `<SpotList spots={spots} />`.
+2. src/app/courses/page.tsx — Server component
+   - Calls `getCoursesForPublicPage()` to get courses with joined instructors + spots.
+   - Calls `getCurrentUser()` to get the logged-in user (may be null).
+   - If user is logged in, query `course_participants` via the Supabase server client to get the list of `course_id` values where `user_id` matches (enrolled course IDs). Also call `getUserSubscription(user.id)`.
+   - Passes all data to a client component: `<CoursesPageClient courses={courses} user={user} enrolledCourseIds={enrolledIds} subscription={subscription} />`.
+   - Wrap the client component in `<Suspense>` (for `useSearchParams`).
 
-3. src/app/spots/[id]/loading.tsx
-   - Import and render `SkeletonDetail`.
+3. src/components/courses/courses-page-client.tsx — `"use client"` — Main client component
+   - Receives: `courses`, `user` (CurrentUser | null), `enrolledCourseIds` (string[]), `subscription` (Subscription row | null).
+   - On mount, reads `?error=not_enrolled` from URL search params via `useSearchParams()`. If present, shows `toast.error("Du må være meldt på kurset for å se chatten.")` and removes the param from URL (router.replace without it).
+   - Renders three sections in order:
+     a. **Intro section** — heading "Kurs", brief description about the club's courses.
+     b. **Course cards** — if courses exist, render a grid/list of `CourseCard` components. If no courses, render the empty state (see below).
+     c. **Subscribe section** — at the bottom of the page.
 
-4. src/app/spots/[id]/page.tsx
-   - Server component that calls `getSpot(params.id)`. If null, call `notFound()` from 'next/navigation'.
-   - Renders all spot sections (see detail spec below).
-   - Sections: WindCompass, Om spotten (description), Kart (map image), Værmelding (Yr link), Veibeskrivelse (Google Maps link), Nødvendige kiteskills (skill level + notes), Type (water type badges).
+4. src/components/courses/course-card.tsx — `CourseCard`
+   - Props: `course` (with joined instructor + spot), `user` (CurrentUser | null), `isEnrolled` (boolean).
+   - Displays: title, date/time range (`formatCourseTime`), spot name linked to `/spots/[spot.id]` (or "Ikke bestemt" if `spot_id` is null), instructor name from joined instructor→users relation (or "Ikke bestemt" if null), price (formatted as "kr X" or "Gratis" if null/0).
+   - Participant count: if `max_participants` is set, display it (e.g. "Maks X deltakere").
+   - Buttons section (depends on user state):
+     - **Not logged in (`user` is null):** Show a Link styled as button: "Logg inn for å melde på" → `/login`.
+     - **Logged in, not enrolled:** "Meld på" button opens `EnrollDialog`.
+     - **Logged in, enrolled:** "Meld av" button opens `UnenrollDialog`. Also show "Chat" Link button → `/courses/[id]/chat`.
+   - **Chat button visibility:** Show "Chat" when user is enrolled OR user.role is `'instructor'` or `'admin'`.
+   - Use white background, border, rounded corners, subtle card style matching the spots cards.
 
-5. src/components/spots/spot-card.tsx — `SpotCard`
-   - Card showing: spot name, area, season badge, skill level badge, wind direction indicators.
-   - Wrapped in a Link to `/spots/[id]`.
-   - Use shadcn Card or a styled div with border, hover effect.
+5. src/components/courses/enroll-dialog.tsx — `EnrollDialog`
+   - Props: `courseId` (string), `courseTitle` (string), `userEmail` (string).
+   - Uses shadcn Dialog. Trigger is the "Meld på" button.
+   - Dialog content: title "Meld på kurs", description "Du melder deg på [courseTitle]. En bekreftelse sendes til:", then a display-only email field (styled as a muted input showing `userEmail`, not editable).
+   - Footer: "Avbryt" (DialogClose) + "Meld på" (submit button).
+   - On submit: use `useTransition` to call `enrollInCourse(courseId)`. While pending, disable button and show spinner (`Loader2` from lucide-react). On success: close dialog, `toast.success("Du er påmeldt!")`. On error: keep dialog open, `toast.error(result.error)`.
 
-6. src/components/spots/spot-list.tsx — `SpotList` (client component, `"use client"`)
-   - Receives `spots` array as prop.
-   - Contains `SpotFilters` inline (or as a child component).
-   - Reads URL search params on mount to initialize filter state.
-   - Filters spots client-side based on selected filters (season, area, wind directions).
-   - Renders a responsive grid of `SpotCard` components.
-   - Empty state: "Ingen spotter matcher filtrene" with a "Nullstill filtre" button.
+6. src/components/courses/unenroll-dialog.tsx — `UnenrollDialog`
+   - Props: `courseId` (string), `courseTitle` (string).
+   - Dialog content: title "Meld av kurs", description "Er du sikker på at du vil melde deg av [courseTitle]?".
+   - Footer: "Avbryt" (DialogClose) + "Meld av" (submit button).
+   - On submit: `useTransition` + `unenrollFromCourse(courseId)`. On success: close dialog, `toast.success("Du er avmeldt")`. On error: `toast.error(result.error)`.
 
-7. src/components/spots/spot-filters.tsx — `SpotFilters` (client component)
-   - Filter controls in a collapsible drawer/section at the top.
-   - Three filter groups:
-     - Season: toggle buttons for "Sommer" / "Vinter" (maps to 'summer' / 'winter').
-     - Area: buttons derived from the unique `area` values in the spots data.
-     - Wind direction: multi-select buttons for N, NE, E, SE, S, SW, W, NW. When multiple are selected, show spots whose `wind_directions` array contains ANY of the selected directions (OR semantics).
-   - Filters sync to URL params (e.g. `?season=summer&area=Giske&wind=N,SW`). Use `useRouter` + `useSearchParams` + `usePathname` to update the URL without a full page reload (`router.replace`).
-   - The drawer can be collapsed/expanded (use a toggle button like "Filtre ▼" / "Filtre ▲").
+7. src/components/courses/subscribe-section.tsx — `SubscribeSection`
+   - Props: `user` (CurrentUser | null), `subscription` (Subscription row | null).
+   - Renders a section with heading "Varsler", description about receiving email notifications when new courses are published.
+   - If not logged in: show text "Logg inn for å motta kursvarsler" with a Link to `/login`.
+   - If logged in and not subscribed: "Meld på varsler" button opens a confirmation dialog. Dialog shows: action description, display-only email field (user.email), "Avbryt" + "Meld på" buttons. On confirm: `useTransition` + `subscribe()`. Success: close dialog, `toast.success("Du vil få varsler om nye kurs")`. Error: `toast.error(result.error)`.
+   - If logged in and subscribed: show "Du mottar varsler om nye kurs" text + "Meld av varsler" button opens a confirmation dialog. Dialog: "Er du sikker på at du vil slutte å motta kursvarsler?", "Avbryt" + "Meld av". On confirm: `useTransition` + `unsubscribe()`. Success: close dialog, `toast.success("Du mottar ikke lenger kursvarsler")`. Error: `toast.error(result.error)`.
 
-8. src/components/spots/wind-compass.tsx — `WindCompass`
-   - Visual compass rose component.
-   - Props: `directions: string[]` (e.g. `['N', 'SW', 'W']`).
-   - Renders a circular compass with 8 direction labels (N, NE, E, SE, S, SW, W, NW).
-   - Favorable directions are highlighted (e.g. sky-600 blue fill/color), others are muted/gray.
-   - Should be visually clear at both small (card) and large (detail page) sizes. Accept an optional `size` prop (`'sm' | 'lg'`, default `'sm'`).
+Empty state (no courses):
 
-Spot detail page sections (src/app/spots/[id]/page.tsx):
-
-- **Back link** — "← Tilbake til spotter" link to `/spots`.
-- **Title** — spot name as `<h1>`.
-- **Badges row** — season badge (if set), skill level badge (if set), area badge.
-- **WindCompass** — render with `size="lg"` and the spot's `wind_directions`. If `wind_directions` is null/empty, hide the compass or show "Ingen vindretninger spesifisert".
-- **Om spotten** — `description` text. If null, omit section.
-- **Kart** — `map_image_url` rendered as an `<Image>` (next/image). If null, omit section.
-- **Værmelding** — Link to Yr.no: `https://www.yr.no/nb/v%C3%A6rvarsel/daglig-tabell/{latitude},{longitude}`. Opens in new tab. If latitude or longitude is null, hide this section.
-- **Veibeskrivelse** — "Vis i Google Maps" button: `https://www.google.com/maps?q={latitude},{longitude}`. Opens in new tab. If latitude or longitude is null, hide this section.
-- **Nødvendige kiteskills** — Render `skill_level` as a badge: 'beginner' → "Nybegynner", 'experienced' → "Erfaren". Show `skill_notes` text below. If both are null, omit section.
-- **Type** — `water_type` array rendered as badges with mapping: 'flat' → "Flatt vann", 'chop' → "Chop", 'waves' → "Bølger". If null/empty, omit section.
+When `courses` array is empty, instead of the card grid, render:
+- Muted text: "Kurs legges ut når forholdene ser lovende ut, ikke langt i forkant."
+- A call-to-action: "Meld deg på varsler for å bli informert når nye kurs publiseres." — this should scroll to or draw attention to the subscribe section below.
 
 Design guidelines:
 
-- Mobile-first: single-column card stack on mobile, grid on larger screens.
-- Use the existing design system: off-white content card (`bg-[#FAFAF8]`), sky-600/sky-800 blue accents, Inter font.
-- Cards: white background, border, subtle hover shadow. Rounded corners.
-- Badges: use shadcn Badge component. Season badges: "Sommer" (sky-100/sky-800), "Vinter" (blue-100/blue-800). Skill badges: "Nybegynner" (green-100/green-800), "Erfaren" (amber-100/amber-800). Water type badges: neutral style.
-- Page padding: `px-6 py-8` or similar, matching the front page style.
-- External links (Yr, Google Maps) open in new tabs with `target="_blank" rel="noopener noreferrer"`.
-- Use lucide-react icons where appropriate (e.g. MapPin, Wind, ExternalLink, ArrowLeft, ChevronDown).
+- Mobile-first: single-column card stack on mobile, 2-column grid on md+.
+- Use the existing design system: off-white card (`bg-[#FAFAF8]`), sky-600/sky-800 blue accents, Inter font.
+- Course cards: white background, border, rounded-lg, p-5, subtle hover shadow (same feel as spot cards).
+- Badges: use for spot name link (neutral), price.
+- Page padding: `px-6 py-8`, matching the spots page style.
+- External links open in new tabs.
+- Use lucide-react icons: `Calendar`, `MapPin`, `User`, `MessageCircle`, `Bell`, `Loader2`, `ArrowRight`.
+- All mutation buttons must use `useTransition` + `isPending` for pending state (spinner + disabled).
+- Dialog close-then-toast sequence: on success, (1) set dialog open to `false`, (2) show `toast.success()`.
+- Toast import: `import { toast } from "sonner"`.
 
 Important conventions:
 
-- `getSpots()` returns `Database['public']['Tables']['spots']['Row'][]`. Use this type or infer from the query return.
-- `wind_directions` and `water_type` are `string[] | null` in the DB type.
-- `season` and `skill_level` are enum types or null.
-- All filtering is client-side (the query fetches all spots). This is appropriate at the expected scale (~10–30 spots).
-- URL param sync uses `useSearchParams` (read-only) + `router.replace(pathname + '?' + params.toString())` for updates.
-- The `[id]` route uses `params` — in Next.js 15 App Router, `params` is a Promise that must be awaited: `const { id } = await params`.
+- `getCoursesForPublicPage()` returns courses with `.instructors` and `.spots` as joined relations. The instructor relation has nested `users` — but the public query uses `instructors(*)`, which returns the instructor row (bio, certifications, etc.) but NOT the joined user name. To get the instructor name: the query selects `"*, instructors(*), spots(*)"`. The `instructors` row has `user_id`, `bio`, `certifications`, etc. but not `name`. You need to handle this — either show instructor `certifications` or `bio` on the card, or accept that the instructor name is not directly available from this query. For v1, show the instructor info that IS available (e.g. skip showing instructor name if not in the join, or show "Instruktør" as a generic label). Alternatively, modify the query to `"*, instructors(*, users(name)), spots(*)"` — but check if this works by reading `src/lib/queries/courses.ts` and testing. The simplest correct approach: update `COURSE_SELECT` in `src/lib/queries/courses.ts` to `"*, instructors(*, users(name)), spots(name)"` so instructor name and spot name are available, then type the result accordingly.
+- `enrollInCourse` and `unenrollFromCourse` call `revalidatePath('/courses')`, so the page data refreshes automatically after enrollment changes.
+- `subscribe` and `unsubscribe` also call `revalidatePath('/courses')`.
+- In Next.js 15 App Router, `params` is a Promise that must be awaited.
+- For the `?error=not_enrolled` toast: use `useSearchParams` + `useEffect` to check on mount, then `router.replace(pathname)` to clean the URL.
+- The Dialog component uses @base-ui/react, not Radix. `DialogClose` works as a close trigger. To programmatically control open state, use `<Dialog open={open} onOpenChange={setOpen}>` and set `open` to `false` after successful mutation.
 
 Run `pnpm build` when done to verify no TypeScript errors.
-After completing each item, check it off in plan/checklist.md (Phase 9, Front Page + Spots sections).
+After completing each item, check it off in plan/checklist.md (Phase 9, Courses section).

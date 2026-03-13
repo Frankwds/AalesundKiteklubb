@@ -34,7 +34,7 @@ todos:
     status: completed
   - id: step-11
     content: "Step 11: Instructor Dashboard and Polish (Phases 9/10) -- profile edit, course CRUD, responsive audit, loading states, SEO"
-    status: pending
+    status: completed
 isProject: false
 ---
 

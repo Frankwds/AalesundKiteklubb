@@ -13,6 +13,11 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "Ålesund Kiteklubb",
   description: "Kiteklubben for Sunnmøre — Kurs, spotter og fellesskap",
+  openGraph: {
+    title: "Ålesund Kiteklubb",
+    description: "Kiteklubben for Sunnmøre — Kurs, spotter og fellesskap",
+    type: "website",
+  },
 }
 
 export const viewport: Viewport = {

@@ -209,19 +209,19 @@ Progress tracker for the full-stack implementation. Work top to bottom — later
 - [x] **Tab: Brukere** — DataTable; role change dropdown (disabled for own row); confirmation dialogs for instructor→user, admin→user, admin→instructor demotions; toast messages per operation
 
 ### Instructor Dashboard
-- [ ] `src/app/instructor/loading.tsx` — `SkeletonTable`
-- [ ] `src/app/instructor/page.tsx` — server component fetches profile + courses
-- [ ] **Tab: Profil** — edit bio, certifications, years experience, phone, photo upload
-- [ ] **Tab: Mine Kurs** — DataTable; "Nytt kurs" dialog (date picker + HH:MM start/end time, spot Combobox, Oslo timezone ISO construction); edit/delete row actions (delete sends cancellation emails); view participants drawer/dialog with remove buttons
+- [x] `src/app/instructor/loading.tsx` — `SkeletonTable`
+- [x] `src/app/instructor/page.tsx` — server component fetches profile + courses
+- [x] **Tab: Profil** — edit bio, certifications, years experience, phone, photo upload
+- [x] **Tab: Mine Kurs** — DataTable; "Nytt kurs" dialog (date picker + HH:MM start/end time, spot select, Oslo timezone ISO construction); edit/delete row actions (delete sends cancellation emails); view participants drawer/dialog with remove buttons
 
 ---
 
 ## Phase 10 — Polish & Deploy
 
-- [ ] Add `loading.tsx` to all remaining routes (`/login`, etc.)
-- [ ] Confirm all mutation buttons use `useTransition` + `isPending` spinner; dialog-close-then-toast sequence
-- [ ] Mobile-first responsive audit: hamburger nav, touch targets, single-column card stacks, tap-friendly forms
-- [ ] SEO meta tags in layout and key pages
+- [x] Add `loading.tsx` to all remaining routes (`/login`, etc.)
+- [x] Confirm all mutation buttons use `useTransition` + `isPending` spinner; dialog-close-then-toast sequence
+- [x] Mobile-first responsive audit: hamburger nav, touch targets, single-column card stacks, tap-friendly forms
+- [x] SEO meta tags in layout and key pages
 - [ ] Connect GitHub repo to Vercel; configure project settings
 - [ ] Set all environment variables in Vercel dashboard (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `NEXT_PUBLIC_SITE_URL`)
 - [ ] Run `supabase db push` against production Supabase project **(production Supabase project)**

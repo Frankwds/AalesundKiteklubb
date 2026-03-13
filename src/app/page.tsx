@@ -4,6 +4,11 @@ import { buttonVariants } from "@/components/ui/button-variants"
 import { ArrowRight, MessageCircle, Users } from "lucide-react"
 import { cn } from "@/lib/utils"
 
+export const metadata = {
+  title: "Ålesund Kiteklubb",
+  description: "Kiteklubben for Sunnmøre — Kurs, spotter og fellesskap",
+}
+
 export default function HomePage() {
   return (
     <div>

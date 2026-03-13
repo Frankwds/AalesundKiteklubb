@@ -1,65 +1,134 @@
-import Image from "next/image";
+import Link from "next/link"
+import Image from "next/image"
+import { buttonVariants } from "@/components/ui/button-variants"
+import { ArrowRight, MessageCircle, Users } from "lucide-react"
+import { cn } from "@/lib/utils"
 
-export default function Home() {
+export default function HomePage() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
+    <div>
+      {/* Hero Section */}
+      <section className="relative h-[60vh] min-h-[400px] overflow-hidden rounded-t-none md:rounded-t-xl">
         <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
+          src="/images/kite-beach-bg.jpg"
+          alt="Kitesurf på strand"
+          fill
+          className="object-cover"
           priority
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+        <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/30 to-black/60" />
+        <div className="relative z-10 h-full flex flex-col items-center justify-center text-center px-6">
+          <h1 className="text-4xl md:text-6xl font-bold text-white mb-4 text-balance">
+            Ålesund Kiteklubb
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="text-lg md:text-xl text-white/90 mb-8">
+            Kiteklubben for Sunnmøre
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+          <Link
+            href="/courses"
+            className={cn(
+              buttonVariants({ size: "lg" }),
+              "bg-sky-600 hover:bg-sky-700 text-white h-12 px-8"
+            )}
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+            Se kurs
+            <ArrowRight className="ml-2 h-5 w-5" />
+          </Link>
         </div>
-      </main>
+      </section>
+
+      {/* Om klubben */}
+      <section className="px-6 py-12 md:py-16">
+        <div className="max-w-4xl mx-auto">
+          <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-8">
+            Om klubben
+          </h2>
+
+          <div className="grid md:grid-cols-2 gap-8 md:gap-12 items-center">
+            <div className="space-y-6">
+              <p className="text-base text-foreground/80 leading-relaxed">
+                Ålesund Kiteklubb er en lokal kiteklubb på Sunnmøre. Vi
+                arrangerer kurs for nybegynnere og erfarne, og har en guide til
+                de beste kitespottene i området. Bli med i fellesskapet!
+              </p>
+              <p className="text-base text-foreground/80 leading-relaxed">
+                Våre instruktører er sertifiserte og har lang erfaring med
+                kitesurfing i norske forhold. Vi tilbyr kurs gjennom hele
+                sesongen, tilpasset ditt nivå.
+              </p>
+
+              <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                <Link
+                  href="https://facebook.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={cn(
+                    buttonVariants(),
+                    "bg-sky-600 hover:bg-sky-700 text-white h-11"
+                  )}
+                >
+                  <Users className="mr-2 h-5 w-5" />
+                  Facebook-gruppen vår
+                </Link>
+                <Link
+                  href="https://discord.gg"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={cn(
+                    buttonVariants({ variant: "outline" }),
+                    "h-11 border-sky-600 text-sky-600 hover:bg-sky-50"
+                  )}
+                >
+                  <MessageCircle className="mr-2 h-5 w-5" />
+                  Bli med i chatten
+                </Link>
+              </div>
+            </div>
+
+            <div className="relative aspect-[4/3] rounded-lg overflow-hidden shadow-lg">
+              <Image
+                src="/images/kite-beach-bg.jpg"
+                alt="Kitesurfing på Sunnmøre"
+                fill
+                className="object-cover"
+              />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Quick Links */}
+      <section className="px-6 pb-12 md:pb-16">
+        <div className="max-w-4xl mx-auto">
+          <div className="grid sm:grid-cols-2 gap-6">
+            <Link
+              href="/spots"
+              className="group p-6 bg-white rounded-lg border border-border hover:border-sky-300 hover:shadow-md transition-all"
+            >
+              <h3 className="text-lg font-semibold text-foreground mb-2 group-hover:text-sky-600 transition-colors">
+                Utforsk spotter
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                Finn de beste stedene for kitesurfing på Sunnmøre med vår
+                spottguide.
+              </p>
+            </Link>
+
+            <Link
+              href="/courses"
+              className="group p-6 bg-white rounded-lg border border-border hover:border-sky-300 hover:shadow-md transition-all"
+            >
+              <h3 className="text-lg font-semibold text-foreground mb-2 group-hover:text-sky-600 transition-colors">
+                Bli med på kurs
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                Lær å kitesurfe med våre erfarne instruktører — kurs for alle
+                nivåer.
+              </p>
+            </Link>
+          </div>
+        </div>
+      </section>
     </div>
-  );
+  )
 }

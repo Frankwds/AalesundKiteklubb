@@ -2,7 +2,6 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { Menu, X, LogOut, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { buttonVariants } from "@/components/ui/button-variants"
@@ -22,7 +21,7 @@ import {
   SheetClose,
   SheetTitle,
 } from "@/components/ui/sheet"
-import { createClient } from "@/lib/supabase/client"
+import { signOut } from "@/lib/actions/auth"
 import { cn } from "@/lib/utils"
 import type { CurrentUser } from "@/lib/auth"
 
@@ -53,7 +52,6 @@ interface NavbarClientProps {
 
 export function NavbarClient({ user }: NavbarClientProps) {
   const [isOpen, setIsOpen] = useState(false)
-  const router = useRouter()
 
   const navLinks = [
     { href: "/", label: "Hjem" },
@@ -70,10 +68,7 @@ export function NavbarClient({ user }: NavbarClientProps) {
   }
 
   async function handleSignOut() {
-    const supabase = createClient()
-    await supabase.auth.signOut()
-    router.refresh()
-    router.push("/")
+    await signOut()
   }
 
   return (

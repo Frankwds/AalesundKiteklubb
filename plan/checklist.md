@@ -124,23 +124,23 @@ Progress tracker for the full-stack implementation. Work top to bottom — later
 - [x] Create `src/lib/validations/subscriptions.ts`
 
 ### Server Actions
-- [ ] `src/lib/actions/courses.ts`:
-  - [ ] `publishCourse` — lookup instructorId from auth, insert course, fetch subscribers via service role client, send notification emails via `Promise.allSettled` + single retry; return `{ course, notificationsSent, notificationsFailed }`; `revalidatePath('/courses', '/instructor', '/admin')`
-  - [ ] `enrollInCourse` — capacity check, insert; on 23505 return "already enrolled"; send enrollment confirmation email; `revalidatePath('/courses')`
-  - [ ] `unenrollFromCourse` — delete own `course_participants` row; `revalidatePath('/courses')`
-  - [ ] `updateCourse` — update own course; `revalidatePath('/courses', '/instructor', '/admin')`
-  - [ ] `deleteCourse` — fetch participant emails (regular client), send cancellation emails via `Promise.allSettled` + single retry, delete course; `revalidatePath('/courses', '/instructor', '/admin')`
-- [ ] `src/lib/actions/instructors.ts`:
-  - [ ] `promoteToInstructor` — `supabase.rpc('promote_to_instructor', ...)`; `revalidatePath('/admin')`
-  - [ ] `promoteToAdmin` — `supabase.rpc('promote_to_admin', ...)`; `revalidatePath('/admin')`
-  - [ ] `demoteToUser` — `supabase.rpc('demote_to_user', ...)`; `revalidatePath('/admin')`
-  - [ ] `demoteAdminToInstructor` — `supabase.rpc('demote_admin_to_instructor', ...)`; `revalidatePath('/admin')`
-  - [ ] `updateInstructorProfile` — update own instructor row; upload photo to `instructor-photos/{uid}/` if provided; `revalidatePath('/instructor', '/courses')`
-- [ ] `src/lib/actions/messages.ts` — `sendMessage` — insert into `messages`; no `revalidatePath` (Realtime handles updates)
-- [ ] `src/lib/actions/subscriptions.ts` — `subscribe` / `unsubscribe`; `revalidatePath('/courses')`
-- [ ] `src/lib/actions/spots.ts` — `createSpot` (create row → upload image → update `map_image_url`; rollback spot row on upload failure), `updateSpot`, `deleteSpot`; `revalidatePath('/spots', '/admin')`
-- [ ] `src/lib/actions/users.ts` — re-exports role-change RPCs for use in Brukere tab
-- [ ] `src/lib/actions/auth.ts` — `signOut` (signOut + `redirect('/')`), `deleteAccount` (service role `deleteUser` + `redirect('/')`) — **v1 scope decision:** `deleteAccount` is implemented but has no UI entry point; add a "Delete account" button to the courses page or defer to a future account settings page (`src/app/account/page.tsx`)
+- [x] `src/lib/actions/courses.ts`:
+  - [x] `publishCourse` — lookup instructorId from auth, insert course, fetch subscribers via service role client, send notification emails via `Promise.allSettled` + single retry; return `{ course, notificationsSent, notificationsFailed }`; `revalidatePath('/courses', '/instructor', '/admin')`
+  - [x] `enrollInCourse` — capacity check, insert; on 23505 return "already enrolled"; send enrollment confirmation email; `revalidatePath('/courses')`
+  - [x] `unenrollFromCourse` — delete own `course_participants` row; `revalidatePath('/courses')`
+  - [x] `updateCourse` — update own course; `revalidatePath('/courses', '/instructor', '/admin')`
+  - [x] `deleteCourse` — fetch participant emails (regular client), send cancellation emails via `Promise.allSettled` + single retry, delete course; `revalidatePath('/courses', '/instructor', '/admin')`
+- [x] `src/lib/actions/instructors.ts`:
+  - [x] `promoteToInstructor` — `supabase.rpc('promote_to_instructor', ...)`; `revalidatePath('/admin')`
+  - [x] `promoteToAdmin` — `supabase.rpc('promote_to_admin', ...)`; `revalidatePath('/admin')`
+  - [x] `demoteToUser` — `supabase.rpc('demote_to_user', ...)`; `revalidatePath('/admin')`
+  - [x] `demoteAdminToInstructor` — `supabase.rpc('demote_admin_to_instructor', ...)`; `revalidatePath('/admin')`
+  - [x] `updateInstructorProfile` — update own instructor row; upload photo to `instructor-photos/{uid}/` if provided; `revalidatePath('/instructor', '/courses')`
+- [x] `src/lib/actions/messages.ts` — `sendMessage` — insert into `messages`; no `revalidatePath` (Realtime handles updates)
+- [x] `src/lib/actions/subscriptions.ts` — `subscribe` / `unsubscribe`; `revalidatePath('/courses')`
+- [x] `src/lib/actions/spots.ts` — `createSpot` (create row → upload image → update `map_image_url`; rollback spot row on upload failure), `updateSpot`, `deleteSpot`; `revalidatePath('/spots', '/admin')`
+- [x] `src/lib/actions/users.ts` — re-exports role-change RPCs for use in Brukere tab
+- [x] `src/lib/actions/auth.ts` — `signOut` (signOut + `redirect('/')`), `deleteAccount` (service role `deleteUser` + `redirect('/')`) — **v1 scope decision:** `deleteAccount` is implemented but has no UI entry point; add a "Delete account" button to the courses page or defer to a future account settings page (`src/app/account/page.tsx`)
 
 ---
 

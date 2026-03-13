@@ -33,3 +33,19 @@ export async function getAllSubscriberEmails() {
 
   return data.map((row) => row.email)
 }
+
+export async function getAllSubscriptions() {
+  const supabase = createAdminClient()
+
+  const { data, error } = await supabase
+    .from("subscriptions")
+    .select("*, users(name)")
+    .order("created_at", { ascending: false })
+
+  if (error) {
+    logError("getAllSubscriptions", error)
+    return []
+  }
+
+  return data
+}

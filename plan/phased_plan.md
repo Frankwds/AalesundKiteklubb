@@ -28,10 +28,10 @@ todos:
     status: completed
   - id: step-09
     content: "Step 9: Course Chat (Phase 9) -- Realtime chat, access gating, ChatWindow, MessageBubble, MessageInput, profile cache"
-    status: pending
+    status: completed
   - id: step-10
     content: "Step 10: Admin Dashboard (Phase 9) -- 5 tabs: Instruktorer, Kurs, Spotter, Abonnenter, Brukere with full CRUD"
-    status: pending
+    status: completed
   - id: step-11
     content: "Step 11: Instructor Dashboard and Polish (Phases 9/10) -- profile edit, course CRUD, responsive audit, loading states, SEO"
     status: pending

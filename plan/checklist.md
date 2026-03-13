@@ -200,13 +200,13 @@ Progress tracker for the full-stack implementation. Work top to bottom — later
   - [x] Profile cache: seed from initial messages + instructor; on-demand fetch on cache miss; placeholder while fetching; "Ukjent bruker" on fetch failure; "Slettet bruker" for `null` user_id
 
 ### Admin Dashboard
-- [ ] `src/app/admin/loading.tsx` — `SkeletonTable`
-- [ ] `src/app/admin/page.tsx` — server component fetches all tab data upfront; passes as props
-- [ ] **Tab: Instruktører** — DataTable; "Legg til instruktør" dialog (user search/select, excludes existing instructors); remove action with confirmation dialog
-- [ ] **Tab: Kurs** — DataTable with "Kommende"/"Tidligere" tags; delete action (confirmation + cancellation emails); view participants dialog with remove buttons
-- [ ] **Tab: Spotter** — DataTable with season/area filters; "Ny spot" dialog; edit/delete row actions *(spot admin CMS — server actions implemented in Phase 6: `createSpot`, `updateSpot`, `deleteSpot`)*
-- [ ] **Tab: Abonnenter** — read-only DataTable
-- [ ] **Tab: Brukere** — DataTable; role change dropdown (disabled for own row); confirmation dialogs for instructor→user, admin→user, admin→instructor demotions; toast messages per operation
+- [x] `src/app/admin/loading.tsx` — `SkeletonTable`
+- [x] `src/app/admin/page.tsx` — server component fetches all tab data upfront; passes as props
+- [x] **Tab: Instruktører** — DataTable; "Legg til instruktør" dialog (user search/select, excludes existing instructors); remove action with confirmation dialog
+- [x] **Tab: Kurs** — DataTable with "Kommende"/"Tidligere" tags; delete action (confirmation + cancellation emails); view participants dialog with remove buttons
+- [x] **Tab: Spotter** — DataTable with season/area filters; "Ny spot" dialog; edit/delete row actions *(spot admin CMS — server actions implemented in Phase 6: `createSpot`, `updateSpot`, `deleteSpot`)*
+- [x] **Tab: Abonnenter** — read-only DataTable
+- [x] **Tab: Brukere** — DataTable; role change dropdown (disabled for own row); confirmation dialogs for instructor→user, admin→user, admin→instructor demotions; toast messages per operation
 
 ### Instructor Dashboard
 - [ ] `src/app/instructor/loading.tsx` — `SkeletonTable`

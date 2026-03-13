@@ -202,37 +202,50 @@ export async function enrollInCourse(courseId: string) {
 
   log('enrollInCourse', `user ${user.id} enrolled in course ${courseId}`)
 
-  const { data: courseDetails } = await supabase
+  const admin = createAdminClient()
+  const { data: courseDetails, error: detailsError } = await admin
     .from('courses')
-    .select('*, spots(name), instructors(users(name))')
+    .select('*, spots(name), instructors(*, users(name))')
     .eq('id', courseId)
     .single()
 
-  if (courseDetails) {
-    const courseDate = formatCourseTime(courseDetails.start_time, courseDetails.end_time)
-    const instructorName =
-      (courseDetails.instructors as { users: { name: string | null } | null } | null)?.users
-        ?.name ?? 'Ukjent instruktør'
-    const spotName = (courseDetails.spots as { name: string } | null)?.name ?? null
-    const spotUrl = courseDetails.spot_id
-      ? `${siteUrl}/spots/${courseDetails.spot_id}`
-      : null
+  if (detailsError) {
+    logError('enrollInCourse.fetchDetails', detailsError)
+  }
 
-    await resend.emails.send({
-      from: fromEmail,
-      to: user.email!,
-      subject: `Påmelding bekreftet: ${courseDetails.title}`,
-      react: EnrollmentConfirmationEmail({
-        courseTitle: courseDetails.title,
-        courseDate,
-        instructorName,
-        price: courseDetails.price,
-        spotName,
-        spotUrl,
-        chatUrl: `${siteUrl}/courses/${courseId}/chat`,
-        coursesPageUrl: `${siteUrl}/courses`,
-      }),
-    })
+  if (courseDetails) {
+    try {
+      const courseDate = formatCourseTime(courseDetails.start_time, courseDetails.end_time)
+      const instructorName =
+        (courseDetails.instructors as { users: { name: string | null } | null } | null)?.users
+          ?.name ?? 'Ukjent instruktør'
+      const spotName = (courseDetails.spots as { name: string } | null)?.name ?? null
+      const spotUrl = courseDetails.spot_id
+        ? `${siteUrl}/spots/${courseDetails.spot_id}`
+        : null
+
+      const { error: emailError } = await resend.emails.send({
+        from: fromEmail,
+        to: user.email!,
+        subject: `Påmelding bekreftet: ${courseDetails.title}`,
+        react: EnrollmentConfirmationEmail({
+          courseTitle: courseDetails.title,
+          courseDate,
+          instructorName,
+          price: courseDetails.price,
+          spotName,
+          spotUrl,
+          chatUrl: `${siteUrl}/courses/${courseId}/chat`,
+          coursesPageUrl: `${siteUrl}/courses`,
+        }),
+      })
+
+      if (emailError) {
+        logError('enrollInCourse.email', emailError)
+      }
+    } catch (e) {
+      logError('enrollInCourse.email', e instanceof Error ? e : new Error(String(e)))
+    }
   }
 
   revalidatePath('/courses')

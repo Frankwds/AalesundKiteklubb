@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Bell, Loader2, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -65,6 +66,7 @@ export function SubscribeSection({ user, subscription }: SubscribeSectionProps) 
 function UnsubscribedState({ email }: { email: string }) {
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
+  const router = useRouter()
 
   function handleSubscribe() {
     startTransition(async () => {
@@ -72,6 +74,7 @@ function UnsubscribedState({ email }: { email: string }) {
       if (result.success) {
         setOpen(false)
         toast.success("Du vil få varsler om nye kurs")
+        router.refresh()
       } else {
         toast.error(result.error)
       }
@@ -123,6 +126,7 @@ function UnsubscribedState({ email }: { email: string }) {
 function SubscribedState() {
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
+  const router = useRouter()
 
   function handleUnsubscribe() {
     startTransition(async () => {
@@ -130,6 +134,7 @@ function SubscribedState() {
       if (result.success) {
         setOpen(false)
         toast.success("Du mottar ikke lenger kursvarsler")
+        router.refresh()
       } else {
         toast.error(result.error)
       }

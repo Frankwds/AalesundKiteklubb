@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -24,6 +25,7 @@ interface UnenrollDialogProps {
 export function UnenrollDialog({ courseId, courseTitle }: UnenrollDialogProps) {
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
+  const router = useRouter()
 
   function handleUnenroll() {
     startTransition(async () => {
@@ -31,6 +33,7 @@ export function UnenrollDialog({ courseId, courseTitle }: UnenrollDialogProps) {
       if (result.success) {
         setOpen(false)
         toast.success("Du er avmeldt")
+        router.refresh()
       } else {
         toast.error(result.error)
       }

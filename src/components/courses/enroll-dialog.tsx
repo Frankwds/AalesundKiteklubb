@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -31,6 +32,7 @@ export function EnrollDialog({
 }: EnrollDialogProps) {
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
+  const router = useRouter()
 
   function handleEnroll() {
     startTransition(async () => {
@@ -38,6 +40,7 @@ export function EnrollDialog({
       if (result.success) {
         setOpen(false)
         toast.success("Du er påmeldt!")
+        router.refresh()
       } else {
         toast.error(result.error)
       }

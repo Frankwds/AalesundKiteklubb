@@ -118,10 +118,10 @@ Progress tracker for the full-stack implementation. Work top to bottom — later
 
 ## Phase 6 — Validation Schemas & Server Actions
 
-- [ ] Create `src/lib/validations/courses.ts` — `publishCourseSchema` (with `endTime > startTime` refine)
-- [ ] Create `src/lib/validations/spots.ts`
-- [ ] Create `src/lib/validations/instructors.ts`
-- [ ] Create `src/lib/validations/subscriptions.ts`
+- [x] Create `src/lib/validations/courses.ts` — `publishCourseSchema` (with `endTime > startTime` refine)
+- [x] Create `src/lib/validations/spots.ts`
+- [x] Create `src/lib/validations/instructors.ts`
+- [x] Create `src/lib/validations/subscriptions.ts`
 
 ### Server Actions
 - [ ] `src/lib/actions/courses.ts`:
@@ -146,21 +146,21 @@ Progress tracker for the full-stack implementation. Work top to bottom — later
 
 ## Phase 7 — Data Queries
 
-- [ ] `src/lib/queries/courses.ts` — `getCoursesForPublicPage()` (future only, `gte(new Date().toISOString())`), `getCoursesForAdmin()` (all), `getCoursesForInstructor()` (lookup instructor ID first, then filter by `instructor_id`)
-- [ ] `src/lib/queries/instructors.ts` — `getInstructors()` with joined `users(*)`
-- [ ] `src/lib/queries/messages.ts` — `getMessages(courseId)` with joined `users(name, avatar_url)`, ordered by `created_at`
-- [ ] `src/lib/queries/subscriptions.ts` — `getUserSubscription(userId)` (own row); `getAllSubscriberEmails()` via service role client
-- [ ] `src/lib/queries/spots.ts` — `getSpots()` (all spots, filtering done client-side); `getSpot(id)`
-- [ ] `src/lib/queries/users.ts` — `getAllUsers()` via service role client (admin Brukere tab)
+- [x] `src/lib/queries/courses.ts` — `getCoursesForPublicPage()` (future only, `gte(new Date().toISOString())`), `getCoursesForAdmin()` (all), `getCoursesForInstructor()` (lookup instructor ID first, then filter by `instructor_id`)
+- [x] `src/lib/queries/instructors.ts` — `getInstructors()` with joined `users(*)`
+- [x] `src/lib/queries/messages.ts` — `getMessages(courseId)` with joined `users(name, avatar_url)`, ordered by `created_at`
+- [x] `src/lib/queries/subscriptions.ts` — `getUserSubscription(userId)` (own row); `getAllSubscriberEmails()` via service role client
+- [x] `src/lib/queries/spots.ts` — `getSpots()` (all spots, filtering done client-side); `getSpot(id)`
+- [x] `src/lib/queries/users.ts` — `getAllUsers()` via service role client (admin Brukere tab)
 
 ---
 
 ## Phase 8 — Email Templates
 
-- [ ] Create `src/lib/email/resend.ts` — Resend client (`import 'server-only'`)
-- [ ] Create `src/lib/email/templates/new-course.tsx` — subscriber notification (title, date/time range, instructor, price, spot link, enroll link)
-- [ ] Create `src/lib/email/templates/enrollment-confirmation.tsx` — user confirmation on enroll (course details, spot link, chat link, unenroll note)
-- [ ] Create `src/lib/email/templates/course-cancellation.tsx` — enrolled participant notification on course deletion
+- [x] Create `src/lib/email/resend.ts` — Resend client (`import 'server-only'`)
+- [x] Create `src/lib/email/templates/new-course.tsx` — subscriber notification (title, date/time range, instructor, price, spot link, enroll link)
+- [x] Create `src/lib/email/templates/enrollment-confirmation.tsx` — user confirmation on enroll (course details, spot link, chat link, unenroll note)
+- [x] Create `src/lib/email/templates/course-cancellation.tsx` — enrolled participant notification on course deletion
 
 ---
 

@@ -16,7 +16,7 @@ todos:
     status: completed
   - id: step-05
     content: "Step 5: Validation Schemas, Data Queries and Email Templates (Phases 6/7/8) -- Zod schemas, all query functions, Resend client, 3 email templates"
-    status: pending
+    status: completed
   - id: step-06
     content: "Step 6: Server Actions (Phase 6) -- courses, instructors, messages, subscriptions, spots, users, auth actions"
     status: pending

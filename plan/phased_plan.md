@@ -19,13 +19,13 @@ todos:
     status: completed
   - id: step-06
     content: "Step 6: Server Actions (Phase 6) -- courses, instructors, messages, subscriptions, spots, users, auth actions"
-    status: pending
+    status: completed
   - id: step-07
     content: "Step 7: Front Page and Spots Pages (Phase 9) -- hero, about, spots listing with filters, spot detail with wind compass"
-    status: pending
+    status: completed
   - id: step-08
     content: "Step 8: Courses Page and Subscriptions (Phase 9) -- course cards, enroll/unenroll, subscribe/unsubscribe, chat button visibility"
-    status: pending
+    status: completed
   - id: step-09
     content: "Step 9: Course Chat (Phase 9) -- Realtime chat, access gating, ChatWindow, MessageBubble, MessageInput, profile cache"
     status: pending

@@ -6,8 +6,8 @@ import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button-variants"
 import { cn } from "@/lib/utils"
 import { formatCourseTime } from "@/lib/utils/date"
-import { EnrollDialog } from "./enroll-dialog"
-import { UnenrollDialog } from "./unenroll-dialog"
+import { EnrollDialog } from "@/components/courses/enroll-dialog"
+import { UnenrollDialog } from "@/components/courses/unenroll-dialog"
 import type { CourseWithRelations } from "@/lib/queries/courses"
 import type { CurrentUser } from "@/lib/auth"
 
@@ -21,7 +21,10 @@ export function CourseCard({ course, user, isEnrolled }: CourseCardProps) {
   const instructorLabel = course.instructors?.certifications ?? (course.instructors ? "Instruktør" : null)
   const spotName = course.spots?.name ?? null
   const dateTime = formatCourseTime(course.start_time, course.end_time)
-  const showChat = isEnrolled
+  const showChat =
+    isEnrolled ||
+    (user && (user.role === "instructor" || user.role === "admin"))
+
 
   return (
     <div className="rounded-lg border border-border bg-white p-5 transition-all hover:shadow-md">

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { publishCourseSchema } from '@/lib/validations/courses'
 import { getAllSubscriberEmails } from '@/lib/queries/subscriptions'
 import { resend, fromEmail } from '@/lib/email/resend'
@@ -171,7 +172,8 @@ export async function enrollInCourse(courseId: string) {
   }
 
   if (course.max_participants) {
-    const { count, error: countError } = await supabase
+    const admin = createAdminClient()
+    const { count, error: countError } = await admin
       .from('course_participants')
       .select('*', { count: 'exact', head: true })
       .eq('course_id', courseId)

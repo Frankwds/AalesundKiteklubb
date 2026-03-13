@@ -167,14 +167,14 @@ Progress tracker for the full-stack implementation. Work top to bottom — later
 ## Phase 9 — Pages
 
 ### Front Page
-- [ ] `src/app/page.tsx` — hero (Giske panorama + club name), about section, Facebook/chat links
+- [x] `src/app/page.tsx` — hero (Giske panorama + club name), about section, Facebook/chat links
 
 ### Spots
-- [ ] `src/app/spots/loading.tsx` — `SkeletonCard` grid
-- [ ] `src/app/spots/page.tsx` — filter drawer (season, area, wind direction — URL param sync), spot card grid, empty state
-- [ ] `src/app/spots/[id]/loading.tsx` — `SkeletonDetail`
-- [ ] `src/app/spots/[id]/page.tsx` — wind compass, description, map image, Yr link, Google Maps link (null guards), skill level + notes, water type badges
-- [ ] Build `SpotCard`, `SpotList`, `SpotFilters`, `WindCompass` components
+- [x] `src/app/spots/loading.tsx` — `SkeletonCard` grid
+- [x] `src/app/spots/page.tsx` — filter drawer (season, area, wind direction — URL param sync), spot card grid, empty state
+- [x] `src/app/spots/[id]/loading.tsx` — `SkeletonDetail`
+- [x] `src/app/spots/[id]/page.tsx` — wind compass, description, map image, Yr link, Google Maps link (null guards), skill level + notes, water type badges
+- [x] Build `SpotCard`, `SpotList`, `SpotFilters`, `WindCompass` components
 
 ### Courses
 - [ ] `src/app/courses/loading.tsx` — `SkeletonCard` grid

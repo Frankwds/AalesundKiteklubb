@@ -62,7 +62,7 @@ export default function LoginPage() {
           <div className="text-center">
             <Link
               href="/"
-              className="inline-flex items-center text-sm text-muted-foreground hover:text-sky-600 transition-colors"
+              className="inline-flex items-center text-sm text-muted-foreground hover:text-primary transition-colors"
             >
               <ArrowLeft className="h-4 w-4 mr-1" />
               Tilbake til forsiden

@@ -41,7 +41,7 @@ export function CoursesPageClient({
       {/* Intro */}
       <div className="mb-8">
         <div className="flex items-center gap-2 mb-2">
-          <GraduationCap className="h-6 w-6 text-sky-600" />
+          <GraduationCap className="h-6 w-6 text-primary" />
           <h1 className="text-2xl md:text-3xl font-bold text-foreground">
             Kurs
           </h1>
@@ -76,7 +76,7 @@ export function CoursesPageClient({
                 .getElementById("subscribe-section")
                 ?.scrollIntoView({ behavior: "smooth" })
             }
-            className="inline-flex items-center gap-2 text-sm font-medium text-sky-600 hover:text-sky-800 transition-colors"
+            className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/90 transition-colors"
           >
             Meld deg på varsler for å bli informert når nye kurs publiseres
             <ArrowDown className="h-4 w-4" />

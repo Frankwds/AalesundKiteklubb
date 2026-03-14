@@ -47,7 +47,7 @@ export function SpotFilters({
           <Wind className="h-4 w-4" />
           Filtre
           {hasActiveFilters && (
-            <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-sky-600 px-1.5 text-xs font-medium text-white">
+            <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-medium text-white">
               {[season, area, wind.length > 0 ? "w" : null].filter(Boolean).length}
             </span>
           )}
@@ -155,8 +155,8 @@ function FilterToggle({
       className={cn(
         "rounded-md border px-3 py-1.5 text-xs font-medium transition-all",
         active
-          ? "border-sky-600 bg-sky-600 text-white"
-          : "border-border bg-white text-foreground hover:border-sky-300 hover:bg-sky-50"
+          ? "border-primary bg-primary text-white"
+          : "border-border bg-white text-foreground hover:border-primary/40 hover:bg-primary-muted"
       )}
     >
       {children}

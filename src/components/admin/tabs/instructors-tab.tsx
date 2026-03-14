@@ -108,7 +108,7 @@ export function InstructorsTab({ instructors, users, currentUser }: Props) {
         </p>
         <Dialog open={addOpen} onOpenChange={(o) => { setAddOpen(o); if (!o) setSearchQuery("") }}>
           <DialogTrigger
-            render={<Button size="sm" className="bg-sky-600 hover:bg-sky-700 text-white" />}
+            render={<Button size="sm" className="bg-primary hover:bg-primary/90 text-white btn-lift" />}
           >
             <Plus className="mr-1.5 h-4 w-4" />
             Legg til instruktør
@@ -128,7 +128,7 @@ export function InstructorsTab({ instructors, users, currentUser }: Props) {
                 placeholder="Søk etter navn eller e-post..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full rounded-md border border-border bg-background py-2 pl-9 pr-3 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                className="w-full rounded-md border border-border bg-background py-2 pl-9 pr-3 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
               />
             </div>
 
@@ -149,7 +149,7 @@ export function InstructorsTab({ instructors, users, currentUser }: Props) {
                     </div>
                     <Button
                       size="sm"
-                      className="ml-2 shrink-0 bg-sky-600 hover:bg-sky-700 text-white"
+                      className="ml-2 shrink-0 bg-primary hover:bg-primary/90 text-white btn-lift"
                       disabled={isPending}
                       onClick={() => handleAdd(u.id)}
                     >

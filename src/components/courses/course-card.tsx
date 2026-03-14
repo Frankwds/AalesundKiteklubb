@@ -26,7 +26,7 @@ export function CourseCard({ course, user, isEnrolled }: CourseCardProps) {
     (user && (user.role === "instructor" || user.role === "admin"))
 
   return (
-    <div className="rounded-lg border border-border bg-white p-5 transition-all hover:shadow-md">
+    <div className="rounded-lg border border-border bg-white p-5 card-lift">
       <div className="space-y-3">
         <h3 className="text-base font-semibold text-foreground">
           {course.title}
@@ -49,7 +49,7 @@ export function CourseCard({ course, user, isEnrolled }: CourseCardProps) {
             {spotName && course.spot_id ? (
               <Link
                 href={`/spots/${course.spot_id}`}
-                className="hover:text-sky-600 hover:underline transition-colors"
+                className="hover:text-primary hover:underline transition-colors"
               >
                 {spotName}
               </Link>
@@ -68,7 +68,7 @@ export function CourseCard({ course, user, isEnrolled }: CourseCardProps) {
           <Badge
             className={
               course.price
-                ? "bg-sky-100 text-sky-800 border-sky-200"
+                ? "bg-primary-muted text-primary border-primary/30"
                 : "bg-green-100 text-green-800 border-green-200"
             }
           >
@@ -90,7 +90,7 @@ export function CourseCard({ course, user, isEnrolled }: CourseCardProps) {
             href="/login"
             className={cn(
               buttonVariants({ size: "sm" }),
-              "bg-sky-600 hover:bg-sky-700 text-white"
+              "bg-primary hover:bg-primary/90 text-white btn-lift"
             )}
           >
             Logg inn for å melde på

@@ -91,7 +91,7 @@ function SpotForm({
           name="name"
           required
           defaultValue={spot?.name ?? ""}
-          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
         />
       </div>
 
@@ -101,7 +101,7 @@ function SpotForm({
           name="description"
           defaultValue={spot?.description ?? ""}
           rows={3}
-          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 resize-y"
+          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 resize-y"
         />
       </div>
 
@@ -112,7 +112,7 @@ function SpotForm({
             name="area"
             required
             defaultValue={spot?.area ?? ""}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
           />
         </div>
         <div>
@@ -120,7 +120,7 @@ function SpotForm({
           <select
             name="season"
             defaultValue={spot?.season ?? ""}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
           >
             <option value="">Velg...</option>
             {SEASONS.map((s) => (
@@ -138,7 +138,7 @@ function SpotForm({
           <select
             name="skillLevel"
             defaultValue={spot?.skill_level ?? ""}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
           >
             <option value="">Velg...</option>
             {SKILL_LEVELS.map((s) => (
@@ -153,7 +153,7 @@ function SpotForm({
           <input
             name="skillNotes"
             defaultValue={spot?.skill_notes ?? ""}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
           />
         </div>
       </div>
@@ -166,7 +166,7 @@ function SpotForm({
             type="number"
             step="any"
             defaultValue={spot?.latitude ?? ""}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
           />
         </div>
         <div>
@@ -176,7 +176,7 @@ function SpotForm({
             type="number"
             step="any"
             defaultValue={spot?.longitude ?? ""}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
           />
         </div>
       </div>
@@ -197,7 +197,7 @@ function SpotForm({
               }
               className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-colors ${
                 selectedWindDirs.includes(dir)
-                  ? "border-sky-600 bg-sky-50 text-sky-700"
+                  ? "border-primary bg-primary-muted text-primary"
                   : "border-border bg-background text-muted-foreground hover:bg-muted/50"
               }`}
             >
@@ -223,7 +223,7 @@ function SpotForm({
               }
               className={`rounded-md border px-3 py-1.5 text-xs font-medium capitalize transition-colors ${
                 selectedWaterTypes.includes(type)
-                  ? "border-sky-600 bg-sky-50 text-sky-700"
+                  ? "border-primary bg-primary-muted text-primary"
                   : "border-border bg-background text-muted-foreground hover:bg-muted/50"
               }`}
             >
@@ -239,7 +239,7 @@ function SpotForm({
           name="image"
           type="file"
           accept="image/jpeg,image/png,image/webp"
-          className="w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-sky-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-sky-700 hover:file:bg-sky-100"
+          className="w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary-muted file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-primary hover:file:bg-primary-muted/80"
         />
       </div>
 
@@ -249,7 +249,7 @@ function SpotForm({
         </DialogClose>
         <Button
           type="submit"
-          className="bg-sky-600 hover:bg-sky-700 text-white"
+          className="bg-primary hover:bg-primary/90 text-white btn-lift"
           disabled={isPending}
         >
           {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -315,7 +315,7 @@ export function SpotsTab({ spots }: Props) {
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <Button
             size="sm"
-            className="bg-sky-600 hover:bg-sky-700 text-white"
+            className="bg-primary hover:bg-primary/90 text-white btn-lift"
             onClick={() => setCreateOpen(true)}
           >
             <Plus className="mr-1.5 h-4 w-4" />

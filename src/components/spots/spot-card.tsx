@@ -7,7 +7,7 @@ import type { Database } from "@/types/database"
 type Spot = Database["public"]["Tables"]["spots"]["Row"]
 
 const seasonLabels: Record<string, { text: string; className: string }> = {
-  summer: { text: "Sommer", className: "bg-sky-100 text-sky-800 border-sky-200" },
+  summer: { text: "Sommer", className: "bg-primary-muted text-primary border-primary/30" },
   winter: { text: "Vinter", className: "bg-blue-100 text-blue-800 border-blue-200" },
 }
 
@@ -23,11 +23,11 @@ export function SpotCard({ spot }: { spot: Spot }) {
   return (
     <Link
       href={`/spots/${spot.id}`}
-      className="group block rounded-lg border border-border bg-white p-4 transition-all hover:border-sky-300 hover:shadow-md"
+      className="group block rounded-lg border border-border bg-white p-4 transition-all hover:border-primary/40 hover:shadow-md card-lift"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1 space-y-2">
-          <h3 className="text-base font-semibold text-foreground group-hover:text-sky-600 transition-colors truncate">
+          <h3 className="text-base font-semibold text-foreground group-hover:text-primary transition-colors truncate">
             {spot.name}
           </h3>
           <div className="flex items-center gap-1.5 text-sm text-muted-foreground">

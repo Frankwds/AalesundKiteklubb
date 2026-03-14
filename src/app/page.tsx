@@ -33,7 +33,7 @@ export default function HomePage() {
             href="/courses"
             className={cn(
               buttonVariants({ size: "lg" }),
-              "bg-sky-600 hover:bg-sky-700 text-white h-12 px-8"
+              "bg-primary hover:bg-primary/90 text-primary-foreground h-12 px-8 btn-lift"
             )}
           >
             Se kurs
@@ -69,7 +69,7 @@ export default function HomePage() {
                   rel="noopener noreferrer"
                   className={cn(
                     buttonVariants(),
-                    "bg-sky-600 hover:bg-sky-700 text-white h-11"
+                    "bg-primary hover:bg-primary/90 text-primary-foreground h-11 btn-lift"
                   )}
                 >
                   <Users className="mr-2 h-5 w-5" />
@@ -81,7 +81,7 @@ export default function HomePage() {
                   rel="noopener noreferrer"
                   className={cn(
                     buttonVariants({ variant: "outline" }),
-                    "h-11 border-sky-600 text-sky-600 hover:bg-sky-50"
+                    "h-11 border-primary text-primary hover:bg-primary-muted"
                   )}
                 >
                   <MessageCircle className="mr-2 h-5 w-5" />
@@ -108,9 +108,9 @@ export default function HomePage() {
           <div className="grid sm:grid-cols-2 gap-6">
             <Link
               href="/spots"
-              className="group p-6 bg-white rounded-lg border border-border hover:border-sky-300 hover:shadow-md transition-all"
+              className="group p-6 bg-white rounded-lg border border-border hover:border-primary/40 card-lift"
             >
-              <h3 className="text-lg font-semibold text-foreground mb-2 group-hover:text-sky-600 transition-colors">
+              <h3 className="text-lg font-semibold text-foreground mb-2 group-hover:text-primary transition-colors">
                 Utforsk spotter
               </h3>
               <p className="text-sm text-muted-foreground">
@@ -121,9 +121,9 @@ export default function HomePage() {
 
             <Link
               href="/courses"
-              className="group p-6 bg-white rounded-lg border border-border hover:border-sky-300 hover:shadow-md transition-all"
+              className="group p-6 bg-white rounded-lg border border-border hover:border-primary/40 card-lift"
             >
-              <h3 className="text-lg font-semibold text-foreground mb-2 group-hover:text-sky-600 transition-colors">
+              <h3 className="text-lg font-semibold text-foreground mb-2 group-hover:text-primary transition-colors">
                 Bli med på kurs
               </h3>
               <p className="text-sm text-muted-foreground">

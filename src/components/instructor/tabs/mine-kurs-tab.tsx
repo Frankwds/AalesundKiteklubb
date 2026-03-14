@@ -85,7 +85,7 @@ function CourseForm({
           name="title"
           required
           defaultValue={course?.title ?? ""}
-          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
         />
       </div>
 
@@ -95,7 +95,7 @@ function CourseForm({
           name="description"
           defaultValue={course?.description ?? ""}
           rows={3}
-          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 resize-y"
+          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 resize-y"
         />
       </div>
 
@@ -107,7 +107,7 @@ function CourseForm({
             type="number"
             min={0}
             defaultValue={course?.price ?? ""}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
           />
         </div>
         <div>
@@ -117,7 +117,7 @@ function CourseForm({
             type="number"
             min={1}
             defaultValue={course?.max_participants ?? ""}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
           />
         </div>
       </div>
@@ -129,7 +129,7 @@ function CourseForm({
           type="date"
           required
           defaultValue={course ? formatDateForInput(course.start_time) : ""}
-          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
         />
       </div>
 
@@ -141,7 +141,7 @@ function CourseForm({
             type="time"
             required
             defaultValue={course ? formatTimeForInput(course.start_time) : "10:00"}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
           />
         </div>
         <div>
@@ -151,7 +151,7 @@ function CourseForm({
             type="time"
             required
             defaultValue={course ? formatTimeForInput(course.end_time) : "14:00"}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
           />
         </div>
       </div>
@@ -161,7 +161,7 @@ function CourseForm({
         <select
           name="spotId"
           defaultValue={course?.spot_id ?? ""}
-          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
         >
           <option value="">Velg spot (valgfritt)</option>
           {spots.map((spot) => (
@@ -178,7 +178,7 @@ function CourseForm({
         </Button>
         <Button
           type="submit"
-          className="bg-sky-600 hover:bg-sky-700 text-white"
+          className="bg-primary hover:bg-primary/90 text-white btn-lift"
           disabled={isPending}
         >
           {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -308,7 +308,7 @@ export function MineKursTab({ courses, spots }: Props) {
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <Button
             size="sm"
-            className="bg-sky-600 hover:bg-sky-700 text-white"
+            className="bg-primary hover:bg-primary/90 text-white btn-lift"
             onClick={() => setCreateOpen(true)}
           >
             <Plus className="mr-1.5 h-4 w-4" />

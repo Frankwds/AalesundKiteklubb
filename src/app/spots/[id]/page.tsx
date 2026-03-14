@@ -8,7 +8,7 @@ import { WindCompass } from "@/components/spots/wind-compass"
 import { getSpot } from "@/lib/queries/spots"
 
 const seasonLabels: Record<string, { text: string; className: string }> = {
-  summer: { text: "Sommer", className: "bg-sky-100 text-sky-800 border-sky-200" },
+  summer: { text: "Sommer", className: "bg-primary-muted text-primary border-primary/30" },
   winter: { text: "Vinter", className: "bg-blue-100 text-blue-800 border-blue-200" },
 }
 
@@ -123,9 +123,9 @@ export default async function SpotDetailPage({
             href={`https://www.yr.no/nb/v%C3%A6rvarsel/daglig-tabell/${spot.latitude},${spot.longitude}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-md border border-border bg-white px-4 py-2.5 text-sm font-medium text-foreground hover:border-sky-300 hover:bg-sky-50 transition-all"
+            className="inline-flex items-center gap-2 rounded-md border border-border bg-white px-4 py-2.5 text-sm font-medium text-foreground hover:border-primary/40 hover:bg-primary-muted transition-all"
           >
-            <Cloud className="h-4 w-4 text-sky-600" />
+            <Cloud className="h-4 w-4 text-primary" />
             Se værmelding på Yr.no
             <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
           </a>
@@ -139,9 +139,9 @@ export default async function SpotDetailPage({
             href={`https://www.google.com/maps?q=${spot.latitude},${spot.longitude}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-md border border-border bg-white px-4 py-2.5 text-sm font-medium text-foreground hover:border-sky-300 hover:bg-sky-50 transition-all"
+            className="inline-flex items-center gap-2 rounded-md border border-border bg-white px-4 py-2.5 text-sm font-medium text-foreground hover:border-primary/40 hover:bg-primary-muted transition-all"
           >
-            <Navigation className="h-4 w-4 text-sky-600" />
+            <Navigation className="h-4 w-4 text-primary" />
             Vis i Google Maps
             <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
           </a>

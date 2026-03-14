@@ -18,7 +18,7 @@ export default function NotFound() {
         href="/"
         className={cn(
           buttonVariants(),
-          "bg-sky-600 hover:bg-sky-700 text-white"
+          "bg-primary hover:bg-primary/90 text-white btn-lift"
         )}
       >
         Tilbake til forsiden

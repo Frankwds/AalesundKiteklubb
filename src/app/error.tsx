@@ -26,7 +26,7 @@ export default function Error({
       <p className="text-muted-foreground mb-8 max-w-md">
         En uventet feil oppstod. Prøv igjen senere.
       </p>
-      <Button onClick={reset} className="bg-sky-600 hover:bg-sky-700 text-white">
+      <Button onClick={reset} className="bg-primary hover:bg-primary/90 text-white btn-lift">
         Prøv igjen
       </Button>
     </div>

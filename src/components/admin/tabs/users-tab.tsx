@@ -161,7 +161,7 @@ export function UsersTab({ users, currentUser }: Props) {
                               ? "Du kan ikke endre din egen rolle"
                               : "Endre rolle"
                           }
-                          className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           <option value="user">Bruker</option>
                           <option value="instructor">Instruktør</option>

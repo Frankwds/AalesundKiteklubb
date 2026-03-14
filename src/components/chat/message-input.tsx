@@ -44,13 +44,13 @@ export function MessageInput({ courseId }: MessageInputProps) {
         placeholder="Skriv en melding..."
         disabled={isPending}
         autoFocus
-        className="flex-1 rounded-lg border border-border bg-white px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400/50 disabled:opacity-50 placeholder:text-muted-foreground"
+        className="flex-1 rounded-lg border border-border bg-white px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 disabled:opacity-50 placeholder:text-muted-foreground"
       />
       <Button
         type="submit"
         size="icon"
         disabled={isPending}
-        className="bg-sky-600 hover:bg-sky-700 text-white shrink-0"
+        className="bg-primary hover:bg-primary/90 text-white shrink-0 btn-lift"
       >
         {isPending ? (
           <Loader2 className="h-4 w-4 animate-spin" />

@@ -1,13 +1,20 @@
 import type { Metadata, Viewport } from "next"
-import { Inter } from "next/font/google"
+import { Syne, Plus_Jakarta_Sans } from "next/font/google"
 import "./globals.css"
 import { Navbar } from "@/components/layout/navbar"
 import { Footer } from "@/components/layout/footer"
 import { Toaster } from "@/components/ui/sonner"
 
-const inter = Inter({
+const syne = Syne({
   subsets: ["latin"],
-  variable: "--font-inter",
+  variable: "--font-syne",
+  display: "swap",
+})
+
+const jakarta = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  variable: "--font-jakarta",
+  display: "swap",
 })
 
 export const metadata: Metadata = {
@@ -21,7 +28,7 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  themeColor: "#0284c7",
+  themeColor: "#0d7377",
   width: "device-width",
   initialScale: 1,
 }
@@ -33,7 +40,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="no">
-      <body className={`${inter.variable} font-sans antialiased`}>
+      <body className={`${syne.variable} ${jakarta.variable} font-sans antialiased`}>
         {/* Fixed background image */}
         <div
           className="fixed inset-0 -z-10 bg-cover bg-center bg-no-repeat"
@@ -44,7 +51,7 @@ export default function RootLayout({
           <Navbar />
           <main className="flex-1 pt-16">
             <div className="mx-auto w-full max-w-6xl px-4 py-6 md:py-8">
-              <div className="rounded-none md:rounded-xl bg-[#FAFAF8] shadow-lg md:shadow-xl min-h-[60vh]">
+              <div className="rounded-none md:rounded-xl bg-card shadow-lg md:shadow-xl min-h-[60vh]">
                 {children}
               </div>
             </div>

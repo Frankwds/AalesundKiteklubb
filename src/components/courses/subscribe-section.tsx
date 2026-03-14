@@ -36,7 +36,7 @@ export function SubscribeSection({ user, subscription }: SubscribeSectionProps) 
       className="rounded-lg border border-border bg-white p-5"
     >
       <div className="flex items-center gap-2 mb-2">
-        <Bell className="h-5 w-5 text-sky-600" />
+        <Bell className="h-5 w-5 text-primary" />
         <h2 className="text-lg font-semibold text-foreground">Varsler</h2>
       </div>
       <p className="text-sm text-muted-foreground mb-4">
@@ -49,7 +49,7 @@ export function SubscribeSection({ user, subscription }: SubscribeSectionProps) 
           href="/login"
           className={cn(
             buttonVariants({ size: "sm" }),
-            "bg-sky-600 hover:bg-sky-700 text-white"
+            "bg-primary hover:bg-primary/90 text-white btn-lift"
           )}
         >
           Logg inn for å motta kursvarsler
@@ -86,7 +86,7 @@ function UnsubscribedState({ email }: { email: string }) {
       <DialogTrigger
         className={cn(
           buttonVariants({ size: "sm" }),
-          "bg-sky-600 hover:bg-sky-700 text-white"
+          "bg-primary hover:bg-primary/90 text-white btn-lift"
         )}
       >
         <Bell className="mr-2 h-4 w-4" />
@@ -110,7 +110,7 @@ function UnsubscribedState({ email }: { email: string }) {
             Avbryt
           </DialogClose>
           <Button
-            className="bg-sky-600 hover:bg-sky-700 text-white"
+            className="bg-primary hover:bg-primary/90 text-white btn-lift"
             disabled={isPending}
             onClick={handleSubscribe}
           >

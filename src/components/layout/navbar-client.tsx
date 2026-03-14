@@ -33,7 +33,7 @@ const roleLabels: Record<string, string> = {
 
 const roleBadgeStyles: Record<string, string> = {
   user: "bg-muted text-muted-foreground",
-  instructor: "bg-sky-100 text-sky-800",
+  instructor: "bg-primary-muted text-primary",
   admin: "bg-amber-100 text-amber-800",
 }
 
@@ -76,7 +76,7 @@ export function NavbarClient({ user }: NavbarClientProps) {
       <nav className="mx-auto max-w-6xl px-4 h-16 flex items-center justify-between">
         <Link
           href="/"
-          className="font-semibold text-lg text-foreground hover:text-sky-600 transition-colors"
+          className="font-semibold text-lg text-foreground hover:text-primary transition-colors"
         >
           Ålesund Kiteklubb
         </Link>
@@ -87,7 +87,7 @@ export function NavbarClient({ user }: NavbarClientProps) {
             <Link
               key={link.href}
               href={link.href}
-              className="text-sm font-medium text-foreground/80 hover:text-sky-600 transition-colors"
+              className="text-sm font-medium text-foreground/80 hover:text-primary transition-colors"
             >
               {link.label}
             </Link>
@@ -96,7 +96,7 @@ export function NavbarClient({ user }: NavbarClientProps) {
             <Link
               key={link.href}
               href={link.href}
-              className="text-sm font-medium text-foreground/80 hover:text-sky-600 transition-colors"
+              className="text-sm font-medium text-foreground/80 hover:text-primary transition-colors"
             >
               {link.label}
             </Link>
@@ -109,7 +109,7 @@ export function NavbarClient({ user }: NavbarClientProps) {
               >
                 <Avatar className="h-8 w-8">
                   <AvatarImage src={user.avatarUrl ?? undefined} />
-                  <AvatarFallback className="bg-sky-100 text-sky-800 text-sm">
+                  <AvatarFallback className="bg-primary-muted text-primary text-sm">
                     {getInitials(user.name)}
                   </AvatarFallback>
                 </Avatar>
@@ -141,7 +141,7 @@ export function NavbarClient({ user }: NavbarClientProps) {
               href="/login"
               className={cn(
                 buttonVariants(),
-                "bg-sky-600 hover:bg-sky-700 text-white"
+                "bg-primary hover:bg-primary/90 text-primary-foreground btn-lift"
               )}
             >
               Logg inn
@@ -175,7 +175,7 @@ export function NavbarClient({ user }: NavbarClientProps) {
                   <div className="flex items-center gap-3">
                     <Avatar className="h-12 w-12">
                       <AvatarImage src={user.avatarUrl ?? undefined} />
-                      <AvatarFallback className="bg-sky-100 text-sky-800">
+                      <AvatarFallback className="bg-primary-muted text-primary">
                         {getInitials(user.name)}
                       </AvatarFallback>
                     </Avatar>
@@ -200,7 +200,7 @@ export function NavbarClient({ user }: NavbarClientProps) {
                       key={link.href}
                       href={link.href}
                       onClick={() => setIsOpen(false)}
-                      className="flex items-center h-12 px-4 text-lg font-medium text-foreground hover:bg-sky-50 rounded-lg transition-colors"
+                      className="flex items-center h-12 px-4 text-lg font-medium text-foreground hover:bg-primary-muted rounded-lg transition-colors"
                     >
                       {link.label}
                     </Link>
@@ -210,7 +210,7 @@ export function NavbarClient({ user }: NavbarClientProps) {
                       key={link.href}
                       href={link.href}
                       onClick={() => setIsOpen(false)}
-                      className="flex items-center h-12 px-4 text-lg font-medium text-foreground hover:bg-sky-50 rounded-lg transition-colors"
+                      className="flex items-center h-12 px-4 text-lg font-medium text-foreground hover:bg-primary-muted rounded-lg transition-colors"
                     >
                       {link.label}
                     </Link>
@@ -237,7 +237,7 @@ export function NavbarClient({ user }: NavbarClientProps) {
                     onClick={() => setIsOpen(false)}
                     className={cn(
                       buttonVariants(),
-                      "w-full h-12 bg-sky-600 hover:bg-sky-700 text-white"
+                      "w-full h-12 bg-primary hover:bg-primary/90 text-white btn-lift"
                     )}
                   >
                     Logg inn

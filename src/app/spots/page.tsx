@@ -16,7 +16,7 @@ export default async function SpotsPage() {
     <div className="px-6 py-8">
       <div className="mb-8">
         <div className="flex items-center gap-2 mb-2">
-          <MapPin className="h-6 w-6 text-sky-600" />
+          <MapPin className="h-6 w-6 text-primary" />
           <h1 className="text-2xl md:text-3xl font-bold text-foreground">
             Spotter
           </h1>

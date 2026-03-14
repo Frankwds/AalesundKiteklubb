@@ -69,7 +69,7 @@ export function ProfilTab({ instructor }: Props) {
             name="photo"
             type="file"
             accept="image/jpeg,image/png,image/webp"
-            className="w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-sky-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-sky-700 hover:file:bg-sky-100"
+            className="w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary-muted file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-primary hover:file:bg-primary-muted/80"
           />
           <p className="text-xs text-muted-foreground mt-1">
             Valgfritt. JPEG, PNG eller WebP. Max 2 MB.
@@ -83,7 +83,7 @@ export function ProfilTab({ instructor }: Props) {
             defaultValue={instructor.bio ?? ""}
             rows={4}
             maxLength={2000}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 resize-y"
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 resize-y"
             placeholder="Fortell litt om deg selv som instruktør..."
           />
         </div>
@@ -95,7 +95,7 @@ export function ProfilTab({ instructor }: Props) {
             type="text"
             defaultValue={instructor.certifications ?? ""}
             maxLength={500}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
             placeholder="F.eks. IKO Level 2"
           />
         </div>
@@ -109,7 +109,7 @@ export function ProfilTab({ instructor }: Props) {
               min={0}
               max={100}
               defaultValue={instructor.years_experience ?? ""}
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
             />
           </div>
           <div>
@@ -119,7 +119,7 @@ export function ProfilTab({ instructor }: Props) {
               type="text"
               defaultValue={instructor.phone ?? ""}
               maxLength={30}
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
               placeholder="+47 xxx xx xxx"
             />
           </div>
@@ -127,7 +127,7 @@ export function ProfilTab({ instructor }: Props) {
 
         <Button
           type="submit"
-          className="bg-sky-600 hover:bg-sky-700 text-white"
+          className="bg-primary hover:bg-primary/90 text-white btn-lift"
           disabled={isPending}
         >
           {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

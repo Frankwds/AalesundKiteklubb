@@ -72,7 +72,7 @@ export function MessageBubble({
           className={cn(
             "rounded-xl px-3 py-2 text-sm leading-relaxed",
             isOwnMessage
-              ? "bg-sky-100 text-sky-950"
+              ? "bg-primary-muted text-primary"
               : "bg-white border border-border text-foreground"
           )}
         >

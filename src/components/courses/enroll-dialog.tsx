@@ -52,7 +52,7 @@ export function EnrollDialog({
       <DialogTrigger
         className={cn(
           buttonVariants({ size: "sm" }),
-          "bg-sky-600 hover:bg-sky-700 text-white"
+          "bg-primary hover:bg-primary/90 text-white btn-lift"
         )}
       >
         Meld på
@@ -75,7 +75,7 @@ export function EnrollDialog({
             Avbryt
           </DialogClose>
           <Button
-            className="bg-sky-600 hover:bg-sky-700 text-white"
+            className="bg-primary hover:bg-primary/90 text-white btn-lift"
             disabled={isPending}
             onClick={handleEnroll}
           >

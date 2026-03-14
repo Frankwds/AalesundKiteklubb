@@ -49,8 +49,8 @@ export default function RootLayout({
 
         <div className="min-h-screen flex flex-col">
           <Navbar />
-          <main className="flex-1 pt-16">
-            <div className="mx-auto w-full max-w-6xl px-4 py-6 md:py-8">
+          <main className="flex-1 min-h-0 pt-16">
+            <div className="mx-auto w-full max-w-6xl px-4 py-6 md:py-8 h-full min-h-0 overflow-y-auto">
               <div className="rounded-none md:rounded-xl bg-card shadow-lg md:shadow-xl min-h-[60vh]">
                 {children}
               </div>

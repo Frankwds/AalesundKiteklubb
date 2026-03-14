@@ -20,7 +20,7 @@ export function SubscribersTab({ subscriptions }: Props) {
         {subscriptions.length} abonnent{subscriptions.length !== 1 && "er"}
       </p>
 
-      <div className="overflow-x-auto rounded-lg border border-border">
+      <div className="overflow-x-auto rounded-lg border border-border [contain:layout]">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b bg-muted/50 text-left">

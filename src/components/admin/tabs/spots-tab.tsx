@@ -331,7 +331,7 @@ export function SpotsTab({ spots }: Props) {
         </Dialog>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-border">
+      <div className="overflow-x-auto rounded-lg border border-border [contain:layout]">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b bg-muted/50 text-left">

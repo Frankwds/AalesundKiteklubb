@@ -109,7 +109,7 @@ export function CoursesTab({ courses }: Props) {
         {courses.length} kurs totalt
       </p>
 
-      <div className="overflow-x-auto rounded-lg border border-border">
+      <div className="overflow-x-auto rounded-lg border border-border [contain:layout]">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b bg-muted/50 text-left">

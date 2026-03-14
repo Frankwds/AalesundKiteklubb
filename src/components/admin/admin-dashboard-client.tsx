@@ -27,11 +27,16 @@ export function AdminDashboardClient({
   currentUser,
 }: Props) {
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold tracking-tight">Administrasjon</h1>
+    <div className="flex flex-col h-[calc(100vh-12rem)] min-h-0 overflow-hidden px-6 py-6 md:px-8 md:py-8">
+      <h1 className="text-2xl font-bold tracking-tight shrink-0 pb-4">
+        Administrasjon
+      </h1>
 
-      <Tabs defaultValue="instructors">
-        <div className="overflow-x-auto -mx-1 px-1">
+      <Tabs
+        defaultValue="instructors"
+        className="flex flex-col flex-1 min-h-0 overflow-hidden"
+      >
+        <div className="overflow-x-auto overflow-y-hidden -mx-1 px-1 shrink-0">
           <TabsList>
             <TabsTrigger value="instructors">Instruktører</TabsTrigger>
             <TabsTrigger value="courses">Kurs</TabsTrigger>
@@ -41,7 +46,8 @@ export function AdminDashboardClient({
           </TabsList>
         </div>
 
-        <TabsContent value="instructors">
+        <div className="flex-1 min-h-0 overflow-y-auto pt-4">
+          <TabsContent value="instructors">
           <InstructorsTab
             instructors={instructors}
             users={users}
@@ -64,6 +70,7 @@ export function AdminDashboardClient({
         <TabsContent value="users">
           <UsersTab users={users} currentUser={currentUser} />
         </TabsContent>
+        </div>
       </Tabs>
     </div>
   )

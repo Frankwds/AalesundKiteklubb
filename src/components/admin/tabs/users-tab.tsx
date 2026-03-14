@@ -115,7 +115,7 @@ export function UsersTab({ users, currentUser }: Props) {
         {users.length} bruker{users.length !== 1 && "e"}
       </p>
 
-      <div className="overflow-x-auto rounded-lg border border-border">
+      <div className="overflow-x-auto rounded-lg border border-border [contain:layout]">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b bg-muted/50 text-left">

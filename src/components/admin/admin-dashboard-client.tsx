@@ -48,28 +48,24 @@ export function AdminDashboardClient({
 
         <div className="flex-1 min-h-0 overflow-y-auto pt-4">
           <TabsContent value="instructors">
-          <InstructorsTab
-            instructors={instructors}
-            users={users}
-            currentUser={currentUser}
-          />
-        </TabsContent>
-
-        <TabsContent value="courses">
-          <CoursesTab courses={courses} />
-        </TabsContent>
-
-        <TabsContent value="spots">
-          <SpotsTab spots={spots} />
-        </TabsContent>
-
-        <TabsContent value="subscribers">
-          <SubscribersTab subscriptions={subscriptions} />
-        </TabsContent>
-
-        <TabsContent value="users">
-          <UsersTab users={users} currentUser={currentUser} />
-        </TabsContent>
+            <InstructorsTab
+              instructors={instructors}
+              users={users}
+              currentUser={currentUser}
+            />
+          </TabsContent>
+          <TabsContent value="courses">
+            <CoursesTab courses={courses} />
+          </TabsContent>
+          <TabsContent value="spots">
+            <SpotsTab spots={spots} />
+          </TabsContent>
+          <TabsContent value="subscribers">
+            <SubscribersTab subscriptions={subscriptions} />
+          </TabsContent>
+          <TabsContent value="users">
+            <UsersTab users={users} currentUser={currentUser} />
+          </TabsContent>
         </div>
       </Tabs>
     </div>

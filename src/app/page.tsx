@@ -43,25 +43,25 @@ export default function HomePage() {
             Om klubben
           </h2>
 
-          <div className="grid md:grid-cols-2 gap-8 md:gap-12 items-center">
-            <div className="space-y-6">
+          <div className="grid md:grid-cols-2 gap-8 md:gap-16 items-start">
+            <div className="space-y-6 min-w-0 relative z-10">
               <p className="text-base text-foreground/80 leading-relaxed">
                 Ålesund Kiteklubb er en lokal kiteklubb på Sunnmøre. Vi
                 holder kurs for nybegynnere, og har en guide til
                 de beste kitespottene i området. Bli med i fellesskapet!
               </p>
 
-              <div className="flex flex-col sm:flex-row gap-4 pt-4">
+              <div className="flex flex-col sm:flex-row sm:flex-nowrap gap-4 pt-4">
                 <Link
                   href="https://www.facebook.com/groups/219320601753203"
                   target="_blank"
                   rel="noopener noreferrer"
                   className={cn(
                     buttonVariants(),
-                    "bg-primary hover:bg-primary/90 text-primary-foreground h-11 btn-lift"
+                    "shrink-0 h-11 btn-lift bg-primary hover:bg-primary/90 text-primary-foreground"
                   )}
                 >
-                  <Users className="mr-2 h-5 w-5" />
+                  <Users className="mr-2 h-5 w-5 shrink-0" />
                   Facebook gruppe
                 </Link>
                 <Link
@@ -70,16 +70,16 @@ export default function HomePage() {
                   rel="noopener noreferrer"
                   className={cn(
                     buttonVariants({ variant: "outline" }),
-                    "h-11 border-primary text-primary hover:bg-primary-muted"
+                    "shrink-0 h-11 border-primary text-primary hover:bg-primary-muted"
                   )}
                 >
-                  <MessageCircle className="mr-2 h-5 w-5" />
+                  <MessageCircle className="mr-2 h-5 w-5 shrink-0" />
                   Bli med i chatten
                 </Link>
               </div>
             </div>
 
-            <div className="relative aspect-[4/3] rounded-lg overflow-hidden shadow-lg">
+            <div className="relative aspect-[4/3] rounded-lg overflow-hidden shadow-lg min-w-0">
               <Image
                 src="/images/kite-beach-bg.jpg"
                 alt="Kitesurfing på Sunnmøre"
@@ -97,7 +97,7 @@ export default function HomePage() {
           <div className="grid sm:grid-cols-2 gap-6">
             <Link
               href="/spots"
-              className="group p-6 bg-white rounded-lg border border-border hover:border-primary/40 card-lift"
+              className="group p-6 bg-card rounded-lg border border-border hover:border-primary/40 card-lift"
             >
               <h3 className="text-lg font-semibold text-foreground mb-2 group-hover:text-primary transition-colors">
                 Utforsk spotter
@@ -110,7 +110,7 @@ export default function HomePage() {
 
             <Link
               href="/courses"
-              className="group p-6 bg-white rounded-lg border border-border hover:border-primary/40 card-lift"
+              className="group p-6 bg-card rounded-lg border border-border hover:border-primary/40 card-lift"
             >
               <h3 className="text-lg font-semibold text-foreground mb-2 group-hover:text-primary transition-colors">
                 Bli med på kurs

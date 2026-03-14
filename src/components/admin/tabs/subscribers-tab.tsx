@@ -41,7 +41,7 @@ export function SubscribersTab({ subscriptions }: Props) {
                 <tr key={sub.id} className="hover:bg-muted/30">
                   <td className="px-4 py-3 text-muted-foreground">{sub.email}</td>
                   <td className="px-4 py-3 font-medium">
-                    {sub.users?.name ?? "Ukjent"}
+                    {sub.users?.name ?? "Uten navn"}
                   </td>
                   <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
                     {formatDate(sub.created_at)}

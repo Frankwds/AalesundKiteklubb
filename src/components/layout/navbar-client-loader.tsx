@@ -8,7 +8,7 @@ const NavbarClient = dynamic(
   {
     ssr: false,
     loading: () => (
-      <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-white/20">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-card/80 backdrop-blur-md border-b border-border/50">
         <nav className="mx-auto max-w-6xl px-4 h-16" />
       </header>
     ),

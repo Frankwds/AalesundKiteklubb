@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
   Dialog,
+  DialogTrigger,
   DialogContent,
   DialogHeader,
   DialogFooter,
@@ -313,14 +314,17 @@ export function SpotsTab({ spots }: Props) {
           {spots.length} spot{spots.length !== 1 && "s"}
         </p>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-          <Button
-            size="sm"
-            className="bg-primary hover:bg-primary/90 text-white btn-lift"
-            onClick={() => setCreateOpen(true)}
+          <DialogTrigger
+            render={
+              <Button
+                size="sm"
+                className="bg-primary hover:bg-primary/90 text-primary-foreground btn-lift"
+              />
+            }
           >
             <Plus className="mr-1.5 h-4 w-4" />
             Ny spot
-          </Button>
+          </DialogTrigger>
           <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Ny spot</DialogTitle>

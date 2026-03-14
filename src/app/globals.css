@@ -129,4 +129,12 @@
     transform: translateY(-2px);
     box-shadow: 0 12px 40px -10px oklch(0.42 0.14 205 / 0.15);
   }
+  @media (prefers-reduced-motion: reduce) {
+    .btn-lift:hover,
+    .btn-lift:active,
+    .card-lift:hover,
+    .card-hover:hover {
+      transform: none;
+    }
+  }
 }

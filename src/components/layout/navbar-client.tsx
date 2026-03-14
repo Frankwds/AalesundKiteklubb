@@ -72,7 +72,7 @@ export function NavbarClient({ user }: NavbarClientProps) {
   }
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-white/20">
+    <header className="fixed top-0 left-0 right-0 z-50 bg-card/80 backdrop-blur-md border-b border-border/50">
       <nav className="mx-auto max-w-6xl px-4 h-16 flex items-center justify-between">
         <Link
           href="/"
@@ -157,7 +157,7 @@ export function NavbarClient({ user }: NavbarClientProps) {
           </SheetTrigger>
           <SheetContent
             side="right"
-            className="w-full sm:max-w-md bg-white/95 backdrop-blur-md p-0"
+            className="w-full sm:max-w-md bg-card/95 backdrop-blur-md p-0"
             showCloseButton={false}
           >
             <SheetTitle className="sr-only">Navigasjonsmeny</SheetTitle>

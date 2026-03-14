@@ -1,7 +1,7 @@
 import Link from "next/link"
 import Image from "next/image"
 import { buttonVariants } from "@/components/ui/button-variants"
-import { ArrowRight, MessageCircle, Users } from "lucide-react"
+import { MessageCircle, Users } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 export const metadata = {
@@ -13,7 +13,7 @@ export default function HomePage() {
   return (
     <div>
       {/* Hero Section */}
-      <section className="relative h-[60vh] min-h-[400px] overflow-hidden rounded-t-none md:rounded-t-xl">
+      <section className="relative h-[45vh] min-h-[300px] overflow-hidden rounded-t-none md:rounded-t-xl">
         <Image
           src="/images/kite-beach-bg.jpg"
           alt="Kitesurf på strand"
@@ -23,22 +23,16 @@ export default function HomePage() {
         />
         <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/30 to-black/60" />
         <div className="relative z-10 h-full flex flex-col items-center justify-center text-center px-6">
-          <h1 className="text-4xl md:text-6xl font-bold text-white mb-4 text-balance">
-            Ålesund Kiteklubb
+          <h1 className="text-2xl md:text-4xl font-bold text-white mb-8 text-balance">
+            Velkommen til Ålesund Kiteklubb
           </h1>
-          <p className="text-lg md:text-xl text-white/90 mb-8">
-            Kiteklubben for Sunnmøre
+          <p className="text-sm md:text-base text-white/90 max-w-md mx-auto text-center">
+            Vi vil gjerne samle likesinnede i Sunnmøre.
+            <br />
+            Vi kiter på snø og på vann.
+            <br />
+            Bli med, finn spots, eller meld deg på kurs!
           </p>
-          <Link
-            href="/courses"
-            className={cn(
-              buttonVariants({ size: "lg" }),
-              "bg-primary hover:bg-primary/90 text-primary-foreground h-12 px-8 btn-lift"
-            )}
-          >
-            Se kurs
-            <ArrowRight className="ml-2 h-5 w-5" />
-          </Link>
         </div>
       </section>
 
@@ -53,18 +47,13 @@ export default function HomePage() {
             <div className="space-y-6">
               <p className="text-base text-foreground/80 leading-relaxed">
                 Ålesund Kiteklubb er en lokal kiteklubb på Sunnmøre. Vi
-                arrangerer kurs for nybegynnere og erfarne, og har en guide til
+                holder kurs for nybegynnere, og har en guide til
                 de beste kitespottene i området. Bli med i fellesskapet!
-              </p>
-              <p className="text-base text-foreground/80 leading-relaxed">
-                Våre instruktører er sertifiserte og har lang erfaring med
-                kitesurfing i norske forhold. Vi tilbyr kurs gjennom hele
-                sesongen, tilpasset ditt nivå.
               </p>
 
               <div className="flex flex-col sm:flex-row gap-4 pt-4">
                 <Link
-                  href="https://facebook.com"
+                  href="https://www.facebook.com/groups/219320601753203"
                   target="_blank"
                   rel="noopener noreferrer"
                   className={cn(
@@ -73,7 +62,7 @@ export default function HomePage() {
                   )}
                 >
                   <Users className="mr-2 h-5 w-5" />
-                  Facebook-gruppen vår
+                  Facebook gruppe
                 </Link>
                 <Link
                   href="https://discord.gg"

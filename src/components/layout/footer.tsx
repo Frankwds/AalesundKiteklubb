@@ -12,7 +12,7 @@ export function Footer() {
             </p>
             <div className="flex items-center gap-6">
               <Link
-                href="https://facebook.com"
+                href="https://www.facebook.com/groups/219320601753203"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors"

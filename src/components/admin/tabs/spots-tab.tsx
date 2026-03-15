@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dialog"
 import { createSpot, updateSpot, deleteSpot } from "@/lib/actions/spots"
 import { MapCoordinatesModal } from "@/components/admin/MapCoordinatesPicker/MapCoordinatesModal"
+import { AdminWindCompass } from "@/components/admin/AdminWindCompass"
 
 type Spot = {
   id: string
@@ -39,7 +40,6 @@ type Props = {
   spots: Spot[]
 }
 
-const WIND_DIRECTIONS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const
 const WATER_TYPES = ["flat", "chop", "waves"] as const
 const SEASONS = [
   { value: "summer", label: "Sommer" },
@@ -214,29 +214,13 @@ function SpotForm({
       />
 
       <div>
-        <label className="block text-sm font-medium mb-2">Vindretninger</label>
-        <div className="flex flex-wrap gap-2">
-          {WIND_DIRECTIONS.map((dir) => (
-            <button
-              key={dir}
-              type="button"
-              onClick={() =>
-                setSelectedWindDirs((prev) =>
-                  prev.includes(dir)
-                    ? prev.filter((d) => d !== dir)
-                    : [...prev, dir]
-                )
-              }
-              className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-colors ${
-                selectedWindDirs.includes(dir)
-                  ? "border-primary bg-primary-muted text-primary"
-                  : "border-border bg-background text-muted-foreground hover:bg-muted/50"
-              }`}
-            >
-              {dir}
-            </button>
-          ))}
-        </div>
+        <label className="block text-sm font-medium mb-2">Velg passende vindretninger</label>
+        <AdminWindCompass
+          selectedDirections={selectedWindDirs.map((d) => d.toLowerCase())}
+          onWindDirectionChange={(dirs) =>
+            setSelectedWindDirs(dirs.map((d) => d.toUpperCase()))
+          }
+        />
       </div>
 
       <div>

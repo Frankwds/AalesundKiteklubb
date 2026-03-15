@@ -1,7 +1,7 @@
 "use client"
 
-import { useCallback } from "react"
-import { useRouter, usePathname, useSearchParams } from "next/navigation"
+import { useCallback, useEffect, useState } from "react"
+import { usePathname, useSearchParams } from "next/navigation"
 import { SearchX } from "lucide-react"
 import { SpotCard } from "./spot-card"
 import { SpotFilters } from "./spot-filters"
@@ -9,32 +9,63 @@ import type { Database } from "@/types/database"
 
 type Spot = Database["public"]["Tables"]["spots"]["Row"]
 
+function parseFiltersFromSearchParams(searchParams: URLSearchParams) {
+  return {
+    season: searchParams.get("season"),
+    area: searchParams.get("area"),
+    wind: searchParams.get("wind")?.split(",").filter(Boolean) ?? [] as string[],
+  }
+}
+
 export function SpotList({ spots }: { spots: Spot[] }) {
   const searchParams = useSearchParams()
-  const router = useRouter()
   const pathname = usePathname()
 
-  const season = searchParams.get("season")
-  const area = searchParams.get("area")
-  const wind = searchParams.get("wind")?.split(",").filter(Boolean) ?? []
+  const [filters, setFilters] = useState(() =>
+    parseFiltersFromSearchParams(new URLSearchParams(searchParams.toString()))
+  )
+
+  const { season, area, wind } = filters
+
+  // Sync state when user navigates via browser back/forward
+  useEffect(() => {
+    const handlePopState = () => {
+      setFilters(
+        parseFiltersFromSearchParams(new URLSearchParams(window.location.search))
+      )
+    }
+    window.addEventListener("popstate", handlePopState)
+    return () => window.removeEventListener("popstate", handlePopState)
+  }, [])
 
   const setFilter = useCallback(
     (key: string, value: string | null) => {
-      const params = new URLSearchParams(searchParams.toString())
+      setFilters((prev) => {
+        const next = { ...prev }
+        if (key === "wind") {
+          next.wind = value ? value.split(",").filter(Boolean) : []
+        } else {
+          ;(next as Record<string, string | null>)[key] = value
+        }
+        return next
+      })
+      const params = new URLSearchParams(window.location.search)
       if (value) {
         params.set(key, value)
       } else {
         params.delete(key)
       }
       const qs = params.toString()
-      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+      const url = qs ? `${pathname}?${qs}` : pathname
+      window.history.replaceState(null, "", url)
     },
-    [searchParams, router, pathname]
+    [pathname]
   )
 
   const clearFilters = useCallback(() => {
-    router.replace(pathname, { scroll: false })
-  }, [router, pathname])
+    setFilters({ season: null, area: null, wind: [] })
+    window.history.replaceState(null, "", pathname)
+  }, [pathname])
 
   const filteredSpots = spots.filter((spot) => {
     if (season && spot.season !== season) return false

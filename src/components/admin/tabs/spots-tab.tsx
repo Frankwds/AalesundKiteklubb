@@ -223,10 +223,10 @@ function SpotForm({
       <div className="grid grid-cols-[auto_1fr_1fr] gap-3 items-end">
         <Button
           type="button"
+          variant="primaryLift"
           size="sm"
           onClick={() => setMapModalOpen(true)}
           title="Velg posisjon på kart"
-          className="bg-primary hover:bg-primary/90 text-primary-foreground h-9 px-4 gap-2"
         >
           <MapPin className="h-4 w-4" />
           Kart
@@ -349,12 +349,13 @@ function SpotForm({
       </div>
 
       <DialogFooter>
-        <DialogClose render={<Button variant="outline" />}>
+        <DialogClose render={<Button variant="outlinePrimaryLift" size="lg" />}>
           Avbryt
         </DialogClose>
         <Button
           type="submit"
-          className="bg-primary hover:bg-primary/90 text-white btn-lift"
+          variant="primaryLift"
+          size="lg"
           disabled={isPending}
         >
           {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -421,8 +422,8 @@ export function SpotsTab({ spots }: Props) {
           <DialogTrigger
             render={
               <Button
-                size="sm"
-                className="bg-primary hover:bg-primary/90 text-primary-foreground btn-lift"
+                variant="primaryLift"
+                size="lg"
               />
             }
           >
@@ -546,7 +547,7 @@ export function SpotsTab({ spots }: Props) {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <DialogClose render={<Button variant="outline" />}>
+            <DialogClose render={<Button variant="outlinePrimaryLift" size="lg" />}>
               Avbryt
             </DialogClose>
             <Button

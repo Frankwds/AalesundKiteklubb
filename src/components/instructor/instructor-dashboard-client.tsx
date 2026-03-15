@@ -37,8 +37,8 @@ export function InstructorDashboardClient({
         defaultValue="profil"
         className="flex flex-col flex-1 min-h-0 overflow-hidden"
       >
-        <div className="overflow-x-auto overflow-y-hidden -mx-1 px-1 shrink-0">
-          <TabsList>
+        <div className="overflow-x-auto overflow-y-hidden -mx-1 px-1 py-5 shrink-0">
+          <TabsList variant="panel">
             <TabsTrigger value="profil">
               <User className="h-4 w-4" />
               Profil

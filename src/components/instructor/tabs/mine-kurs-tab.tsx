@@ -173,12 +173,13 @@ function CourseForm({
       </div>
 
       <DialogFooter>
-        <Button type="button" variant="outline" onClick={onCancel}>
+        <Button type="button" variant="outlinePrimaryLift" size="lg" onClick={onCancel}>
           Avbryt
         </Button>
         <Button
           type="submit"
-          className="bg-primary hover:bg-primary/90 text-white btn-lift"
+          variant="primaryLift"
+          size="lg"
           disabled={isPending}
         >
           {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -307,8 +308,9 @@ export function MineKursTab({ courses, spots }: Props) {
         </p>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <Button
+            variant="primaryLift"
             size="lg"
-            className="bg-primary hover:bg-primary/90 text-white btn-lift shrink-0"
+            className="shrink-0"
             onClick={() => setCreateOpen(true)}
           >
             <Plus className="mr-2 h-4 w-4" />

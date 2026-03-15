@@ -1,9 +1,9 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useState, useTransition, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { Loader2 } from "lucide-react"
+import { Loader2, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -71,6 +71,17 @@ export function UsersTab({ users, currentUser }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [pendingChange, setPendingChange] = useState<RoleChange | null>(null)
+  const [searchQuery, setSearchQuery] = useState("")
+
+  const filteredUsers = useMemo(() => {
+    if (!searchQuery.trim()) return users
+    const q = searchQuery.toLowerCase()
+    return users.filter(
+      (u) =>
+        (u.name?.toLowerCase().includes(q) ?? false) ||
+        u.email.toLowerCase().includes(q)
+    )
+  }, [users, searchQuery])
 
   function executeRoleChange(userId: string, currentRole: string, newRole: string) {
     startTransition(async () => {
@@ -111,9 +122,21 @@ export function UsersTab({ users, currentUser }: Props) {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">
-        {users.length} bruker{users.length !== 1 && "e"}
-      </p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <p className="text-sm text-muted-foreground">
+          {users.length} bruker{users.length !== 1 && "e"}
+        </p>
+        <div className="relative w-full sm:w-72">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder="Søk etter navn eller e-post..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full rounded-md border border-border bg-background py-2 pl-9 pr-3 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
+          />
+        </div>
+      </div>
 
       <div className="overflow-x-auto rounded-lg border border-border [contain:layout]">
         <table className="w-full text-sm">
@@ -127,14 +150,14 @@ export function UsersTab({ users, currentUser }: Props) {
             </tr>
           </thead>
           <tbody className="divide-y">
-            {users.length === 0 ? (
+            {filteredUsers.length === 0 ? (
               <tr>
                 <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
-                  Ingen brukere
+                  {searchQuery ? "Ingen brukere funnet" : "Ingen brukere"}
                 </td>
               </tr>
             ) : (
-              users.map((user) => {
+              filteredUsers.map((user) => {
                 const isOwnRow = user.id === currentUser.id
                 return (
                   <tr key={user.id} className="hover:bg-muted/30">

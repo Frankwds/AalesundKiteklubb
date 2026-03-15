@@ -17,6 +17,10 @@ export const buttonVariants = cva(
         link: "text-primary underline-offset-4 hover:underline",
         outlinePrimary:
           "border-primary text-primary bg-transparent hover:bg-primary-muted aria-expanded:bg-primary-muted dark:border-primary/70 dark:hover:bg-primary/10",
+        primaryLift:
+          "bg-primary text-primary-foreground hover:bg-primary/90 btn-lift-soft dark:hover:bg-primary/90",
+        outlinePrimaryLift:
+          "border-primary text-primary bg-transparent hover:bg-primary-muted btn-lift-soft dark:border-primary/70 dark:hover:bg-primary/10 h-9 min-h-9",
       },
       size: {
         default:

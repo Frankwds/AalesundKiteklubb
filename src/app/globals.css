@@ -148,6 +148,16 @@
   .btn-lift:active {
     transform: translateY(0);
   }
+  .btn-lift-soft {
+    transition: transform 0.2s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.2s ease;
+  }
+  .btn-lift-soft:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px -2px var(--primary-shadow-soft);
+  }
+  .btn-lift-soft:active {
+    transform: translateY(0);
+  }
   .card-lift,
   .card-hover {
     transition: transform 0.2s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.25s ease, border-color 0.2s ease;
@@ -160,6 +170,8 @@
   @media (prefers-reduced-motion: reduce) {
     .btn-lift:hover,
     .btn-lift:active,
+    .btn-lift-soft:hover,
+    .btn-lift-soft:active,
     .card-lift:hover,
     .card-hover:hover {
       transform: none;

@@ -130,7 +130,8 @@ export function ProfilTab({ instructor }: Props) {
 
         <Button
           type="submit"
-          className="bg-primary hover:bg-primary/90 text-white btn-lift"
+          variant="primaryLift"
+          size="lg"
           disabled={isPending}
         >
           {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

@@ -108,7 +108,7 @@ export function InstructorsTab({ instructors, users, currentUser }: Props) {
         </p>
         <Dialog open={addOpen} onOpenChange={(o) => { setAddOpen(o); if (!o) setSearchQuery("") }}>
           <DialogTrigger
-            render={<Button size="sm" className="bg-primary hover:bg-primary/90 text-white btn-lift" />}
+            render={<Button variant="primaryLift" size="lg" />}
           >
             <Plus className="mr-1.5 h-4 w-4" />
             Legg til instruktør
@@ -148,8 +148,9 @@ export function InstructorsTab({ instructors, users, currentUser }: Props) {
                       <p className="text-muted-foreground truncate text-xs">{u.email}</p>
                     </div>
                     <Button
+                      variant="primaryLift"
                       size="sm"
-                      className="ml-2 shrink-0 bg-primary hover:bg-primary/90 text-white btn-lift"
+                      className="ml-2 shrink-0"
                       disabled={isPending}
                       onClick={() => handleAdd(u.id)}
                     >
@@ -162,7 +163,7 @@ export function InstructorsTab({ instructors, users, currentUser }: Props) {
             </div>
 
             <DialogFooter>
-              <DialogClose render={<Button variant="outline" />}>
+              <DialogClose render={<Button variant="outlinePrimaryLift" size="lg" />}>
                 Lukk
               </DialogClose>
             </DialogFooter>
@@ -233,7 +234,7 @@ export function InstructorsTab({ instructors, users, currentUser }: Props) {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <DialogClose render={<Button variant="outline" />}>
+            <DialogClose render={<Button variant="outlinePrimaryLift" size="lg" />}>
               Avbryt
             </DialogClose>
             <Button

@@ -36,13 +36,13 @@ export function AdminDashboardClient({
         defaultValue="instructors"
         className="flex flex-col flex-1 min-h-0 overflow-hidden"
       >
-        <div className="overflow-x-auto overflow-y-hidden -mx-1 px-1 shrink-0">
-          <TabsList>
+        <div className="overflow-x-auto overflow-y-hidden -mx-1 px-1 py-5 shrink-0">
+          <TabsList variant="panel">
             <TabsTrigger value="instructors">Instruktører</TabsTrigger>
             <TabsTrigger value="courses">Kurs</TabsTrigger>
             <TabsTrigger value="spots">Spots</TabsTrigger>
             <TabsTrigger value="subscribers">Abonnenter</TabsTrigger>
-            <TabsTrigger value="users">Brukere</TabsTrigger>
+            <TabsTrigger value="users">Rettigheter</TabsTrigger>
           </TabsList>
         </div>
 

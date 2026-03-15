@@ -163,38 +163,35 @@ function SpotForm({
         </div>
       </div>
 
-      <div className="grid grid-cols-[1fr_1fr_auto] gap-3 items-end">
-        <div>
-          <label className="block text-sm font-medium mb-1">Breddegrad</label>
-          <input
-            ref={latRef}
-            name="latitude"
-            type="number"
-            step="any"
-            defaultValue={spot?.latitude ?? ""}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">Lengdegrad</label>
-          <input
-            ref={lngRef}
-            name="longitude"
-            type="number"
-            step="any"
-            defaultValue={spot?.longitude ?? ""}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
-          />
-        </div>
+      <div className="grid grid-cols-[auto_1fr_1fr] gap-3 items-end">
         <Button
           type="button"
-          variant="outline"
-          size="icon"
+          size="sm"
           onClick={() => setMapModalOpen(true)}
           title="Velg posisjon på kart"
+          className="bg-primary hover:bg-primary/90 text-primary-foreground h-9 px-4 gap-2"
         >
           <MapPin className="h-4 w-4" />
+          Kart
         </Button>
+        <input
+          ref={latRef}
+          name="latitude"
+          type="number"
+          step="any"
+          placeholder="Breddegrad"
+          defaultValue={spot?.latitude ?? ""}
+          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 placeholder:text-muted-foreground"
+        />
+        <input
+          ref={lngRef}
+          name="longitude"
+          type="number"
+          step="any"
+          placeholder="Lengdegrad"
+          defaultValue={spot?.longitude ?? ""}
+          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 placeholder:text-muted-foreground"
+        />
       </div>
 
       <MapCoordinatesModal

@@ -45,7 +45,7 @@ export function SpotList({ spots }: { spots: Spot[] }) {
         if (key === "wind") {
           next.wind = value ? value.split(",").filter(Boolean) : []
         } else {
-          ;(next as Record<string, string | null>)[key] = value
+          ;(next as unknown as Record<string, string | null>)[key] = value
         }
         return next
       })

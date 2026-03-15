@@ -5,6 +5,7 @@ import { ArrowLeft, Cloud, MapPin } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { WindCompass } from "@/components/spots/wind-compass"
+import { SpotWindForecast } from "@/components/spots/spot-wind-forecast"
 import {
   seasonLabels,
   skillLabels,
@@ -142,6 +143,16 @@ export default async function SpotDetailPage({
               </Badge>
             ))}
           </div>
+        </Section>
+      )}
+
+      {/* Vindvarsel (Yr minimal forecast) */}
+      {hasCoords && (
+        <Section title="Vindvarsel">
+          <SpotWindForecast
+            latitude={spot.latitude!}
+            longitude={spot.longitude!}
+          />
         </Section>
       )}
 

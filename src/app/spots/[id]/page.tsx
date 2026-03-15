@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
-import { ArrowLeft, Cloud, ExternalLink, MapPin, Navigation } from "lucide-react"
+import { ArrowLeft, Cloud, MapPin } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { WindCompass } from "@/components/spots/wind-compass"
@@ -50,90 +50,71 @@ export default async function SpotDetailPage({
         Tilbake til spotter
       </Link>
 
-      {/* Title */}
-      <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-4">
-        {spot.name}
-      </h1>
-
-      {/* Badges row */}
-      <div className="flex flex-wrap gap-2 mb-8">
-        {season && (
-          <Badge variant={season.variant}>{season.text}</Badge>
+      {/* Top row: Title + badges left, Kart + Yr links right */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between sm:gap-4 mb-8">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-2">
+            {spot.name}
+          </h1>
+          <div className="flex flex-wrap gap-2">
+            {season && (
+              <Badge variant={season.variant}>{season.text}</Badge>
+            )}
+            {skill && (
+              <Badge variant={skill.variant}>{skill.text}</Badge>
+            )}
+            <Badge variant="neutral">{spot.area}</Badge>
+          </div>
+        </div>
+        {hasCoords && (
+          <div className="flex flex-wrap gap-2 mt-4 sm:mt-0">
+            <a
+              href={`https://www.google.com/maps?q=${spot.latitude},${spot.longitude}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm font-medium text-foreground hover:border-primary/40 hover:bg-primary-muted transition-all"
+            >
+              <MapPin className="h-4 w-4 text-primary" />
+              Google Maps
+            </a>
+            <a
+              href={`https://www.yr.no/nb/v%C3%A6rvarsel/daglig-tabell/${spot.latitude},${spot.longitude}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm font-medium text-foreground hover:border-primary/40 hover:bg-primary-muted transition-all"
+            >
+              <Cloud className="h-4 w-4 text-primary" />
+              Yr.no
+            </a>
+          </div>
         )}
-        {skill && (
-          <Badge variant={skill.variant}>{skill.text}</Badge>
-        )}
-        <Badge variant="neutral">{spot.area}</Badge>
       </div>
 
-      {/* Wind Compass */}
-      {spot.wind_directions && spot.wind_directions.length > 0 ? (
-        <Section title="Vindretninger">
-          <WindCompass directions={spot.wind_directions} size="lg" />
-        </Section>
-      ) : (
-        <Section title="Vindretninger">
-          <p className="text-sm text-muted-foreground">
-            Ingen vindretninger spesifisert
-          </p>
-        </Section>
-      )}
-
-      {/* Om spotten */}
-      {spot.description && (
-        <Section title="Om spotten">
-          <p className="text-sm leading-relaxed text-foreground/80 whitespace-pre-line">
-            {spot.description}
-          </p>
-        </Section>
-      )}
-
-      {/* Kart */}
-      {spot.map_image_url && (
-        <Section title="Kart">
-          <div className="relative aspect-video w-full overflow-hidden rounded-lg border border-border">
-            <Image
-              src={spot.map_image_url}
-              alt={`Kart over ${spot.name}`}
-              fill
-              className="object-cover"
-              sizes="(max-width: 768px) 100vw, 800px"
-            />
+      {/* Om spotten + Wind compass side by side */}
+      <Section title="Om spotten">
+        <div className="flex flex-col md:flex-row md:items-start md:gap-8 gap-6">
+          <div className="flex-1 min-w-0">
+            {spot.description ? (
+              <p className="text-sm leading-relaxed text-foreground/80 whitespace-pre-line">
+                {spot.description}
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground">Ingen beskrivelse</p>
+            )}
           </div>
-        </Section>
-      )}
-
-      {/* Værmelding */}
-      {hasCoords && (
-        <Section title="Værmelding">
-          <a
-            href={`https://www.yr.no/nb/v%C3%A6rvarsel/daglig-tabell/${spot.latitude},${spot.longitude}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-4 py-2.5 text-sm font-medium text-foreground hover:border-primary/40 hover:bg-primary-muted transition-all"
-          >
-            <Cloud className="h-4 w-4 text-primary" />
-            Se værmelding på Yr.no
-            <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
-          </a>
-        </Section>
-      )}
-
-      {/* Veibeskrivelse */}
-      {hasCoords && (
-        <Section title="Veibeskrivelse">
-          <a
-            href={`https://www.google.com/maps?q=${spot.latitude},${spot.longitude}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-4 py-2.5 text-sm font-medium text-foreground hover:border-primary/40 hover:bg-primary-muted transition-all"
-          >
-            <Navigation className="h-4 w-4 text-primary" />
-            Vis i Google Maps
-            <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
-          </a>
-        </Section>
-      )}
+          <div className="flex-shrink-0">
+            {spot.wind_directions && spot.wind_directions.length > 0 ? (
+              <WindCompass directions={spot.wind_directions} size="lg" />
+            ) : (
+              <div className="w-32 h-32 md:w-48 md:h-48 flex items-center justify-center rounded-lg border border-dashed border-border">
+                <p className="text-sm text-muted-foreground text-center px-4">
+                  Ingen vindretninger
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </Section>
 
       {/* Nødvendige kiteskills */}
       {(spot.skill_level || spot.skill_notes) && (
@@ -160,6 +141,21 @@ export default async function SpotDetailPage({
                 {waterTypeLabels[type] ?? type}
               </Badge>
             ))}
+          </div>
+        </Section>
+      )}
+
+      {/* Bilde - at bottom */}
+      {spot.map_image_url && (
+        <Section title="Bilde">
+          <div className="relative aspect-video w-full overflow-hidden rounded-lg border border-border">
+            <Image
+              src={spot.map_image_url}
+              alt={`Bilde av ${spot.name}`}
+              fill
+              className="object-cover"
+              sizes="(max-width: 768px) 100vw, 800px"
+            />
           </div>
         </Section>
       )}

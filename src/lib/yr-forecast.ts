@@ -49,9 +49,9 @@ export function mapYrToMinimalForecast(rawData: unknown): MinimalForecast[] {
     result.push({
       time: item.time,
       is_day:
-        symbolCode.includes("_day") || symbolCode.includes("_polartwilight")
-          ? 1
-          : 0,
+        symbolCode.includes("_night")
+          ? 0
+          : 1, /* daytime unless explicitly _night; cloudy/rain/fog have no suffix */
       weather_code: symbolCode,
       temperature: instant.air_temperature ?? 0,
       wind_speed: instant.wind_speed ?? 0,

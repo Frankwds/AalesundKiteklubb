@@ -52,29 +52,29 @@ export function isKitePromising(
   spotWindDirections: string[] | null,
   weatherFilter: WeatherCondition[] = []
 ): boolean {
-  if (forecast.is_day !== 1) return false
-  if (forecast.wind_speed < KITE_RULE.MIN_WIND_SPEED) return false
-  if (forecast.wind_speed > KITE_RULE.MAX_WIND_SPEED) return false
+  const symbol = degreesToSymbol(forecast.wind_direction)
+  const allowed = new Set(
+    (spotWindDirections ?? []).map((d) => d.toLowerCase().trim())
+  )
+
+  const failReasons: string[] = []
+  if (forecast.is_day !== 1) failReasons.push("is_day")
+  if (forecast.wind_speed < KITE_RULE.MIN_WIND_SPEED) failReasons.push("wind_min")
+  if (forecast.wind_speed > KITE_RULE.MAX_WIND_SPEED) failReasons.push("wind_max")
   if (
     forecast.wind_gusts != null &&
     forecast.wind_gusts > KITE_RULE.MAX_GUST
   )
-    return false
-  if (!spotWindDirections || spotWindDirections.length === 0) return false
-
-  const symbol = degreesToSymbol(forecast.wind_direction)
-  const allowed = new Set(
-    spotWindDirections.map((d) => d.toLowerCase().trim())
-  )
-  if (!allowed.has(symbol)) return false
-
+    failReasons.push("gust")
+  if (!spotWindDirections || spotWindDirections.length === 0) failReasons.push("no_dirs")
+  else if (!allowed.has(symbol)) failReasons.push("dir")
   if (weatherFilter.length > 0) {
-    if (!weatherFilter.includes(forecast.weather_code as WeatherCondition))
-      return false
+    if (!weatherFilter.includes(forecast.weather_code as WeatherCondition)) failReasons.push("weather_filter")
   } else {
-    if (!GOOD_WEATHER_CODES.has(forecast.weather_code)) return false
+    if (!GOOD_WEATHER_CODES.has(forecast.weather_code)) failReasons.push("weather_code")
   }
 
+  if (failReasons.length > 0) return false
   return true
 }
 
@@ -139,12 +139,14 @@ function filterForecastToWindow(
   const startMs = start.getTime()
   const endMs = end.getTime()
 
-  return forecast
+  const relevant = forecast
     .filter((f) => {
       const t = new Date(f.time).getTime()
       return t >= startMs && t < endMs
     })
     .sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime())
+
+  return relevant
 }
 
 /** Compute max consecutive promising hours. */

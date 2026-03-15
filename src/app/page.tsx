@@ -39,11 +39,20 @@ export default function HomePage() {
       {/* Om klubben */}
       <section className="px-6 py-12 md:py-16">
         <div className="max-w-4xl mx-auto">
-          <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-8">
-            Om klubben
-          </h2>
+          <div className="grid md:grid-cols-2 md:grid-rows-[auto_auto] gap-8 md:gap-x-16 md:gap-y-6">
+            <h2 className="text-2xl md:text-3xl font-bold text-foreground">
+              Om klubben
+            </h2>
 
-          <div className="grid md:grid-cols-2 gap-8 md:gap-16 items-start">
+            <div className="relative rounded-lg overflow-hidden shadow-lg min-h-[220px] md:min-h-0 md:row-span-2">
+              <Image
+                src="/images/kite-beach-bg.jpg"
+                alt="Kitesurfing på Sunnmøre"
+                fill
+                className="object-cover"
+              />
+            </div>
+
             <div className="space-y-6 min-w-0 relative z-10">
               <p className="text-base text-foreground/80 leading-relaxed">
                 Ålesund Kiteklubb er en lokal kiteklubb på Sunnmøre. Vi
@@ -51,14 +60,14 @@ export default function HomePage() {
                 de beste kitespottene i området. Bli med i fellesskapet!
               </p>
 
-              <div className="flex flex-col sm:flex-row sm:flex-nowrap gap-4 pt-4">
+              <div className="flex flex-col sm:flex-row flex-wrap gap-4 pt-4 min-w-0">
                 <Link
                   href="https://www.facebook.com/groups/219320601753203"
                   target="_blank"
                   rel="noopener noreferrer"
                   className={cn(
                     buttonVariants({ size: "xl" }),
-                    "shrink-0 btn-lift"
+                    "min-w-0 shrink btn-lift"
                   )}
                 >
                   <Users className="mr-2 h-5 w-5 shrink-0" />
@@ -70,22 +79,13 @@ export default function HomePage() {
                   rel="noopener noreferrer"
                   className={cn(
                     buttonVariants({ variant: "outlinePrimary", size: "xl" }),
-                    "shrink-0"
+                    "min-w-0 shrink btn-lift"
                   )}
                 >
                   <MessageCircle className="mr-2 h-5 w-5 shrink-0" />
                   Bli med i chatten
                 </Link>
               </div>
-            </div>
-
-            <div className="relative aspect-[4/3] rounded-lg overflow-hidden shadow-lg min-w-0">
-              <Image
-                src="/images/kite-beach-bg.jpg"
-                alt="Kitesurfing på Sunnmøre"
-                fill
-                className="object-cover"
-              />
             </div>
           </div>
         </div>

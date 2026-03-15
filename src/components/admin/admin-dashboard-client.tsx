@@ -40,7 +40,7 @@ export function AdminDashboardClient({
           <TabsList>
             <TabsTrigger value="instructors">Instruktører</TabsTrigger>
             <TabsTrigger value="courses">Kurs</TabsTrigger>
-            <TabsTrigger value="spots">Spot guide</TabsTrigger>
+            <TabsTrigger value="spots">Spots</TabsTrigger>
             <TabsTrigger value="subscribers">Abonnenter</TabsTrigger>
             <TabsTrigger value="users">Brukere</TabsTrigger>
           </TabsList>

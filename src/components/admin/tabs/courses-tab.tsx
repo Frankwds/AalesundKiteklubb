@@ -186,7 +186,7 @@ export function CoursesTab({ courses }: Props) {
             <DialogTitle>Slett kurs</DialogTitle>
             <DialogDescription>
               Er du sikker på at du vil slette kurset «{deleteTarget?.title}»?
-              Alle påmeldte vil bli varslet via e-post.
+              Alle påmeldte vil bli varslet via e-post om at kurset er avlyst.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

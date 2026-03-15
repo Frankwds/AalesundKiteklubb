@@ -331,7 +331,7 @@ export function MineKursTab({ courses, spots }: Props) {
         </Dialog>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-border">
+      <div className="overflow-x-auto rounded-lg border border-border [contain:layout]">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b bg-muted/50 text-left">
@@ -440,7 +440,7 @@ export function MineKursTab({ courses, spots }: Props) {
             <DialogTitle>Slett kurs</DialogTitle>
             <DialogDescription>
               Er du sikker på at du vil slette kurset «{deleteTarget?.title}»?
-              Alle påmeldte vil bli varslet via e-post.
+              Alle påmeldte vil bli varslet via e-post om at kurset er avlyst.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

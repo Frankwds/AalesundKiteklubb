@@ -3,8 +3,7 @@
 import { useState } from "react"
 import { ChevronDown, Wind, X } from "lucide-react"
 import { cn } from "@/lib/utils"
-
-const ALL_DIRECTIONS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const
+import { AdminWindCompass } from "@/components/admin/AdminWindCompass"
 
 interface SpotFiltersProps {
   season: string | null
@@ -30,12 +29,6 @@ export function SpotFilters({
   )
 
   const hasActiveFilters = Boolean(season || area || wind.length > 0)
-
-  function toggleWind(dir: string) {
-    onWindChange(
-      wind.includes(dir) ? wind.filter((d) => d !== dir) : [...wind, dir]
-    )
-  }
 
   return (
     <div className="rounded-lg border border-border bg-card">
@@ -108,17 +101,13 @@ export function SpotFilters({
             <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Vindretning
             </p>
-            <div className="flex flex-wrap gap-2">
-              {ALL_DIRECTIONS.map((dir) => (
-                <FilterToggle
-                  key={dir}
-                  active={wind.includes(dir)}
-                  onClick={() => toggleWind(dir)}
-                >
-                  {dir}
-                </FilterToggle>
-              ))}
-            </div>
+            <AdminWindCompass
+              selectedDirections={wind.map((d) => d.toLowerCase())}
+              onWindDirectionChange={(dirs) =>
+                onWindChange(dirs.map((d) => d.toUpperCase()))
+              }
+              className="w-40 h-40"
+            />
           </div>
 
           {hasActiveFilters && (

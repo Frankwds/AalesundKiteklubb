@@ -38,11 +38,14 @@ function getTextPosition(index: number) {
 export interface AdminWindCompassProps {
   selectedDirections: string[]
   onWindDirectionChange: (directions: string[]) => void
+  /** Optional size override. Default: w-48 h-48 */
+  className?: string
 }
 
 export function AdminWindCompass({
   selectedDirections,
   onWindDirectionChange,
+  className = "w-48 h-48",
 }: AdminWindCompassProps) {
   const normalized = selectedDirections.map((d) => d.toLowerCase())
   const selected = new Set(normalized)
@@ -57,7 +60,7 @@ export function AdminWindCompass({
   return (
     <svg
       viewBox="0 0 130 130"
-      className="w-48 h-48 touch-none select-none"
+      className={`${className} touch-none select-none`}
       aria-label="Velg passende vindretninger"
     >
       {DIRECTIONS.map((dir, index) => {

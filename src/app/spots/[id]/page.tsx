@@ -152,6 +152,7 @@ export default async function SpotDetailPage({
           <SpotWindForecast
             latitude={spot.latitude!}
             longitude={spot.longitude!}
+            windDirections={spot.wind_directions ?? undefined}
           />
         </Section>
       )}

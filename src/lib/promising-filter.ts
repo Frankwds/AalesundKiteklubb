@@ -26,13 +26,6 @@ export const DEFAULT_MIN_WIND = 5
 export const DEFAULT_MAX_WIND = 14
 export const DEFAULT_MAX_GUST = 18
 
-const GOOD_WEATHER_CODES: Set<string> = new Set([
-  "clearsky_day",
-  "fair_day",
-  "partlycloudy_day",
-  "cloudy",
-])
-
 /** Wind direction degrees (0–360) → compass symbol (n, ne, e, se, s, sw, w, nw). */
 function degreesToSymbol(degrees: number): string {
   const normalized = ((degrees % 360) + 360) % 360
@@ -62,7 +55,17 @@ export function isKitePromising(
   )
 
   const failReasons: string[] = []
+  const hourOslo = parseInt(
+    new Date(forecast.time).toLocaleString("en-GB", {
+      hour: "numeric",
+      hour12: false,
+      timeZone: "Europe/Oslo",
+    }),
+    10
+  )
+  if (hourOslo >= 0 && hourOslo <= 6) failReasons.push("early_hours")
   if (forecast.is_day !== 1) failReasons.push("is_day")
+  if (forecast.weather_code.includes("_night")) failReasons.push("night_symbol")
   if (forecast.wind_speed < minWindSpeed) failReasons.push("wind_min")
   if (forecast.wind_speed > maxWindSpeed) failReasons.push("wind_max")
   if (forecast.wind_gusts != null && forecast.wind_gusts > maxGust)
@@ -71,9 +74,8 @@ export function isKitePromising(
   else if (!allowed.has(symbol)) failReasons.push("dir")
   if (weatherFilter.length > 0) {
     if (!weatherFilter.includes(forecast.weather_code as WeatherCondition)) failReasons.push("weather_filter")
-  } else {
-    if (!GOOD_WEATHER_CODES.has(forecast.weather_code)) failReasons.push("weather_code")
   }
+  // No weather check when filter empty: any weather is kitable. Weather only matters for dark green (sunny) in the UI.
 
   if (failReasons.length > 0) return false
   return true

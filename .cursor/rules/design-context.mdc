@@ -26,7 +26,7 @@ alwaysApply: true
 
 ## Design Principles
 
-1. **Nordic coastal energy** — Use the established palette: deep ocean teal (primary), warm sun/energy accent, tinted neutrals with cool undertones. The colors should feel like Sunnmøre: water, wind, and sunlight.
+1. **Nordic coastal energy** — Use the established palette: deep blue (primary), mountain slate accent, sand-paper backgrounds. The colors should feel like Sunnmøre: fjord depth, mountain peaks, and beach sand.
 
 2. **Energetic without chaos** — Prioritize clear hierarchy and generous whitespace. Micro-interactions (btn-lift, card-lift) add energy; avoid visual clutter. Keep content focused on spots, courses, and community.
 

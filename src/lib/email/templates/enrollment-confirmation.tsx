@@ -97,7 +97,7 @@ export function EnrollmentConfirmationEmail({
 export default EnrollmentConfirmationEmail
 
 const body = {
-  backgroundColor: "#f6f9fc",
+  backgroundColor: "#f9fafb",
   fontFamily:
     '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
 }
@@ -113,7 +113,7 @@ const container = {
 const heading = {
   fontSize: "24px",
   fontWeight: "700" as const,
-  color: "#0284c7",
+  color: "#132a45",
   marginBottom: "24px",
 }
 
@@ -124,7 +124,7 @@ const text = {
 }
 
 const details = {
-  backgroundColor: "#f9fafb",
+  backgroundColor: "#f3f4f6",
   borderRadius: "6px",
   padding: "16px 20px",
   margin: "16px 0",
@@ -138,7 +138,7 @@ const detailRow = {
 }
 
 const link = {
-  color: "#0284c7",
+  color: "#132a45",
   textDecoration: "underline",
 }
 
@@ -148,7 +148,7 @@ const buttonSection = {
 }
 
 const button = {
-  backgroundColor: "#0284c7",
+  backgroundColor: "#132a45",
   color: "#ffffff",
   fontSize: "16px",
   fontWeight: "600" as const,
@@ -170,6 +170,6 @@ const footer = {
 }
 
 const footerLink = {
-  color: "#0284c7",
+  color: "#132a45",
   textDecoration: "underline",
 }

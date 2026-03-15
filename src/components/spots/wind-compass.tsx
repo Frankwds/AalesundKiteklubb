@@ -44,10 +44,12 @@ export function WindCompass({ directions, size = "sm" }: WindCompassProps) {
         cy={CY}
         r={RING_R}
         fill="none"
-        stroke="#e5e7eb"
+        stroke="currentColor"
+        strokeOpacity={0.2}
         strokeWidth={1}
+        className="text-border"
       />
-      <circle cx={CX} cy={CY} r={2} fill="#d1d5db" />
+      <circle cx={CX} cy={CY} r={2} fill="currentColor" className="text-muted-foreground" fillOpacity={0.5} />
 
       {DIRECTIONS.map(({ label, deg }) => {
         const rad = toRad(deg)
@@ -67,14 +69,14 @@ export function WindCompass({ directions, size = "sm" }: WindCompassProps) {
               y1={lineY}
               x2={dotX}
               y2={dotY}
-              stroke={isActive ? "#0ea5e9" : "#e5e7eb"}
+              stroke={isActive ? "#132a45" : "#e5e7eb"}
               strokeWidth={isActive ? 1.5 : 0.75}
             />
             <circle
               cx={dotX}
               cy={dotY}
               r={isActive ? DOT_R : DOT_R * 0.7}
-              fill={isActive ? "#0ea5e9" : "#d1d5db"}
+              fill={isActive ? "#132a45" : "#d1d5db"}
             />
             <text
               x={labelX}
@@ -83,7 +85,7 @@ export function WindCompass({ directions, size = "sm" }: WindCompassProps) {
               dominantBaseline="central"
               fontSize={deg % 90 === 0 ? 8 : 6.5}
               fontWeight={deg % 90 === 0 ? 600 : 400}
-              fill={isActive ? "#0369a1" : "#9ca3af"}
+              fill={isActive ? "#132a45" : "#9ca3af"}
             >
               {label}
             </text>

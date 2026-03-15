@@ -71,7 +71,7 @@ export function CourseCancellationEmail({
 export default CourseCancellationEmail
 
 const body = {
-  backgroundColor: "#f6f9fc",
+  backgroundColor: "#f9fafb",
   fontFamily:
     '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
 }
@@ -98,7 +98,7 @@ const text = {
 }
 
 const details = {
-  backgroundColor: "#fef2f2",
+  backgroundColor: "#fef5f5",
   borderRadius: "6px",
   padding: "16px 20px",
   margin: "16px 0",
@@ -112,7 +112,7 @@ const detailRow = {
 }
 
 const link = {
-  color: "#0284c7",
+  color: "#132a45",
   textDecoration: "underline",
 }
 

@@ -16,8 +16,6 @@ import {
   DialogClose,
 } from "@/components/ui/dialog"
 import { enrollInCourse } from "@/lib/actions/courses"
-import { cn } from "@/lib/utils"
-import { buttonVariants } from "@/components/ui/button-variants"
 
 interface EnrollDialogProps {
   courseId: string
@@ -49,12 +47,7 @@ export function EnrollDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
-        className={cn(
-          buttonVariants({ size: "sm" }),
-          "bg-primary hover:bg-primary/90 text-white btn-lift"
-        )}
-      >
+      <DialogTrigger render={<Button variant="primaryLift" size="lg" />}>
         Meld på
       </DialogTrigger>
       <DialogContent>
@@ -71,11 +64,12 @@ export function EnrollDialog({
         </div>
 
         <DialogFooter>
-          <DialogClose render={<Button variant="outline" />}>
+          <DialogClose render={<Button variant="outlinePrimaryLift" size="lg" />}>
             Avbryt
           </DialogClose>
           <Button
-            className="bg-primary hover:bg-primary/90 text-white btn-lift"
+            variant="primaryLift"
+            size="lg"
             disabled={isPending}
             onClick={handleEnroll}
           >

@@ -47,10 +47,7 @@ export function SubscribeSection({ user, subscription }: SubscribeSectionProps) 
       {!user ? (
         <Link
           href="/login"
-          className={cn(
-            buttonVariants({ size: "sm" }),
-            "bg-primary hover:bg-primary/90 text-white btn-lift"
-          )}
+          className={cn(buttonVariants({ variant: "primaryLift", size: "lg" }))}
         >
           Logg inn for å motta kursvarsler
         </Link>
@@ -83,12 +80,7 @@ function UnsubscribedState({ email }: { email: string }) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
-        className={cn(
-          buttonVariants({ size: "sm" }),
-          "bg-primary hover:bg-primary/90 text-white btn-lift"
-        )}
-      >
+      <DialogTrigger render={<Button variant="primaryLift" size="lg" />}>
         <Bell className="mr-2 h-4 w-4" />
         Meld på varsler
       </DialogTrigger>
@@ -106,11 +98,12 @@ function UnsubscribedState({ email }: { email: string }) {
         </div>
 
         <DialogFooter>
-          <DialogClose render={<Button variant="outline" />}>
+          <DialogClose render={<Button variant="outlinePrimaryLift" size="lg" />}>
             Avbryt
           </DialogClose>
           <Button
-            className="bg-primary hover:bg-primary/90 text-white btn-lift"
+            variant="primaryLift"
+            size="lg"
             disabled={isPending}
             onClick={handleSubscribe}
           >
@@ -149,7 +142,7 @@ function SubscribedState() {
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogTrigger render={<Button variant="outline" size="sm" />}>
+        <DialogTrigger render={<Button variant="outlinePrimaryLift" size="sm" />}>
           Meld av varsler
         </DialogTrigger>
         <DialogContent>
@@ -161,7 +154,7 @@ function SubscribedState() {
           </DialogHeader>
 
           <DialogFooter>
-            <DialogClose render={<Button variant="outline" />}>
+            <DialogClose render={<Button variant="outlinePrimaryLift" size="lg" />}>
               Avbryt
             </DialogClose>
             <Button

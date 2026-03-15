@@ -4,6 +4,7 @@ import { useEffect } from "react"
 import { useSearchParams, useRouter, usePathname } from "next/navigation"
 import { toast } from "sonner"
 import { GraduationCap, ArrowDown } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { CourseCard } from "./course-card"
 import { SubscribeSection } from "./subscribe-section"
 import type { CourseWithRelations } from "@/lib/queries/courses"
@@ -70,17 +71,19 @@ export function CoursesPageClient({
           <p className="text-muted-foreground">
             Kurs legges ut når forholdene ser lovende ut, ikke langt i forkant.
           </p>
-          <button
+          <Button
+            variant="primaryLift"
+            size="lg"
             onClick={() =>
               document
                 .getElementById("subscribe-section")
                 ?.scrollIntoView({ behavior: "smooth" })
             }
-            className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/90 transition-colors"
+            className="inline-flex items-center gap-2"
           >
             Meld deg på varsler for å bli informert når nye kurs publiseres
             <ArrowDown className="h-4 w-4" />
-          </button>
+          </Button>
         </div>
       )}
 

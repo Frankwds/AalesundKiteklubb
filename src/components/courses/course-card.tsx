@@ -84,10 +84,7 @@ export function CourseCard({ course, user, isEnrolled }: CourseCardProps) {
         {!user ? (
           <Link
             href="/login"
-            className={cn(
-              buttonVariants({ size: "sm" }),
-              "btn-lift"
-            )}
+            className={cn(buttonVariants({ variant: "primaryLift", size: "lg" }))}
           >
             Logg inn for å melde på
           </Link>
@@ -110,7 +107,7 @@ export function CourseCard({ course, user, isEnrolled }: CourseCardProps) {
           <Link
             href={`/courses/${course.id}/chat`}
             className={cn(
-              buttonVariants({ variant: "outline", size: "sm" }),
+              buttonVariants({ variant: "outlinePrimaryLift", size: "sm" }),
               "gap-1.5"
             )}
           >

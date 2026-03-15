@@ -42,7 +42,7 @@ export function UnenrollDialog({ courseId, courseTitle }: UnenrollDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button variant="outline" size="sm" />}>
+      <DialogTrigger render={<Button variant="outlinePrimaryLift" size="sm" />}>
         Meld av
       </DialogTrigger>
       <DialogContent>
@@ -55,7 +55,7 @@ export function UnenrollDialog({ courseId, courseTitle }: UnenrollDialogProps) {
         </DialogHeader>
 
         <DialogFooter>
-          <DialogClose render={<Button variant="outline" />}>
+          <DialogClose render={<Button variant="outlinePrimaryLift" size="lg" />}>
             Avbryt
           </DialogClose>
           <Button

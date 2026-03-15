@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { usePathname } from "next/navigation"
 import { Menu, X, LogOut, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -83,9 +84,16 @@ export function NavbarClient({ user }: NavbarClientProps) {
       <nav className="mx-auto max-w-6xl px-4 h-16 flex items-center justify-between">
         <Link
           href="/"
-          className="font-display font-bold text-lg tracking-tight text-foreground hover:text-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
+          className="-ml-4 flex items-center gap-1 font-display font-bold text-lg tracking-tight text-foreground hover:text-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
           aria-label="Gå til forsiden"
         >
+          <Image
+            src="/logo-emblem-transparent.png"
+            alt=""
+            width={100}
+            height={100}
+            className="shrink-0"
+          />
           Ålesund Kiteklubb
         </Link>
 

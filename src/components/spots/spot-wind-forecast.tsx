@@ -10,7 +10,7 @@ import {
 } from "@/lib/yr-forecast"
 
 const TIMEZONE = "Europe/Oslo"
-const HOURS_TO_SHOW = 12
+const HOURS_TO_SHOW = 24
 
 export function SpotWindForecast({
   latitude,

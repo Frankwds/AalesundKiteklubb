@@ -11,6 +11,9 @@ import type {
   WeatherCondition,
 } from "@/lib/promising-filter"
 import {
+  DEFAULT_MIN_WIND,
+  DEFAULT_MAX_WIND,
+  DEFAULT_MAX_GUST,
   PROMISING_WEATHER_OPTIONS,
   getDefaultTimeRange,
   getDayLabel,
@@ -41,6 +44,15 @@ export function PromisingFilterSpot({
   const [localMinHours, setLocalMinHours] = useState(
     filter?.minPromisingHours ?? 2
   )
+  const [localMinWind, setLocalMinWind] = useState(
+    filter?.minWindSpeed ?? DEFAULT_MIN_WIND
+  )
+  const [localMaxWind, setLocalMaxWind] = useState(
+    filter?.maxWindSpeed ?? DEFAULT_MAX_WIND
+  )
+  const [localMaxGust, setLocalMaxGust] = useState(
+    filter?.maxGust ?? DEFAULT_MAX_GUST
+  )
   const [localWeather, setLocalWeather] = useState<WeatherCondition[]>(
     filter?.selectedWeatherConditions ?? ([] as WeatherCondition[])
   )
@@ -54,6 +66,9 @@ export function PromisingFilterSpot({
       selectedDay: localDay,
       selectedTimeRange: localTimeRange,
       minPromisingHours: localMinHours,
+      minWindSpeed: localMinWind,
+      maxWindSpeed: localMaxWind,
+      maxGust: localMaxGust,
       selectedWeatherConditions: localWeather,
     })
     setOpen(false)
@@ -63,6 +78,9 @@ export function PromisingFilterSpot({
     setLocalDay(0)
     setLocalTimeRange(getDefaultTimeRange(0, now))
     setLocalMinHours(2)
+    setLocalMinWind(DEFAULT_MIN_WIND)
+    setLocalMaxWind(DEFAULT_MAX_WIND)
+    setLocalMaxGust(DEFAULT_MAX_GUST)
     setLocalWeather([])
     onFilterChange(null)
     setOpen(false)
@@ -161,6 +179,56 @@ export function PromisingFilterSpot({
                   </option>
                 ))}
               </select>
+            </div>
+          </div>
+
+          {/* Wind speed range */}
+          <div>
+            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Vind (m/s)
+            </p>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={0}
+                max={25}
+                step={1}
+                value={localMinWind}
+                onChange={(e) =>
+                  setLocalMinWind(Math.min(25, Math.max(0, Number(e.target.value) || 0)))
+                }
+                aria-label="Min vind m/s"
+                className="w-14 rounded-md border border-border bg-background px-2 py-1.5 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
+              />
+              <span className="text-muted-foreground">–</span>
+              <input
+                type="number"
+                min={0}
+                max={25}
+                step={1}
+                value={localMaxWind}
+                onChange={(e) =>
+                  setLocalMaxWind(Math.min(25, Math.max(0, Number(e.target.value) || 0)))
+                }
+                aria-label="Maks vind m/s"
+                className="w-14 rounded-md border border-border bg-background px-2 py-1.5 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
+              />
+              <span className="flex items-center gap-1 text-sm">
+                <span className="text-muted-foreground">(</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={40}
+                  step={1}
+                  value={localMaxGust}
+                  onChange={(e) =>
+                    setLocalMaxGust(Math.min(40, Math.max(0, Number(e.target.value) || 0)))
+                  }
+                  className="w-14 rounded-md border border-border bg-background px-2 py-1.5 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
+                  aria-label="Maks kast m/s"
+                />
+                <span className="text-muted-foreground">)</span>
+              </span>
             </div>
           </div>
 

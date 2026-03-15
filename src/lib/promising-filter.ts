@@ -16,14 +16,15 @@ export interface PromisingFilterState {
   selectedDay: 0 | 1 | 2
   selectedTimeRange: [number, number]
   minPromisingHours: number
+  minWindSpeed: number
+  maxWindSpeed: number
+  maxGust: number
   selectedWeatherConditions: WeatherCondition[]
 }
 
-const KITE_RULE = {
-  MIN_WIND_SPEED: 5,
-  MAX_WIND_SPEED: 14,
-  MAX_GUST: 18,
-} as const
+export const DEFAULT_MIN_WIND = 5
+export const DEFAULT_MAX_WIND = 14
+export const DEFAULT_MAX_GUST = 18
 
 const GOOD_WEATHER_CODES: Set<string> = new Set([
   "clearsky_day",
@@ -50,7 +51,10 @@ function degreesToSymbol(degrees: number): string {
 export function isKitePromising(
   forecast: MinimalForecast,
   spotWindDirections: string[] | null,
-  weatherFilter: WeatherCondition[] = []
+  weatherFilter: WeatherCondition[] = [],
+  minWindSpeed = DEFAULT_MIN_WIND,
+  maxWindSpeed = DEFAULT_MAX_WIND,
+  maxGust = DEFAULT_MAX_GUST
 ): boolean {
   const symbol = degreesToSymbol(forecast.wind_direction)
   const allowed = new Set(
@@ -59,12 +63,9 @@ export function isKitePromising(
 
   const failReasons: string[] = []
   if (forecast.is_day !== 1) failReasons.push("is_day")
-  if (forecast.wind_speed < KITE_RULE.MIN_WIND_SPEED) failReasons.push("wind_min")
-  if (forecast.wind_speed > KITE_RULE.MAX_WIND_SPEED) failReasons.push("wind_max")
-  if (
-    forecast.wind_gusts != null &&
-    forecast.wind_gusts > KITE_RULE.MAX_GUST
-  )
+  if (forecast.wind_speed < minWindSpeed) failReasons.push("wind_min")
+  if (forecast.wind_speed > maxWindSpeed) failReasons.push("wind_max")
+  if (forecast.wind_gusts != null && forecast.wind_gusts > maxGust)
     failReasons.push("gust")
   if (!spotWindDirections || spotWindDirections.length === 0) failReasons.push("no_dirs")
   else if (!allowed.has(symbol)) failReasons.push("dir")
@@ -153,12 +154,15 @@ function filterForecastToWindow(
 function maxConsecutivePromising(
   entries: MinimalForecast[],
   spotWindDirections: string[] | null,
-  weatherFilter: WeatherCondition[]
+  weatherFilter: WeatherCondition[],
+  minWindSpeed: number,
+  maxWindSpeed: number,
+  maxGust: number
 ): number {
   let max = 0
   let current = 0
   for (const entry of entries) {
-    if (isKitePromising(entry, spotWindDirections, weatherFilter)) {
+    if (isKitePromising(entry, spotWindDirections, weatherFilter, minWindSpeed, maxWindSpeed, maxGust)) {
       current++
       max = Math.max(max, current)
     } else {
@@ -178,7 +182,10 @@ export function spotPassesPromisingFilter(
   const consecutive = maxConsecutivePromising(
     relevant,
     spotWindDirections,
-    filter.selectedWeatherConditions
+    filter.selectedWeatherConditions,
+    filter.minWindSpeed,
+    filter.maxWindSpeed,
+    filter.maxGust
   )
   return consecutive >= filter.minPromisingHours
 }

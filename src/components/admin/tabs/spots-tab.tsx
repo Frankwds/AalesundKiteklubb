@@ -75,15 +75,22 @@ function SpotForm({
   const [imagePreview, setImagePreview] = useState<string | null>(
     spot?.map_image_url ?? null
   )
+  const [imageRemoved, setImageRemoved] = useState(false)
   const imageInputRef = useRef<HTMLInputElement>(null)
+  const userClearedRef = useRef(false)
 
   const revokeBlob = (url: string | null) => {
     if (url?.startsWith("blob:")) URL.revokeObjectURL(url)
   }
 
-  // Sync preview when editing a spot with existing image
+  // Sync preview when editing a spot with existing image (don't overwrite user-initiated clear)
   useEffect(() => {
-    if (spot?.map_image_url && !imageInputRef.current?.files?.length) {
+    userClearedRef.current = false
+    setImageRemoved(false)
+  }, [spot?.id])
+
+  useEffect(() => {
+    if (!userClearedRef.current && spot?.map_image_url && !imageInputRef.current?.files?.length) {
       setImagePreview(spot.map_image_url)
     }
   }, [spot?.map_image_url])
@@ -95,6 +102,7 @@ function SpotForm({
   function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (file) {
+      setImageRemoved(false)
       revokeBlob(imagePreview)
       setImagePreview(URL.createObjectURL(file))
     } else {
@@ -103,8 +111,10 @@ function SpotForm({
   }
 
   function clearImagePreview() {
+    userClearedRef.current = true
+    setImageRemoved(true)
     revokeBlob(imagePreview)
-    setImagePreview(spot?.map_image_url ?? null)
+    setImagePreview(null)
     if (imageInputRef.current) imageInputRef.current.value = ""
   }
 
@@ -121,6 +131,7 @@ function SpotForm({
 
     if (spot) {
       formData.set("id", spot.id)
+      if (imageRemoved) formData.set("removeImage", "true")
     }
 
     onSubmit(formData)

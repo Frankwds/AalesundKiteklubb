@@ -124,8 +124,18 @@ export async function updateSpot(formData: FormData) {
   if (fields.windDirections !== undefined) updateData.wind_directions = fields.windDirections
   if (fields.waterType !== undefined) updateData.water_type = fields.waterType
 
-  const image = formData.get('image') as File | null
-  if (image && image.size > 0) {
+  if (formData.get('removeImage') === 'true') {
+    updateData.map_image_url = null
+    const { data: files } = await supabase.storage
+      .from('spot-maps')
+      .list(id, { limit: 10 })
+    const mapFile = files?.find((f) => f.name.startsWith('map.'))
+    if (mapFile) {
+      await supabase.storage.from('spot-maps').remove([`${id}/${mapFile.name}`])
+    }
+  } else {
+    const image = formData.get('image') as File | null
+    if (image && image.size > 0) {
     const ext = image.name.split('.').pop()
     const storagePath = `${id}/map.${ext}`
 
@@ -143,6 +153,7 @@ export async function updateSpot(formData: FormData) {
     } = supabase.storage.from('spot-maps').getPublicUrl(storagePath)
 
     updateData.map_image_url = publicUrl
+  }
   }
 
   if (Object.keys(updateData).length > 0) {

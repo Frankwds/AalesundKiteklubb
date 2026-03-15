@@ -5,23 +5,12 @@ import { ArrowLeft, Cloud, ExternalLink, MapPin, Navigation } from "lucide-react
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { WindCompass } from "@/components/spots/wind-compass"
+import {
+  seasonLabels,
+  skillLabels,
+  waterTypeLabels,
+} from "@/lib/spot-labels"
 import { getSpot } from "@/lib/queries/spots"
-
-const seasonLabels: Record<string, { text: string; className: string }> = {
-  summer: { text: "Sommer", className: "bg-primary-muted text-primary border-primary/30" },
-  winter: { text: "Vinter", className: "bg-blue-100 text-blue-800 border-blue-200" },
-}
-
-const skillLabels: Record<string, { text: string; className: string }> = {
-  beginner: { text: "Nybegynner", className: "bg-green-100 text-green-800 border-green-200" },
-  experienced: { text: "Erfaren", className: "bg-amber-100 text-amber-800 border-amber-200" },
-}
-
-const waterTypeLabels: Record<string, string> = {
-  flat: "Flatt vann",
-  chop: "Chop",
-  waves: "Bølger",
-}
 
 export async function generateMetadata({
   params,
@@ -69,14 +58,12 @@ export default async function SpotDetailPage({
       {/* Badges row */}
       <div className="flex flex-wrap gap-2 mb-8">
         {season && (
-          <Badge className={season.className}>{season.text}</Badge>
+          <Badge variant={season.variant}>{season.text}</Badge>
         )}
         {skill && (
-          <Badge className={skill.className}>{skill.text}</Badge>
+          <Badge variant={skill.variant}>{skill.text}</Badge>
         )}
-        <Badge className="bg-gray-100 text-gray-800 border-gray-200">
-          {spot.area}
-        </Badge>
+        <Badge variant="neutral">{spot.area}</Badge>
       </div>
 
       {/* Wind Compass */}
@@ -123,7 +110,7 @@ export default async function SpotDetailPage({
             href={`https://www.yr.no/nb/v%C3%A6rvarsel/daglig-tabell/${spot.latitude},${spot.longitude}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-md border border-border bg-white px-4 py-2.5 text-sm font-medium text-foreground hover:border-primary/40 hover:bg-primary-muted transition-all"
+            className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-4 py-2.5 text-sm font-medium text-foreground hover:border-primary/40 hover:bg-primary-muted transition-all"
           >
             <Cloud className="h-4 w-4 text-primary" />
             Se værmelding på Yr.no
@@ -139,7 +126,7 @@ export default async function SpotDetailPage({
             href={`https://www.google.com/maps?q=${spot.latitude},${spot.longitude}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-md border border-border bg-white px-4 py-2.5 text-sm font-medium text-foreground hover:border-primary/40 hover:bg-primary-muted transition-all"
+            className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-4 py-2.5 text-sm font-medium text-foreground hover:border-primary/40 hover:bg-primary-muted transition-all"
           >
             <Navigation className="h-4 w-4 text-primary" />
             Vis i Google Maps
@@ -153,7 +140,7 @@ export default async function SpotDetailPage({
         <Section title="Nødvendige kiteskills">
           <div className="space-y-2">
             {skill && (
-              <Badge className={skill.className}>{skill.text}</Badge>
+              <Badge variant={skill.variant}>{skill.text}</Badge>
             )}
             {spot.skill_notes && (
               <p className="text-sm leading-relaxed text-foreground/80">
@@ -169,10 +156,7 @@ export default async function SpotDetailPage({
         <Section title="Type">
           <div className="flex flex-wrap gap-2">
             {spot.water_type.map((type) => (
-              <Badge
-                key={type}
-                className="bg-gray-100 text-gray-800 border-gray-200"
-              >
+              <Badge key={type} variant="neutral">
                 {waterTypeLabels[type] ?? type}
               </Badge>
             ))}

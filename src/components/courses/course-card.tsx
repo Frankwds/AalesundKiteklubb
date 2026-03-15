@@ -26,7 +26,7 @@ export function CourseCard({ course, user, isEnrolled }: CourseCardProps) {
     (user && (user.role === "instructor" || user.role === "admin"))
 
   return (
-    <div className="rounded-lg border border-border bg-white p-5 card-lift">
+    <div className="rounded-lg border border-border bg-card p-5 card-lift">
       <div className="space-y-3">
         <h3 className="text-base font-semibold text-foreground">
           {course.title}
@@ -66,17 +66,13 @@ export function CourseCard({ course, user, isEnrolled }: CourseCardProps) {
 
         <div className="flex flex-wrap items-center gap-2">
           <Badge
-            className={
-              course.price
-                ? "bg-primary-muted text-primary border-primary/30"
-                : "bg-green-100 text-green-800 border-green-200"
-            }
+            variant={course.price ? "primarySoft" : "success"}
           >
             {course.price ? `kr ${course.price}` : "Gratis"}
           </Badge>
 
           {course.max_participants && (
-            <Badge className="bg-neutral-100 text-neutral-700 border-neutral-200">
+            <Badge variant="neutral">
               Maks {course.max_participants} deltakere
             </Badge>
           )}
@@ -90,7 +86,7 @@ export function CourseCard({ course, user, isEnrolled }: CourseCardProps) {
             href="/login"
             className={cn(
               buttonVariants({ size: "sm" }),
-              "bg-primary hover:bg-primary/90 text-white btn-lift"
+              "btn-lift"
             )}
           >
             Logg inn for å melde på

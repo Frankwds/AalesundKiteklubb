@@ -1,0 +1,37 @@
+---
+description: Design context for Ålesund Kiteklubb — users, brand, aesthetics, principles
+alwaysApply: true
+---
+
+# Ålesund Kiteklubb — Design Context
+
+## Users
+
+- **Primary**: Curious visitors and club members in Sunnmøre
+- **Context**: People looking for kite spots, courses, and community — both snow and water kiting
+- **Job to be done**: Find spots, sign up for courses, join the community, get wind/spot info
+
+## Brand Personality
+
+- **Voice**: Adventurous, welcoming, locally grounded
+- **3-word personality**: Energetic, outdoorsy, trustworthy
+- **Emotional goals**: Feeling energetic and outdoorsy — confident the site connects them to real spots and real people
+
+## Aesthetic Direction
+
+- **Visual tone**: Clean Scandinavian with nature-inspired color and imagery — Nordic coastal, not corporate
+- **Theme**: Light-only (no dark mode)
+- **References**: Norwegian outdoor brands, local sports clubs, nature-first travel sites
+- **Anti-references**: Corporate dashboards, sterile SaaS, generic purple-on-white AI aesthetic
+
+## Design Principles
+
+1. **Nordic coastal energy** — Use the established palette: deep ocean teal (primary), warm sun/energy accent, tinted neutrals with cool undertones. The colors should feel like Sunnmøre: water, wind, and sunlight.
+
+2. **Energetic without chaos** — Prioritize clear hierarchy and generous whitespace. Micro-interactions (btn-lift, card-lift) add energy; avoid visual clutter. Keep content focused on spots, courses, and community.
+
+3. **Mobile-first, touch-friendly** — Content card floats over the fixed kite-beach background. Minimum 44px tap targets, visible focus states. Responsive from mobile to desktop.
+
+4. **Accessibility by default** — Best-effort WCAG compliance. Honor `prefers-reduced-motion` for animations. Ensure sufficient contrast and semantic structure. No known special accommodations required.
+
+5. **Consistency with existing system** — Use the design tokens in globals.css (OKLCH colors, radius scale, font stacks: Syne for display, Plus Jakarta Sans for body). Preserve btn-lift and card-lift patterns. Add new UI through shadcn components and shared variants.

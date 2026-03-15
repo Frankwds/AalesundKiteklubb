@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import { usePathname } from "next/navigation"
 import { Menu, X, LogOut, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { buttonVariants } from "@/components/ui/button-variants"
@@ -31,10 +32,10 @@ const roleLabels: Record<string, string> = {
   admin: "Admin",
 }
 
-const roleBadgeStyles: Record<string, string> = {
-  user: "bg-muted text-muted-foreground",
-  instructor: "bg-primary-muted text-primary",
-  admin: "bg-amber-100 text-amber-800",
+const roleBadgeVariants = {
+  user: "neutral" as const,
+  instructor: "primarySoft" as const,
+  admin: "warning" as const,
 }
 
 function getInitials(name: string | null): string {
@@ -50,8 +51,14 @@ interface NavbarClientProps {
   user: CurrentUser | null
 }
 
+function isActive(pathname: string, href: string): boolean {
+  if (href === "/") return pathname === "/"
+  return pathname === href || pathname.startsWith(`${href}/`)
+}
+
 export function NavbarClient({ user }: NavbarClientProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const pathname = usePathname()
 
   const navLinks = [
     { href: "/", label: "Hjem" },
@@ -76,36 +83,58 @@ export function NavbarClient({ user }: NavbarClientProps) {
       <nav className="mx-auto max-w-6xl px-4 h-16 flex items-center justify-between">
         <Link
           href="/"
-          className="font-semibold text-lg text-foreground hover:text-primary transition-colors"
+          className="font-display font-bold text-lg tracking-tight text-foreground hover:text-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
+          aria-label="Gå til forsiden"
         >
           Ålesund Kiteklubb
         </Link>
 
         {/* Desktop */}
-        <div className="hidden md:flex items-center gap-6">
-          {navLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="text-sm font-medium text-foreground/80 hover:text-primary transition-colors"
-            >
-              {link.label}
-            </Link>
-          ))}
-          {roleLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="text-sm font-medium text-foreground/80 hover:text-primary transition-colors"
-            >
-              {link.label}
-            </Link>
-          ))}
+        <div className="hidden md:flex items-center gap-1">
+          {navLinks.map((link) => {
+            const active = isActive(pathname, link.href)
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "relative py-2 px-3 rounded-lg text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                  active
+                    ? "text-primary bg-primary-muted/60"
+                    : "text-foreground/80 hover:text-primary hover:bg-primary-muted/40"
+                )}
+              >
+                {link.label}
+              </Link>
+            )
+          })}
+          {roleLinks.length > 0 && (
+            <div className="h-4 w-px bg-border mx-1" aria-hidden />
+          )}
+          {roleLinks.map((link) => {
+            const active = isActive(pathname, link.href)
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "relative py-2 px-3 rounded-lg text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                  active
+                    ? "text-primary bg-primary-muted/60"
+                    : "text-muted-foreground hover:text-primary hover:bg-primary-muted/40"
+                )}
+              >
+                {link.label}
+              </Link>
+            )
+          })}
 
           {user ? (
             <DropdownMenu>
               <DropdownMenuTrigger
-                className="flex items-center gap-2 h-10 px-2 rounded-lg hover:bg-muted transition-colors outline-none"
+                className="flex items-center gap-2 h-10 px-2 rounded-lg hover:bg-muted transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
                 <Avatar className="h-8 w-8">
                   <AvatarImage src={user.avatarUrl ?? undefined} />
@@ -121,7 +150,8 @@ export function NavbarClient({ user }: NavbarClientProps) {
                     {user.name ?? user.email}
                   </p>
                   <Badge
-                    className={`text-xs mt-1 ${roleBadgeStyles[user.role]}`}
+                    variant={roleBadgeVariants[user.role]}
+                    className="text-xs mt-1"
                   >
                     {roleLabels[user.role]}
                   </Badge>
@@ -151,7 +181,7 @@ export function NavbarClient({ user }: NavbarClientProps) {
 
         {/* Mobile */}
         <Sheet open={isOpen} onOpenChange={setIsOpen}>
-          <SheetTrigger className="md:hidden h-10 w-10 inline-flex items-center justify-center rounded-lg hover:bg-muted transition-colors">
+          <SheetTrigger className="md:hidden h-11 w-11 min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
             <Menu className="h-6 w-6" />
             <span className="sr-only">Åpne meny</span>
           </SheetTrigger>
@@ -184,7 +214,8 @@ export function NavbarClient({ user }: NavbarClientProps) {
                         {user.name ?? user.email}
                       </p>
                       <Badge
-                        className={`text-xs ${roleBadgeStyles[user.role]}`}
+                        variant={roleBadgeVariants[user.role]}
+                        className="text-xs"
                       >
                         {roleLabels[user.role]}
                       </Badge>
@@ -194,27 +225,48 @@ export function NavbarClient({ user }: NavbarClientProps) {
               )}
 
               <div className="flex-1 py-6">
-                <div className="flex flex-col gap-2 px-4">
-                  {navLinks.map((link) => (
-                    <Link
-                      key={link.href}
-                      href={link.href}
-                      onClick={() => setIsOpen(false)}
-                      className="flex items-center h-12 px-4 text-lg font-medium text-foreground hover:bg-primary-muted rounded-lg transition-colors"
-                    >
-                      {link.label}
-                    </Link>
-                  ))}
-                  {roleLinks.map((link) => (
-                    <Link
-                      key={link.href}
-                      href={link.href}
-                      onClick={() => setIsOpen(false)}
-                      className="flex items-center h-12 px-4 text-lg font-medium text-foreground hover:bg-primary-muted rounded-lg transition-colors"
-                    >
-                      {link.label}
-                    </Link>
-                  ))}
+                <div className="flex flex-col gap-1 px-4">
+                  {navLinks.map((link) => {
+                    const active = isActive(pathname, link.href)
+                    return (
+                      <Link
+                        key={link.href}
+                        href={link.href}
+                        onClick={() => setIsOpen(false)}
+                        aria-current={active ? "page" : undefined}
+                        className={cn(
+                          "flex items-center min-h-[44px] h-12 px-4 text-lg font-medium rounded-lg transition-colors",
+                          active
+                            ? "bg-primary-muted text-primary"
+                            : "text-foreground hover:bg-primary-muted"
+                        )}
+                      >
+                        {link.label}
+                      </Link>
+                    )
+                  })}
+                  {roleLinks.length > 0 && (
+                    <div className="h-px bg-border my-2 mx-2" aria-hidden />
+                  )}
+                  {roleLinks.map((link) => {
+                    const active = isActive(pathname, link.href)
+                    return (
+                      <Link
+                        key={link.href}
+                        href={link.href}
+                        onClick={() => setIsOpen(false)}
+                        aria-current={active ? "page" : undefined}
+                        className={cn(
+                          "flex items-center min-h-[44px] h-12 px-4 text-lg font-medium rounded-lg transition-colors",
+                          active
+                            ? "bg-primary-muted text-primary"
+                            : "text-foreground hover:bg-primary-muted"
+                        )}
+                      >
+                        {link.label}
+                      </Link>
+                    )
+                  })}
                 </div>
               </div>
 

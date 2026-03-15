@@ -57,8 +57,8 @@ export default function HomePage() {
                   target="_blank"
                   rel="noopener noreferrer"
                   className={cn(
-                    buttonVariants(),
-                    "shrink-0 h-11 btn-lift bg-primary hover:bg-primary/90 text-primary-foreground"
+                    buttonVariants({ size: "xl" }),
+                    "shrink-0 btn-lift"
                   )}
                 >
                   <Users className="mr-2 h-5 w-5 shrink-0" />
@@ -69,8 +69,8 @@ export default function HomePage() {
                   target="_blank"
                   rel="noopener noreferrer"
                   className={cn(
-                    buttonVariants({ variant: "outline" }),
-                    "shrink-0 h-11 border-primary text-primary hover:bg-primary-muted"
+                    buttonVariants({ variant: "outlinePrimary", size: "xl" }),
+                    "shrink-0"
                   )}
                 >
                   <MessageCircle className="mr-2 h-5 w-5 shrink-0" />

@@ -38,7 +38,7 @@ export function SpotFilters({
   }
 
   return (
-    <div className="rounded-lg border border-border bg-white">
+    <div className="rounded-lg border border-border bg-card">
       <button
         onClick={() => setOpen(!open)}
         className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium text-foreground hover:bg-muted/50 transition-colors"
@@ -156,7 +156,7 @@ function FilterToggle({
         "rounded-md border px-3 py-1.5 text-xs font-medium transition-all",
         active
           ? "border-primary bg-primary text-white"
-          : "border-border bg-white text-foreground hover:border-primary/40 hover:bg-primary-muted"
+          : "border-border bg-card text-foreground hover:border-primary/40 hover:bg-primary-muted"
       )}
     >
       {children}

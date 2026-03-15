@@ -33,7 +33,7 @@ export function SubscribeSection({ user, subscription }: SubscribeSectionProps) 
   return (
     <section
       id="subscribe-section"
-      className="rounded-lg border border-border bg-white p-5"
+      className="rounded-lg border border-border bg-card p-5"
     >
       <div className="flex items-center gap-2 mb-2">
         <Bell className="h-5 w-5 text-primary" />

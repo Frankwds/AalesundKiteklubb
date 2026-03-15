@@ -48,6 +48,12 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-badge-success: var(--badge-success);
+  --color-badge-success-foreground: var(--badge-success-foreground);
+  --color-badge-info: var(--badge-info);
+  --color-badge-info-foreground: var(--badge-info-foreground);
+  --color-badge-warning: var(--badge-warning);
+  --color-badge-warning-foreground: var(--badge-warning-foreground);
 }
 
 :root {
@@ -88,6 +94,15 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  /* Semantic badge tints — harmonize with primary/accent palette */
+  --badge-success: oklch(0.92 0.06 145);
+  --badge-success-foreground: oklch(0.32 0.1 145);
+  --badge-info: oklch(0.92 0.04 205);
+  --badge-info-foreground: oklch(0.38 0.08 205);
+  --badge-warning: oklch(0.94 0.08 75);
+  --badge-warning-foreground: oklch(0.4 0.12 55);
+  --primary-shadow: oklch(0.42 0.14 205 / 0.25);
+  --primary-shadow-soft: oklch(0.42 0.14 205 / 0.15);
 }
 
 @layer base {
@@ -103,7 +118,7 @@
   }
   @media (min-width: 768px) {
     html {
-      font-size: 150%;
+      font-size: 112.5%;
     }
   }
   h1, h2, h3, h4, h5, h6 {
@@ -120,7 +135,7 @@
   }
   .btn-lift:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 25px -5px oklch(0.42 0.14 205 / 0.25);
+    box-shadow: 0 8px 25px -5px var(--primary-shadow);
   }
   .btn-lift:active {
     transform: translateY(0);
@@ -132,7 +147,7 @@
   .card-lift:hover,
   .card-hover:hover {
     transform: translateY(-2px);
-    box-shadow: 0 12px 40px -10px oklch(0.42 0.14 205 / 0.15);
+    box-shadow: 0 12px 40px -10px var(--primary-shadow-soft);
   }
   @media (prefers-reduced-motion: reduce) {
     .btn-lift:hover,

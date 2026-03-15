@@ -2,19 +2,10 @@ import Link from "next/link"
 import { MapPin } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { WindCompass } from "./wind-compass"
+import { seasonLabels, skillLabels } from "@/lib/spot-labels"
 import type { Database } from "@/types/database"
 
 type Spot = Database["public"]["Tables"]["spots"]["Row"]
-
-const seasonLabels: Record<string, { text: string; className: string }> = {
-  summer: { text: "Sommer", className: "bg-primary-muted text-primary border-primary/30" },
-  winter: { text: "Vinter", className: "bg-blue-100 text-blue-800 border-blue-200" },
-}
-
-const skillLabels: Record<string, { text: string; className: string }> = {
-  beginner: { text: "Nybegynner", className: "bg-green-100 text-green-800 border-green-200" },
-  experienced: { text: "Erfaren", className: "bg-amber-100 text-amber-800 border-amber-200" },
-}
 
 export function SpotCard({ spot }: { spot: Spot }) {
   const season = spot.season ? seasonLabels[spot.season] : null
@@ -23,7 +14,7 @@ export function SpotCard({ spot }: { spot: Spot }) {
   return (
     <Link
       href={`/spots/${spot.id}`}
-      className="group block rounded-lg border border-border bg-white p-4 transition-all hover:border-primary/40 hover:shadow-md card-lift"
+      className="group block rounded-lg border border-border bg-card p-4 transition-all hover:border-primary/40 hover:shadow-md card-lift"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1 space-y-2">
@@ -36,10 +27,10 @@ export function SpotCard({ spot }: { spot: Spot }) {
           </div>
           <div className="flex flex-wrap gap-1.5">
             {season && (
-              <Badge className={season.className}>{season.text}</Badge>
+              <Badge variant={season.variant}>{season.text}</Badge>
             )}
             {skill && (
-              <Badge className={skill.className}>{skill.text}</Badge>
+              <Badge variant={skill.variant}>{skill.text}</Badge>
             )}
           </div>
         </div>

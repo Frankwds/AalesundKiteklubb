@@ -73,7 +73,7 @@ export function MessageBubble({
             "rounded-xl px-3 py-2 text-sm leading-relaxed",
             isOwnMessage
               ? "bg-primary-muted text-primary"
-              : "bg-white border border-border text-foreground"
+              : "bg-card border border-border text-foreground"
           )}
         >
           {message.content}

@@ -41,7 +41,7 @@ export function SpotFilters({
     <div className="rounded-lg border border-border bg-card">
       <button
         onClick={() => setOpen(!open)}
-        className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium text-foreground hover:bg-muted/50 transition-colors"
+        className="flex w-full cursor-pointer items-center justify-between px-4 py-3 text-sm font-medium text-foreground hover:bg-muted/50 transition-colors"
       >
         <span className="flex items-center gap-2">
           <Wind className="h-4 w-4" />
@@ -128,7 +128,7 @@ export function SpotFilters({
                 onAreaChange(null)
                 onWindChange([])
               }}
-              className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+              className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
             >
               <X className="h-3 w-3" />
               Nullstill filtre
@@ -153,9 +153,9 @@ function FilterToggle({
     <button
       onClick={onClick}
       className={cn(
-        "rounded-md border px-3 py-1.5 text-xs font-medium transition-all",
+        "cursor-pointer rounded-md border px-3 py-1.5 text-xs font-medium transition-all",
         active
-          ? "border-primary bg-primary text-white"
+          ? "border-primary bg-primary text-primary-foreground"
           : "border-border bg-card text-foreground hover:border-primary/40 hover:bg-primary-muted"
       )}
     >

@@ -52,13 +52,16 @@ const SKILL_LEVELS = [
 
 function SpotForm({
   spot,
+  spots,
   isPending,
   onSubmit,
 }: {
   spot?: Spot
+  spots: Spot[]
   isPending: boolean
   onSubmit: (formData: FormData) => void
 }) {
+  const areas = [...new Set(spots.map((s) => s.area).filter(Boolean))].sort()
   const formRef = useRef<HTMLFormElement>(null)
   const latRef = useRef<HTMLInputElement>(null)
   const lngRef = useRef<HTMLInputElement>(null)
@@ -115,10 +118,18 @@ function SpotForm({
           <label className="block text-sm font-medium mb-1">Område *</label>
           <input
             name="area"
+            list="area-list"
             required
+            autoComplete="off"
             defaultValue={spot?.area ?? ""}
+            placeholder="Velg eller skriv nytt område"
             className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
           />
+          <datalist id="area-list">
+            {areas.map((area) => (
+              <option key={area} value={area} />
+            ))}
+          </datalist>
         </div>
         <div>
           <label className="block text-sm font-medium mb-1">Sesong</label>
@@ -250,13 +261,16 @@ function SpotForm({
       </div>
 
       <div>
-        <label className="block text-sm font-medium mb-1">Kartbilde</label>
-        <input
-          name="image"
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          className="w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary-muted file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-primary hover:file:bg-primary-muted/80"
-        />
+        <label className="block text-sm font-medium mb-1">Bilde</label>
+        <label className="mt-1 inline-flex cursor-pointer items-center rounded-md bg-primary-muted px-3 py-1.5 text-sm font-medium text-primary hover:bg-primary-muted/80">
+          Velg fil
+          <input
+            name="image"
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="sr-only"
+          />
+        </label>
       </div>
 
       <DialogFooter>
@@ -345,7 +359,7 @@ export function SpotsTab({ spots }: Props) {
               <DialogTitle>Ny spot</DialogTitle>
               <DialogDescription>Opprett en ny kitespot.</DialogDescription>
             </DialogHeader>
-            <SpotForm isPending={isPending} onSubmit={handleCreate} />
+            <SpotForm spots={spots} isPending={isPending} onSubmit={handleCreate} />
           </DialogContent>
         </Dialog>
       </div>
@@ -441,6 +455,7 @@ export function SpotsTab({ spots }: Props) {
           {editTarget && (
             <SpotForm
               spot={editTarget}
+              spots={spots}
               isPending={isPending}
               onSubmit={handleUpdate}
             />

@@ -46,49 +46,52 @@ export function ProfilTab({ instructor }: Props) {
   }
 
   return (
-    <div className="space-y-6 max-w-xl">
-      <div className="flex items-center gap-4">
-        <Avatar className="h-20 w-20">
-          <AvatarImage src={photoUrl ?? undefined} alt="" />
-          <AvatarFallback className="text-lg">
-            {users?.name?.charAt(0) ?? "?"}
-          </AvatarFallback>
-        </Avatar>
-        <div>
-          <p className="font-medium">{users?.name ?? "Instruktør"}</p>
-          <p className="text-sm text-muted-foreground">
-            Rediger din instruktørprofil
-          </p>
-        </div>
-      </div>
-
-      <form ref={formRef} onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium mb-1">Profilbilde</label>
-          <input
-            name="photo"
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            className="w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary-muted file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-primary hover:file:bg-primary-muted/80"
-          />
-          <p className="text-xs text-muted-foreground mt-1">
-            Valgfritt. JPEG, PNG eller WebP. Max 2 MB.
-          </p>
+    <div className="max-w-xl">
+      <div className="rounded-xl border border-border bg-card p-6 card-lift">
+        <div className="flex items-center gap-4 mb-6">
+          <Avatar className="h-20 w-20 ring-2 ring-primary/10">
+            <AvatarImage src={photoUrl ?? undefined} alt="" />
+            <AvatarFallback className="text-lg font-display bg-primary-muted text-primary">
+              {users?.name?.charAt(0) ?? "?"}
+            </AvatarFallback>
+          </Avatar>
+          <div>
+            <p className="font-display font-semibold text-lg text-foreground">
+              {users?.name ?? "Instruktør"}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Presenter deg for kursdeltakere
+            </p>
+          </div>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium mb-1">Bio</label>
-          <textarea
-            name="bio"
-            defaultValue={instructor.bio ?? ""}
-            rows={4}
-            maxLength={2000}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 resize-y"
-            placeholder="Fortell litt om deg selv som instruktør..."
-          />
-        </div>
+        <form ref={formRef} onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">Profilbilde</label>
+            <input
+              name="photo"
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary-muted file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-primary file:transition-colors hover:file:bg-primary-muted/80"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Valgfritt. JPEG, PNG eller WebP. Max 2 MB.
+            </p>
+          </div>
 
-        <div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Bio</label>
+            <textarea
+              name="bio"
+              defaultValue={instructor.bio ?? ""}
+              rows={4}
+              maxLength={2000}
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 resize-y"
+              placeholder="Fortell kursdeltakere om din erfaring og hva som gjør kiting spennende for deg."
+            />
+          </div>
+
+          <div>
           <label className="block text-sm font-medium mb-1">Sertifiseringer</label>
           <input
             name="certifications"
@@ -98,9 +101,9 @@ export function ProfilTab({ instructor }: Props) {
             className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
             placeholder="F.eks. IKO Level 2"
           />
-        </div>
+          </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium mb-1">År med erfaring</label>
             <input
@@ -134,6 +137,7 @@ export function ProfilTab({ instructor }: Props) {
           Lagre profil
         </Button>
       </form>
+      </div>
     </div>
   )
 }

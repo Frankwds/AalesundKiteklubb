@@ -3,7 +3,7 @@
 import { useState, useTransition, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { Plus, Trash2, Users, Pencil, Loader2, X } from "lucide-react"
+import { Plus, Trash2, Users, Pencil, Loader2, X, GraduationCap } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -301,17 +301,17 @@ export function MineKursTab({ courses, spots }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <p className="text-sm text-muted-foreground">
           {courses.length} kurs totalt
         </p>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <Button
-            size="sm"
-            className="bg-primary hover:bg-primary/90 text-white btn-lift"
+            size="lg"
+            className="bg-primary hover:bg-primary/90 text-white btn-lift shrink-0"
             onClick={() => setCreateOpen(true)}
           >
-            <Plus className="mr-1.5 h-4 w-4" />
+            <Plus className="mr-2 h-4 w-4" />
             Nytt kurs
           </Button>
           <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
@@ -345,15 +345,22 @@ export function MineKursTab({ courses, spots }: Props) {
           <tbody className="divide-y">
             {courses.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
-                  Ingen kurs ennå. Opprett ditt første kurs.
+                <td colSpan={5} className="px-4 py-12 text-center">
+                  <GraduationCap className="mx-auto h-10 w-10 text-muted-foreground/60 mb-3" />
+                  <p className="font-medium text-foreground">Ditt første kurs venter</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Opprett et kurs og gi folk muligheten til å lære kiting med deg.
+                  </p>
                 </td>
               </tr>
             ) : (
               courses.map((course) => {
                 const isUpcoming = new Date(course.start_time) > now
                 return (
-                  <tr key={course.id} className="hover:bg-muted/30">
+                  <tr
+                    key={course.id}
+                    className="transition-colors duration-150 hover:bg-primary-muted/30"
+                  >
                     <td className="px-4 py-3 font-medium max-w-[200px] truncate">
                       {course.title}
                     </td>
@@ -467,19 +474,25 @@ export function MineKursTab({ courses, spots }: Props) {
             <DialogTitle>Deltakere — {participantsTarget?.title}</DialogTitle>
             <DialogDescription>
               {loadingParticipants
-                ? "Laster deltakere..."
-                : `${participants.length} deltaker${participants.length !== 1 ? "e" : ""}`}
+                ? "Sjekker deltakere…"
+                : participants.length === 0
+                  ? "Ingen påmeldte ennå"
+                  : `${participants.length} deltaker${participants.length !== 1 ? "e" : ""}`}
             </DialogDescription>
           </DialogHeader>
 
           {loadingParticipants ? (
-            <div className="flex justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            <div className="flex flex-col items-center justify-center py-8 gap-2">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              <p className="text-sm text-muted-foreground">Sjekker deltakere...</p>
             </div>
           ) : participants.length === 0 ? (
-            <p className="py-4 text-center text-sm text-muted-foreground">
-              Ingen påmeldte
-            </p>
+            <div className="py-6 text-center">
+              <Users className="mx-auto h-8 w-8 text-muted-foreground/50 mb-2" />
+              <p className="text-sm text-muted-foreground">
+                Ingen påmeldte ennå. Deltakerne vil vises her når noen melder seg på.
+              </p>
+            </div>
           ) : (
             <div className="max-h-60 overflow-y-auto rounded-md border border-border divide-y">
               {participants.map((p) => (

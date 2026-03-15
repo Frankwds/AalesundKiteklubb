@@ -3,7 +3,7 @@
 import { useState, useTransition, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { Plus, Pencil, Trash2, Loader2 } from "lucide-react"
+import { Plus, Pencil, Trash2, Loader2, MapPin } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -17,6 +17,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog"
 import { createSpot, updateSpot, deleteSpot } from "@/lib/actions/spots"
+import { MapCoordinatesModal } from "@/components/admin/MapCoordinatesPicker/MapCoordinatesModal"
 
 type Spot = {
   id: string
@@ -59,6 +60,9 @@ function SpotForm({
   onSubmit: (formData: FormData) => void
 }) {
   const formRef = useRef<HTMLFormElement>(null)
+  const latRef = useRef<HTMLInputElement>(null)
+  const lngRef = useRef<HTMLInputElement>(null)
+  const [mapModalOpen, setMapModalOpen] = useState(false)
   const [selectedWindDirs, setSelectedWindDirs] = useState<string[]>(
     spot?.wind_directions ?? []
   )
@@ -159,10 +163,11 @@ function SpotForm({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-[1fr_1fr_auto] gap-3 items-end">
         <div>
           <label className="block text-sm font-medium mb-1">Breddegrad</label>
           <input
+            ref={latRef}
             name="latitude"
             type="number"
             step="any"
@@ -173,6 +178,7 @@ function SpotForm({
         <div>
           <label className="block text-sm font-medium mb-1">Lengdegrad</label>
           <input
+            ref={lngRef}
             name="longitude"
             type="number"
             step="any"
@@ -180,7 +186,35 @@ function SpotForm({
             className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
           />
         </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          onClick={() => setMapModalOpen(true)}
+          title="Velg posisjon på kart"
+        >
+          <MapPin className="h-4 w-4" />
+        </Button>
       </div>
+
+      <MapCoordinatesModal
+        open={mapModalOpen}
+        onOpenChange={setMapModalOpen}
+        initialLat={
+          latRef.current?.value
+            ? parseFloat(latRef.current.value)
+            : spot?.latitude ?? null
+        }
+        initialLng={
+          lngRef.current?.value
+            ? parseFloat(lngRef.current.value)
+            : spot?.longitude ?? null
+        }
+        onConfirm={(lat, lng) => {
+          if (latRef.current) latRef.current.value = String(lat)
+          if (lngRef.current) lngRef.current.value = String(lng)
+        }}
+      />
 
       <div>
         <label className="block text-sm font-medium mb-2">Vindretninger</label>

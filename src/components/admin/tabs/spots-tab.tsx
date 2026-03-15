@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition, useRef } from "react"
+import { useState, useTransition, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Plus, Pencil, Trash2, Loader2, MapPin } from "lucide-react"
@@ -72,6 +72,41 @@ function SpotForm({
   const [selectedWaterTypes, setSelectedWaterTypes] = useState<string[]>(
     spot?.water_type ?? []
   )
+  const [imagePreview, setImagePreview] = useState<string | null>(
+    spot?.map_image_url ?? null
+  )
+  const imageInputRef = useRef<HTMLInputElement>(null)
+
+  const revokeBlob = (url: string | null) => {
+    if (url?.startsWith("blob:")) URL.revokeObjectURL(url)
+  }
+
+  // Sync preview when editing a spot with existing image
+  useEffect(() => {
+    if (spot?.map_image_url && !imageInputRef.current?.files?.length) {
+      setImagePreview(spot.map_image_url)
+    }
+  }, [spot?.map_image_url])
+
+  useEffect(() => {
+    return () => revokeBlob(imagePreview)
+  }, [imagePreview])
+
+  function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (file) {
+      revokeBlob(imagePreview)
+      setImagePreview(URL.createObjectURL(file))
+    } else {
+      setImagePreview(spot?.map_image_url ?? null)
+    }
+  }
+
+  function clearImagePreview() {
+    revokeBlob(imagePreview)
+    setImagePreview(spot?.map_image_url ?? null)
+    if (imageInputRef.current) imageInputRef.current.value = ""
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -118,14 +153,14 @@ function SpotForm({
           <label className="block text-sm font-medium mb-1">Område *</label>
           <input
             name="area"
-            list="area-list"
+            list={`area-list-${spot?.id ?? "new"}`}
             required
             autoComplete="off"
             defaultValue={spot?.area ?? ""}
             placeholder="Velg eller skriv nytt område"
             className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/50"
           />
-          <datalist id="area-list">
+          <datalist id={`area-list-${spot?.id ?? "new"}`}>
             {areas.map((area) => (
               <option key={area} value={area} />
             ))}
@@ -262,15 +297,44 @@ function SpotForm({
 
       <div>
         <label className="block text-sm font-medium mb-1">Bilde</label>
-        <label className="mt-1 inline-flex cursor-pointer items-center rounded-md bg-primary-muted px-3 py-1.5 text-sm font-medium text-primary hover:bg-primary-muted/80">
-          Velg fil
-          <input
+        <div className="mt-1 mb-2 rounded-lg border border-border overflow-hidden bg-muted/30 min-h-40 flex items-center justify-center">
+          {imagePreview ? (
+            <img
+              key={imagePreview}
+              src={imagePreview}
+              alt="Forhåndsvisning"
+              className="w-full h-40 object-cover block"
+            />
+          ) : (
+            <span className="text-sm text-muted-foreground py-8">
+              Ingen forhåndsvisning
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="inline-flex cursor-pointer items-center rounded-md bg-primary-muted px-3 py-1.5 text-sm font-medium text-primary hover:bg-primary-muted/80">
+            Velg fil
+            <input
+            ref={imageInputRef}
             name="image"
             type="file"
             accept="image/jpeg,image/png,image/webp"
             className="sr-only"
+            onChange={handleImageChange}
           />
-        </label>
+          </label>
+          {imagePreview && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground hover:text-foreground"
+              onClick={clearImagePreview}
+            >
+              Fjern
+            </Button>
+          )}
+        </div>
       </div>
 
       <DialogFooter>
@@ -359,7 +423,7 @@ export function SpotsTab({ spots }: Props) {
               <DialogTitle>Ny spot</DialogTitle>
               <DialogDescription>Opprett en ny kitespot.</DialogDescription>
             </DialogHeader>
-            <SpotForm spots={spots} isPending={isPending} onSubmit={handleCreate} />
+            <SpotForm key="create" spots={spots} isPending={isPending} onSubmit={handleCreate} />
           </DialogContent>
         </Dialog>
       </div>
@@ -391,18 +455,14 @@ export function SpotsTab({ spots }: Props) {
                   <td className="px-4 py-3">
                     {spot.season ? (
                       <Badge variant="secondary">
-                        {spot.season === "summer" ? "Sommer" : "Vinter"}
+                        {SEASONS.find((s) => s.value === spot.season)?.label ?? "-"}
                       </Badge>
                     ) : (
                       <span className="text-muted-foreground">-</span>
                     )}
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">
-                    {spot.skill_level
-                      ? spot.skill_level === "beginner"
-                        ? "Nybegynner"
-                        : "Erfaren"
-                      : "-"}
+                    {SKILL_LEVELS.find((s) => s.value === spot.skill_level)?.label ?? "-"}
                   </td>
                   <td className="px-4 py-3">
                     {spot.water_type && spot.water_type.length > 0 ? (
@@ -454,6 +514,7 @@ export function SpotsTab({ spots }: Props) {
           </DialogHeader>
           {editTarget && (
             <SpotForm
+              key={editTarget.id}
               spot={editTarget}
               spots={spots}
               isPending={isPending}

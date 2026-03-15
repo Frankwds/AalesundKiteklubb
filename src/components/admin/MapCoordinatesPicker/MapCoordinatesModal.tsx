@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import {
   Dialog,
   DialogContent,
@@ -40,6 +40,9 @@ function MapContent({
   onCoordsChange: (lat: number, lng: number) => void
   onMapReady: (coords: { lat: number; lng: number } | null) => void
 }) {
+  const onMapReadyRef = useRef(onMapReady)
+  onMapReadyRef.current = onMapReady
+
   const { mapRef, mapInstance, isLoading, error } = useMapInstance({
     latitude: centerLat,
     longitude: centerLng,
@@ -48,9 +51,9 @@ function MapContent({
   const handleCoordsChange = useCallback(
     (lat: number, lng: number) => {
       onCoordsChange(lat, lng)
-      onMapReady({ lat, lng })
+      onMapReadyRef.current({ lat, lng })
     },
-    [onCoordsChange, onMapReady]
+    [onCoordsChange]
   )
 
   const { addMarker } = useClickToPlaceMarker({
@@ -71,11 +74,13 @@ function MapContent({
     return () => google.maps.event.removeListener(listener)
   }, [mapInstance, addMarker])
 
+  // Set pending coords when opening with initial values. Use ref to avoid
+  // re-running when the parent's callback reference changes (infinite loop).
   useEffect(() => {
     if (initialLat != null && initialLng != null) {
-      onMapReady({ lat: initialLat, lng: initialLng })
+      onMapReadyRef.current({ lat: initialLat, lng: initialLng })
     }
-  }, [initialLat, initialLng, onMapReady])
+  }, [initialLat, initialLng])
 
   return (
     <>

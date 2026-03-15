@@ -19,10 +19,10 @@ const jakarta = Plus_Jakarta_Sans({
 
 export const metadata: Metadata = {
   title: "Ålesund Kiteklubb",
-  description: "Kiteklubben for Sunnmøre — Kurs, spotter og fellesskap",
+  description: "Kiteklubben for Sunnmøre — Kurs, Spot guide og fellesskap",
   openGraph: {
     title: "Ålesund Kiteklubb",
-    description: "Kiteklubben for Sunnmøre — Kurs, spotter og fellesskap",
+    description: "Kiteklubben for Sunnmøre — Kurs, Spot guide og fellesskap",
     type: "website",
   },
 }

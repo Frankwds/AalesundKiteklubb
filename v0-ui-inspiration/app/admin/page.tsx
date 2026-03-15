@@ -85,7 +85,7 @@ export default function AdminPage() {
           <TabsList className="mb-6 w-full flex flex-wrap h-auto gap-1 bg-muted p-1">
             <TabsTrigger value="instructors" className="flex-1 min-w-[100px]">Instruktører</TabsTrigger>
             <TabsTrigger value="courses" className="flex-1 min-w-[100px]">Kurs</TabsTrigger>
-            <TabsTrigger value="spots" className="flex-1 min-w-[100px]">Spotter</TabsTrigger>
+            <TabsTrigger value="spots" className="flex-1 min-w-[100px]">Spot guide</TabsTrigger>
             <TabsTrigger value="subscribers" className="flex-1 min-w-[100px]">Abonnenter</TabsTrigger>
             <TabsTrigger value="users" className="flex-1 min-w-[100px]">Brukere</TabsTrigger>
           </TabsList>
@@ -282,7 +282,7 @@ function SpotsTab() {
   return (
     <div>
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-lg font-semibold text-foreground">Spotter</h2>
+        <h2 className="text-lg font-semibold text-foreground">Spot guide</h2>
         <Dialog open={showNewSpotDialog} onOpenChange={setShowNewSpotDialog}>
           <DialogTrigger asChild>
             <Button className="bg-sky-600 hover:bg-sky-700">

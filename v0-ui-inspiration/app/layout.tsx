@@ -12,7 +12,7 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: 'Ålesund Kiteklubb',
-  description: 'Kiteklubben for Sunnmøre - Kurs, spotter og fellesskap',
+  description: 'Kiteklubben for Sunnmøre - Kurs, spot guide og fellesskap',
   generator: 'v0.app',
   icons: {
     icon: [

@@ -5,7 +5,7 @@ import { SpotList } from "@/components/spots/spot-list"
 import { SkeletonCard } from "@/components/ui/skeletons"
 
 export const metadata = {
-  title: "Spotter — Ålesund Kiteklubb",
+  title: "Spot guide — Ålesund Kiteklubb",
   description: "Finn de beste kitespottene på Sunnmøre",
 }
 
@@ -18,7 +18,7 @@ export default async function SpotsPage() {
         <div className="flex items-center gap-2 mb-2">
           <MapPin className="h-6 w-6 text-primary" />
           <h1 className="text-2xl md:text-3xl font-bold text-foreground">
-            Spotter
+            Spot guide
           </h1>
         </div>
         <p className="text-sm text-muted-foreground">

@@ -1035,7 +1035,7 @@ Design: Off-white content card floating over the panorama background. Shades of 
 
 ### 5b. Spots Listing Page (`src/app/spots/page.tsx`)
 
-Spots are accessed via a direct nav link to `/spots`. One nav item "Spotter" links to the listing page.
+Spots are accessed via a direct nav link to `/spots`. One nav item "Spot guide" links to the listing page.
 
 **Layout:**
 - **Filters:** Placed in a drawer at the top of the page (same on mobile and desktop). Season (SommerSpotter / VinterSpotter), Area (e.g. Giske, Ålesund), Wind direction (N, NE, E, SE, S, SW, W, NW — multi-select). When multiple wind directions are selected, show spots whose windDirections array contains any of the selected directions (OR semantics). Filters sync to URL params (e.g. `?season=summer&area=Giske`); initial render reads params and filters client-side. Shareable links use URL params. Drawer can be collapsed/expanded.
@@ -1101,7 +1101,7 @@ Protected by middleware (admin role only). One page with shadcn/ui `Tabs` to swi
 - No create button here — course creation uses the shared Instructor dashboard (see 5f). Admins see the Instructor nav item and use the same "Nytt kurs" flow there.
 - Row actions: Edit, Delete (opens confirmation dialog; on confirm, the `deleteCourse` server action fetches enrolled participants, sends cancellation emails via Resend, then deletes the course — see Section 7), View participants (expandable row or Dialog showing participant list with remove buttons)
 
-**Tab: Spotter**
+**Tab: Spot guide**
 - DataTable listing all spots (name, season, area, skill level, water type)
 - Filters by season and area
 - "Ny spot" button → Dialog with full spot form (name, description, season, area, wind directions multi-select compass, map image upload, latitude/longitude, skill level, skill notes, water type multi-select)

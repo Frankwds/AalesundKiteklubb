@@ -30,7 +30,7 @@ todos:
     content: "Step 9: Course Chat (Phase 9) -- Realtime chat, access gating, ChatWindow, MessageBubble, MessageInput, profile cache"
     status: completed
   - id: step-10
-    content: "Step 10: Admin Dashboard (Phase 9) -- 5 tabs: Instruktorer, Kurs, Spotter, Abonnenter, Brukere with full CRUD"
+    content: "Step 10: Admin Dashboard (Phase 9) -- 5 tabs: Instruktorer, Kurs, Spot guide, Abonnenter, Brukere with full CRUD"
     status: completed
   - id: step-11
     content: "Step 11: Instructor Dashboard and Polish (Phases 9/10) -- profile edit, course CRUD, responsive audit, loading states, SEO"
@@ -349,7 +349,7 @@ All actions follow the pattern: (1) Zod validation, (2) early return on failure,
 - Create `src/app/admin/page.tsx` -- server component fetches all tab data upfront; passes as props
 - Build **Tab: Instruktorer** -- DataTable; "Legg til instruktor" dialog (user search/select, excludes existing instructors); remove action with confirmation
 - Build **Tab: Kurs** -- DataTable with "Kommende"/"Tidligere" tags; delete action (confirmation + cancellation emails); view participants dialog with remove buttons
-- Build **Tab: Spotter** -- DataTable with season/area filters; "Ny spot" dialog; edit/delete row actions
+- Build **Tab: Spot guide** -- DataTable with season/area filters; "Ny spot" dialog; edit/delete row actions
 - Build **Tab: Abonnenter** -- read-only DataTable
 - Build **Tab: Brukere** -- DataTable; role change dropdown (disabled for own row); confirmation dialogs for demotions; toast messages per operation
 
@@ -362,7 +362,7 @@ All actions follow the pattern: (1) Zod validation, (2) early return on failure,
 - All 5 tabs render with correct data
 - Instruktorer: can add/remove instructors
 - Kurs: can delete courses (sends cancellation emails), view/remove participants
-- Spotter: full CRUD with image upload
+- Spot guide: full CRUD with image upload
 - Brukere: role changes work with confirmation dialogs
 - Abonnenter: read-only list renders
 

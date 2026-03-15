@@ -380,7 +380,7 @@ export function SpotsTab({ spots }: Props) {
             {spots.length === 0 ? (
               <tr>
                 <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
-                  Ingen spotter ennå
+                  Ingen spot guide ennå
                 </td>
               </tr>
             ) : (

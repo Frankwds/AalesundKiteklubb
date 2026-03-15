@@ -100,7 +100,7 @@ export function SpotList({ spots }: { spots: Spot[] }) {
           <SearchX className="h-10 w-10 text-muted-foreground/50" />
           <div>
             <p className="text-base font-medium text-foreground">
-              Ingen spotter matcher filtrene
+              Ingen spot guide matcher filtrene
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
               Prøv å justere filtrene eller nullstill dem.

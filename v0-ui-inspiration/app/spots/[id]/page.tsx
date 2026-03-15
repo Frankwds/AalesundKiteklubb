@@ -122,7 +122,7 @@ export default async function SpotDetailPage({
         className="inline-flex items-center text-sm text-muted-foreground hover:text-sky-600 mb-6 transition-colors"
       >
         <ArrowLeft className="h-4 w-4 mr-1" />
-        Tilbake til spotter
+        Tilbake til spot guide
       </Link>
 
       {/* Header */}

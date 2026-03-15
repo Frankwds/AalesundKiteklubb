@@ -25,7 +25,7 @@ Present on all pages at the top of the viewport.
 
 - Full-width bar with a semi-transparent white/frosted-glass background and subtle bottom border.
 - **Left:** Club name "Ålesund Kiteklubb" as a logo/link to home.
-- **Center/Right nav items (desktop):** Hjem, Spotter, Kurs, Logg inn (when logged out) or a user avatar dropdown (when logged in). When logged in as instructor or admin, show additional items: "Instruktør" and/or "Admin".
+- **Center/Right nav items (desktop):** Hjem, Spot guide, Kurs, Logg inn (when logged out) or a user avatar dropdown (when logged in). When logged in as instructor or admin, show additional items: "Instruktør" and/or "Admin".
 - **Mobile:** Collapse all nav items into a hamburger icon (top-right). Tapping it opens a **full-screen overlay** with large, stacked nav links and a close button (X) in the top-right.
 - **User avatar dropdown (logged in, desktop):** Shows the user's name and role badge (Bruker / Instruktør / Admin), plus "Logg ut" link.
 
@@ -56,7 +56,7 @@ Single-page scroll layout inside the content card.
 
 ---
 
-### Page 2: Spotter (Spots Listing) — route `/spots`
+### Page 2: Spot guide (Spots Listing) — route `/spots`
 
 **Filter drawer:**
 - A collapsible/expandable filter section at the top of the page (same on mobile and desktop).
@@ -78,7 +78,7 @@ Single-page scroll layout inside the content card.
 
 Show 4–6 placeholder spot cards with varied data.
 
-**Empty state:** When no spots match filters: "Ingen spotter matcher filtrene dine." with a "Nullstill filtre" button.
+**Empty state:** When no spots match filters: "Ingen spot guide matcher filtrene dine." with a "Nullstill filtre" button.
 
 ---
 
@@ -95,7 +95,7 @@ A detail page for a single spot. Sections stacked vertically:
 7. **Nødvendige kiteskills:** A skill level badge ("Erfaren" or "Nybegynner") + a short note text: "Krever erfaring med bølger og sterk strøm."
 8. **Vanntype:** Badges/tags: "Chop", "Flatt vann", "Bølger" — show 2 of these as active.
 
-Use a back arrow/link at the top: "← Tilbake til spotter"
+Use a back arrow/link at the top: "← Tilbake til spot guide"
 
 ---
 
@@ -169,7 +169,7 @@ A tabbed interface using shadcn/ui `Tabs`. Five tabs:
 - Row actions: Rediger, Slett, Vis deltakere (opens dialog with participant list + remove buttons).
 - Show 4 placeholder rows.
 
-**Tab: Spotter**
+**Tab: Spot guide**
 - DataTable with columns: Navn, Sesong, Område, Nivå, Vanntype
 - Season/area filter dropdowns above the table.
 - "Ny spot" button → Dialog with a full form (name, description, season select, area, wind direction multi-select, map image upload area, coordinates, skill level, skill notes, water type multi-select).

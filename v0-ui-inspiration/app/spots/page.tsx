@@ -94,7 +94,7 @@ export default function SpotsPage() {
 
   return (
     <div className="p-6 md:p-8">
-      <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-6">Spotter</h1>
+      <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-6">Spot guide</h1>
 
       {/* Filter Section */}
       <div className="mb-8">
@@ -102,7 +102,7 @@ export default function SpotsPage() {
           onClick={() => setFiltersOpen(!filtersOpen)}
           className="flex items-center gap-2 text-sm font-medium text-foreground mb-4 hover:text-sky-600 transition-colors"
         >
-          Filtrer spotter
+          Filtrer spot guide
           {filtersOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </button>
 
@@ -200,7 +200,7 @@ export default function SpotsPage() {
         </div>
       ) : (
         <div className="text-center py-12">
-          <p className="text-muted-foreground mb-4">Ingen spotter matcher filtrene dine.</p>
+          <p className="text-muted-foreground mb-4">Ingen spot guide matcher filtrene dine.</p>
           <Button onClick={clearFilters} variant="outline">
             Nullstill filtre
           </Button>

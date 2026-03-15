@@ -42,7 +42,7 @@ export function Navbar() {
 
   const navLinks = [
     { href: "/", label: "Hjem" },
-    { href: "/spots", label: "Spotter" },
+    { href: "/spots", label: "Spot guide" },
     { href: "/courses", label: "Kurs" },
   ]
 

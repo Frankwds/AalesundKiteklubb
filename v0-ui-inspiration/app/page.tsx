@@ -89,7 +89,7 @@ export default function HomePage() {
               className="group p-6 bg-white rounded-lg border border-border hover:border-sky-300 hover:shadow-md transition-all"
             >
               <h3 className="text-lg font-semibold text-foreground mb-2 group-hover:text-sky-600 transition-colors">
-                Utforsk spotter
+                Utforsk spot guide
               </h3>
               <p className="text-sm text-muted-foreground">
                 Finn de beste stedene for kitesurfing på Sunnmøre med vår spottguide.

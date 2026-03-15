@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils"
 
 export const metadata = {
   title: "Ålesund Kiteklubb",
-  description: "Kiteklubben for Sunnmøre — Kurs, spotter og fellesskap",
+  description: "Kiteklubben for Sunnmøre — Kurs, Spot guide og fellesskap",
 }
 
 export default function HomePage() {
@@ -100,7 +100,7 @@ export default function HomePage() {
               className="group p-6 bg-card rounded-lg border border-border hover:border-primary/40 card-lift"
             >
               <h3 className="text-lg font-semibold text-foreground mb-2 group-hover:text-primary transition-colors">
-                Utforsk spotter
+                Utforsk Spot guide
               </h3>
               <p className="text-sm text-muted-foreground">
                 Finn de beste stedene for kitesurfing på Sunnmøre med vår

@@ -225,6 +225,7 @@ function SpotForm({
           type="button"
           variant="primaryLift"
           size="sm"
+          className="h-9"
           onClick={() => setMapModalOpen(true)}
           title="Velg posisjon på kart"
         >

@@ -12,6 +12,7 @@ import {
   waterTypeLabels,
 } from "@/lib/spot-labels"
 import { getSpot } from "@/lib/queries/spots"
+import { getSpotStaticMapUrl } from "@/lib/maps/spot-static-map"
 
 export async function generateMetadata({
   params,
@@ -39,6 +40,17 @@ export default async function SpotDetailPage({
   const season = spot.season ? seasonLabels[spot.season] : null
   const skill = spot.skill_level ? skillLabels[spot.skill_level] : null
   const hasCoords = spot.latitude != null && spot.longitude != null
+  const staticMapUrl = getSpotStaticMapUrl({
+    lat: spot.latitude,
+    lng: spot.longitude,
+    kiteZones: spot.kite_zones,
+  })
+  const hasKiteZones =
+    spot.kite_zones != null &&
+    typeof spot.kite_zones === "object" &&
+    !Array.isArray(spot.kite_zones) &&
+    Array.isArray((spot.kite_zones as { features?: unknown }).features) &&
+    (spot.kite_zones as { features: unknown[] }).features.length > 0
 
   return (
     <div className="px-6 py-8">
@@ -154,6 +166,32 @@ export default async function SpotDetailPage({
             longitude={spot.longitude!}
             windDirections={spot.wind_directions ?? undefined}
           />
+        </Section>
+      )}
+
+      {staticMapUrl && (
+        <Section title="Oversiktskart">
+          <div className="relative w-full overflow-hidden rounded-lg border border-border aspect-video max-w-3xl">
+            <Image
+              src={staticMapUrl}
+              alt={
+                hasKiteZones
+                  ? `Satellittkart med skraverte områder for ${spot.name}`
+                  : `Satellittkart for ${spot.name}`
+              }
+              fill
+              unoptimized
+              className="object-cover pointer-events-none select-none"
+              sizes="(max-width: 768px) 100vw, 768px"
+              draggable={false}
+            />
+          </div>
+          {hasKiteZones && (
+            <p className="mt-2 text-xs text-muted-foreground max-w-3xl">
+              Fargede områder er klubbens veiledning om hvor det er vanlig å kite;
+              det erstatter ikke lokale regler eller egen vurdering.
+            </p>
+          )}
         </Section>
       )}
 

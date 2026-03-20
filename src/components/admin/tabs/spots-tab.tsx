@@ -18,7 +18,9 @@ import {
 } from "@/components/ui/dialog"
 import { createSpot, updateSpot, deleteSpot } from "@/lib/actions/spots"
 import { MapCoordinatesModal } from "@/components/admin/MapCoordinatesPicker/MapCoordinatesModal"
+import { KiteZonesMapModal } from "@/components/admin/KiteZonesMapModal"
 import { AdminWindCompass } from "@/components/admin/AdminWindCompass"
+import type { Json } from "@/types/database"
 
 type Spot = {
   id: string
@@ -33,6 +35,7 @@ type Spot = {
   wind_directions: string[] | null
   water_type: string[] | null
   map_image_url: string | null
+  kite_zones?: Json | null
   created_at: string
 }
 
@@ -66,6 +69,8 @@ function SpotForm({
   const latRef = useRef<HTMLInputElement>(null)
   const lngRef = useRef<HTMLInputElement>(null)
   const [mapModalOpen, setMapModalOpen] = useState(false)
+  const [kiteZonesModalOpen, setKiteZonesModalOpen] = useState(false)
+  const [kiteZonesJson, setKiteZonesJson] = useState("")
   const [selectedWindDirs, setSelectedWindDirs] = useState<string[]>(
     spot?.wind_directions ?? []
   )
@@ -88,6 +93,21 @@ function SpotForm({
     userClearedRef.current = false
     setImageRemoved(false)
   }, [spot?.id])
+
+  useEffect(() => {
+    if (!spot) {
+      setKiteZonesJson("")
+      return
+    }
+    const kz = spot.kite_zones ?? null
+    if (kz == null) {
+      setKiteZonesJson("")
+    } else if (typeof kz === "string") {
+      setKiteZonesJson(kz)
+    } else {
+      setKiteZonesJson(JSON.stringify(kz))
+    }
+  }, [spot?.id, spot?.kite_zones])
 
   useEffect(() => {
     if (!userClearedRef.current && spot?.map_image_url && !imageInputRef.current?.files?.length) {
@@ -133,6 +153,8 @@ function SpotForm({
       formData.set("id", spot.id)
       if (imageRemoved) formData.set("removeImage", "true")
     }
+
+    formData.set("kite_zones", kiteZonesJson)
 
     onSubmit(formData)
   }
@@ -306,6 +328,44 @@ function SpotForm({
           ))}
         </div>
       </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          variant="outlinePrimaryLift"
+          size="sm"
+          className="h-10"
+          onClick={() => setKiteZonesModalOpen(true)}
+        >
+          Skraver områder
+        </Button>
+        {kiteZonesJson.trim() !== "" && (
+          <span className="text-xs text-muted-foreground">
+            Skraverte områder er klare for lagring med skjemaet.
+          </span>
+        )}
+      </div>
+
+      <KiteZonesMapModal
+        open={kiteZonesModalOpen}
+        onOpenChange={setKiteZonesModalOpen}
+        committedJson={kiteZonesJson}
+        spotLat={
+          latRef.current?.value && latRef.current.value.trim() !== ""
+            ? Number(latRef.current.value)
+            : spot?.latitude ?? null
+        }
+        spotLng={
+          lngRef.current?.value && lngRef.current.value.trim() !== ""
+            ? Number(lngRef.current.value)
+            : spot?.longitude ?? null
+        }
+        onCommit={(doc) => {
+          setKiteZonesJson(
+            doc.features.length === 0 ? "" : JSON.stringify(doc)
+          )
+        }}
+      />
 
       <div>
         <label className="block text-sm font-medium mb-1">Bilde</label>

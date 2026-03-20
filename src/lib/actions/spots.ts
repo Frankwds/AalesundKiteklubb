@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createSpotSchema, updateSpotSchema } from '@/lib/validations/spots'
+import { parseKiteZonesField } from '@/lib/validations/kite-zones'
 import { log, logError } from '@/lib/logger'
 
 export async function createSpot(formData: FormData) {
@@ -26,6 +27,18 @@ export async function createSpot(formData: FormData) {
     return { success: false as const, error: parsed.error.issues[0].message }
   }
 
+  const kiteZonesResult = parseKiteZonesField(formData.get('kite_zones'))
+  if (!kiteZonesResult.success) {
+    return { success: false as const, error: kiteZonesResult.error }
+  }
+
+  const kiteZonesPayload =
+    kiteZonesResult.data &&
+    kiteZonesResult.data.features &&
+    kiteZonesResult.data.features.length > 0
+      ? kiteZonesResult.data
+      : null
+
   const supabase = await createClient()
 
   const { data: spot, error: insertError } = await supabase
@@ -41,6 +54,7 @@ export async function createSpot(formData: FormData) {
       longitude: parsed.data.longitude,
       wind_directions: parsed.data.windDirections,
       water_type: parsed.data.waterType,
+      kite_zones: kiteZonesPayload,
     })
     .select()
     .single()
@@ -109,6 +123,11 @@ export async function updateSpot(formData: FormData) {
     return { success: false as const, error: parsed.error.issues[0].message }
   }
 
+  const kiteZonesResult = parseKiteZonesField(formData.get('kite_zones'))
+  if (!kiteZonesResult.success) {
+    return { success: false as const, error: kiteZonesResult.error }
+  }
+
   const supabase = await createClient()
   const { id, ...fields } = parsed.data
 
@@ -123,6 +142,14 @@ export async function updateSpot(formData: FormData) {
   if (fields.longitude !== undefined) updateData.longitude = fields.longitude
   if (fields.windDirections !== undefined) updateData.wind_directions = fields.windDirections
   if (fields.waterType !== undefined) updateData.water_type = fields.waterType
+
+  const kiteZonesPayload =
+    kiteZonesResult.data &&
+    kiteZonesResult.data.features &&
+    kiteZonesResult.data.features.length > 0
+      ? kiteZonesResult.data
+      : null
+  updateData.kite_zones = kiteZonesPayload
 
   if (formData.get('removeImage') === 'true') {
     updateData.map_image_url = null

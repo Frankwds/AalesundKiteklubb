@@ -55,6 +55,8 @@ pnpm db:types
 
 `db:types` requires the `SUPABASE_PROJECT_ID` environment variable. You can find your project ref in the Supabase Dashboard URL: `https://supabase.com/dashboard/project/<project-ref>`.
 
+After adding columns (e.g. `kite_zones` on `spots`), run `pnpm db:types` or update `src/types/database.ts` to match.
+
 ### Migrations and types in one step
 
 ```bash
@@ -62,6 +64,14 @@ pnpm db:sync
 ```
 
 Runs `db:push` then `db:types`, so migrations are applied and types are refreshed.
+
+## Google Maps (admin picker, kite zones, public static map)
+
+1. In [Google Cloud Console](https://console.cloud.google.com/), enable **Maps JavaScript API** (admin interactive maps) and **Maps Static API** (read-only satellite image on public spot pages).
+2. Create or reuse an API key. For a single key, set `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` and restrict it to your HTTP referrers (dev and production). The same key must be allowed to call the Static Maps endpoint used server-side (or set a separate `GOOGLE_MAPS_API_KEY` for server-only Static Map URLs and restrict it by IP or as recommended in Google’s docs).
+3. Copy values into `.env.local` (see `.env.local.example`).
+
+If no valid key is configured, the public spot page omits the static map block; the admin map modals show a configuration error.
 
 ## Deploy on Vercel
 

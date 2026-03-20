@@ -8,19 +8,31 @@ const DEFAULT_CENTER = { lat: 62.4722, lng: 6.1549 } // Ålesund
 export function useMapInstance({
   latitude,
   longitude,
+  /** When false, skip init (e.g. dialog closed). Ref must exist when this becomes true. */
+  enabled = true,
 }: {
   latitude: number
   longitude: number
+  enabled?: boolean
 }) {
   const mapRef = useRef<HTMLDivElement>(null)
   const [mapInstance, setMapInstance] = useState<google.maps.Map | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(enabled)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    if (!enabled) {
+      setMapInstance(null)
+      setIsLoading(false)
+      setError(null)
+      return
+    }
+
     let cancelled = false
 
     const initMap = async () => {
+      setIsLoading(true)
+      setError(null)
       try {
         const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
         if (!apiKey || apiKey === "GOOGLE_MAPS_API_KEY") {
@@ -37,9 +49,28 @@ export function useMapInstance({
         await importLibrary("maps")
 
         const g = (window as Window & { google: typeof globalThis.google }).google
-        if (!g || !mapRef.current || cancelled) return
+        // Ref may lag one frame (portal / conditional mount); never leave loading stuck.
+        let el = mapRef.current
+        if (!el) {
+          await new Promise<void>((r) =>
+            requestAnimationFrame(() => requestAnimationFrame(r))
+          )
+          el = mapRef.current
+        }
 
-        const map = new g.maps.Map(mapRef.current, {
+        if (!g || !el || cancelled) {
+          if (!cancelled) {
+            setError(
+              !g
+                ? "Google Maps lastet ikke. Prøv å lukke og åpne vinduet på nytt."
+                : "Kart-container manglet. Prøv å lukke og åpne vinduet på nytt."
+            )
+            setIsLoading(false)
+          }
+          return
+        }
+
+        const map = new g.maps.Map(el, {
           center: { lat: latitude, lng: longitude },
           zoom: 12,
           mapTypeId: g.maps.MapTypeId.SATELLITE,
@@ -63,11 +94,11 @@ export function useMapInstance({
       }
     }
 
-    initMap()
+    void initMap()
     return () => {
       cancelled = true
     }
-  }, [latitude, longitude])
+  }, [latitude, longitude, enabled])
 
   return { mapRef, mapInstance, isLoading, error }
 }

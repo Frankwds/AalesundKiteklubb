@@ -91,6 +91,7 @@ export function KiteZonesMapModal({
   const { mapRef, mapInstance, isLoading, error } = useMapInstance({
     latitude: centerLat,
     longitude: centerLng,
+    enabled: open,
   })
 
   useEffect(() => {
@@ -266,20 +267,10 @@ export function KiteZonesMapModal({
       })
     })
 
-    return () => {
-      overlaysRef.current.listeners.forEach((l) => l.remove())
-      overlaysRef.current.markers.forEach((m) => m.setMap(null))
-      overlaysRef.current.polygons.forEach((p) => p.setMap(null))
-      overlaysRef.current = { polygons: [], markers: [], listeners: [] }
-    }
-  }, [mapInstance, open, polygons, selectedId, updateVertex, removeVertex])
-
-  useEffect(() => {
-    if (!mapInstance || !open) return
-    const g = window.google?.maps
-    if (!g) return
-
-    const listener = mapInstance.addListener(
+    // Register here (not a separate effect): the block above clears `listeners` on every
+    // `polygons` change; a detached effect with `[selectedId, addVertex]` deps never re-ran,
+    // so the map lost its click listener after the first vertex.
+    const mapClickListener = mapInstance.addListener(
       "click",
       (e: google.maps.MapMouseEvent) => {
         if (dragVertexRef.current) return
@@ -287,11 +278,15 @@ export function KiteZonesMapModal({
         addVertex(selectedId, e.latLng.lat(), e.latLng.lng())
       }
     )
-    overlaysRef.current.listeners.push(listener)
+    overlaysRef.current.listeners.push(mapClickListener)
+
     return () => {
-      listener.remove()
+      overlaysRef.current.listeners.forEach((l) => l.remove())
+      overlaysRef.current.markers.forEach((m) => m.setMap(null))
+      overlaysRef.current.polygons.forEach((p) => p.setMap(null))
+      overlaysRef.current = { polygons: [], markers: [], listeners: [] }
     }
-  }, [mapInstance, open, selectedId, addVertex])
+  }, [mapInstance, open, polygons, selectedId, updateVertex, removeVertex, addVertex])
 
   function handleCreatePolygon() {
     const id = crypto.randomUUID()

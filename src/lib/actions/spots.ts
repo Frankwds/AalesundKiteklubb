@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createSpotSchema, updateSpotSchema } from '@/lib/validations/spots'
+import { parseKiteZonesFormValue } from '@/lib/kite-zones/parse-form'
 import { log, logError } from '@/lib/logger'
 
 export async function createSpot(formData: FormData) {
@@ -26,6 +27,11 @@ export async function createSpot(formData: FormData) {
     return { success: false as const, error: parsed.error.issues[0].message }
   }
 
+  const kiteZonesResult = parseKiteZonesFormValue(formData.get('kiteZones'))
+  if (!kiteZonesResult.ok) {
+    return { success: false as const, error: kiteZonesResult.message }
+  }
+
   const supabase = await createClient()
 
   const { data: spot, error: insertError } = await supabase
@@ -41,6 +47,7 @@ export async function createSpot(formData: FormData) {
       longitude: parsed.data.longitude,
       wind_directions: parsed.data.windDirections,
       water_type: parsed.data.waterType,
+      kite_zones: kiteZonesResult.value,
     })
     .select()
     .single()
@@ -82,6 +89,7 @@ export async function createSpot(formData: FormData) {
   log('createSpot', `spot ${spot.id} created`)
 
   revalidatePath('/spots')
+  revalidatePath(`/spots/${spot.id}`)
   revalidatePath('/admin')
 
   return { success: true as const, spot }
@@ -109,6 +117,11 @@ export async function updateSpot(formData: FormData) {
     return { success: false as const, error: parsed.error.issues[0].message }
   }
 
+  const kiteZonesResult = parseKiteZonesFormValue(formData.get('kiteZones'))
+  if (!kiteZonesResult.ok) {
+    return { success: false as const, error: kiteZonesResult.message }
+  }
+
   const supabase = await createClient()
   const { id, ...fields } = parsed.data
 
@@ -123,6 +136,8 @@ export async function updateSpot(formData: FormData) {
   if (fields.longitude !== undefined) updateData.longitude = fields.longitude
   if (fields.windDirections !== undefined) updateData.wind_directions = fields.windDirections
   if (fields.waterType !== undefined) updateData.water_type = fields.waterType
+
+  updateData.kite_zones = kiteZonesResult.value
 
   if (formData.get('removeImage') === 'true') {
     updateData.map_image_url = null
@@ -171,6 +186,7 @@ export async function updateSpot(formData: FormData) {
   log('updateSpot', `spot ${id} updated`)
 
   revalidatePath('/spots')
+  revalidatePath(`/spots/${id}`)
   revalidatePath('/admin')
 
   return { success: true as const }

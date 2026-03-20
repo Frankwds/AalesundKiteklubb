@@ -190,6 +190,7 @@ export type Database = {
           created_at: string
           description: string | null
           id: string
+          kite_zones: Json | null
           latitude: number | null
           longitude: number | null
           map_image_url: string | null
@@ -205,6 +206,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          kite_zones?: Json | null
           latitude?: number | null
           longitude?: number | null
           map_image_url?: string | null
@@ -220,6 +222,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          kite_zones?: Json | null
           latitude?: number | null
           longitude?: number | null
           map_image_url?: string | null

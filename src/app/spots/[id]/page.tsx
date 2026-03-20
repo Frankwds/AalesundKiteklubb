@@ -12,6 +12,8 @@ import {
   waterTypeLabels,
 } from "@/lib/spot-labels"
 import { getSpot } from "@/lib/queries/spots"
+import { buildStaticSpotMapUrl } from "@/lib/maps/staticSpotMapUrl"
+import { SpotKiteZonesStaticMap } from "@/components/spots/spot-kite-zones-static-map"
 
 export async function generateMetadata({
   params,
@@ -39,6 +41,12 @@ export default async function SpotDetailPage({
   const season = spot.season ? seasonLabels[spot.season] : null
   const skill = spot.skill_level ? skillLabels[spot.skill_level] : null
   const hasCoords = spot.latitude != null && spot.longitude != null
+
+  const staticSpotMapUrl = buildStaticSpotMapUrl({
+    latitude: spot.latitude,
+    longitude: spot.longitude,
+    kiteZones: spot.kite_zones,
+  })
 
   return (
     <div className="px-6 py-8">
@@ -153,6 +161,16 @@ export default async function SpotDetailPage({
             latitude={spot.latitude!}
             longitude={spot.longitude!}
             windDirections={spot.wind_directions ?? undefined}
+          />
+        </Section>
+      )}
+
+      {staticSpotMapUrl && (
+        <Section title="Kart">
+          <SpotKiteZonesStaticMap
+            mapUrl={staticSpotMapUrl}
+            spotName={spot.name}
+            kiteZones={spot.kite_zones}
           />
         </Section>
       )}

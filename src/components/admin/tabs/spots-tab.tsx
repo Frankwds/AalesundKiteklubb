@@ -16,8 +16,11 @@ import {
   DialogDescription,
   DialogClose,
 } from "@/components/ui/dialog"
+import type { Json } from "@/types/database"
+import { serializeKiteZonesForForm } from "@/lib/kite-zones/schema"
 import { createSpot, updateSpot, deleteSpot } from "@/lib/actions/spots"
 import { MapCoordinatesModal } from "@/components/admin/MapCoordinatesPicker/MapCoordinatesModal"
+import { KiteZonesModal } from "@/components/admin/KiteZonesEditor"
 import { AdminWindCompass } from "@/components/admin/AdminWindCompass"
 
 type Spot = {
@@ -33,6 +36,7 @@ type Spot = {
   wind_directions: string[] | null
   water_type: string[] | null
   map_image_url: string | null
+  kite_zones: Json | null
   created_at: string
 }
 
@@ -66,6 +70,10 @@ function SpotForm({
   const latRef = useRef<HTMLInputElement>(null)
   const lngRef = useRef<HTMLInputElement>(null)
   const [mapModalOpen, setMapModalOpen] = useState(false)
+  const [kiteZonesModalOpen, setKiteZonesModalOpen] = useState(false)
+  const [kiteZonesJson, setKiteZonesJson] = useState(() =>
+    serializeKiteZonesForForm(spot?.kite_zones)
+  )
   const [selectedWindDirs, setSelectedWindDirs] = useState<string[]>(
     spot?.wind_directions ?? []
   )
@@ -88,6 +96,10 @@ function SpotForm({
     userClearedRef.current = false
     setImageRemoved(false)
   }, [spot?.id])
+
+  useEffect(() => {
+    setKiteZonesJson(serializeKiteZonesForForm(spot?.kite_zones))
+  }, [spot?.id, spot?.kite_zones])
 
   useEffect(() => {
     if (!userClearedRef.current && spot?.map_image_url && !imageInputRef.current?.files?.length) {
@@ -306,6 +318,36 @@ function SpotForm({
           ))}
         </div>
       </div>
+
+      <input type="hidden" name="kiteZones" value={kiteZonesJson} readOnly />
+
+      <div>
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full min-h-11 sm:w-auto"
+          onClick={() => setKiteZonesModalOpen(true)}
+        >
+          Skraver områder
+        </Button>
+      </div>
+
+      <KiteZonesModal
+        open={kiteZonesModalOpen}
+        onOpenChange={setKiteZonesModalOpen}
+        formJson={kiteZonesJson}
+        centerLat={
+          latRef.current?.value
+            ? parseFloat(latRef.current.value)
+            : spot?.latitude ?? null
+        }
+        centerLng={
+          lngRef.current?.value
+            ? parseFloat(lngRef.current.value)
+            : spot?.longitude ?? null
+        }
+        onCommit={setKiteZonesJson}
+      />
 
       <div>
         <label className="block text-sm font-medium mb-1">Bilde</label>

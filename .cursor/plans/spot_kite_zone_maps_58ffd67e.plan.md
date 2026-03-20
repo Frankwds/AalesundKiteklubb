@@ -4,19 +4,19 @@ overview: Add a JSONB column on `spots` for GeoJSON kite zones, an admin Google 
 todos:
   - id: migration-jsonb
     content: Add Supabase migration `kite_zones jsonb` on spots; update database types
-    status: pending
+    status: completed
   - id: validate-persist
     content: Zod schema + createSpot/updateSpot FormData parsing and kite_zones persistence; revalidate /spots/[id]
-    status: pending
+    status: completed
   - id: static-map-url
     content: Server helper for Maps Static API URL (marker, paths, visible vs zoom 11)
-    status: pending
+    status: completed
   - id: kite-zones-modal
     content: KiteZonesModal + map/polygon/marker logic; hidden input + SpotForm integration before Bilde
-    status: pending
+    status: completed
   - id: public-spot-map
     content: "Spot detail section: static img + legend; next/image remote config if needed"
-    status: pending
+    status: completed
 isProject: false
 ---
 

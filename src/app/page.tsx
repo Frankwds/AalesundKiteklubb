@@ -1,12 +1,16 @@
 import Link from "next/link"
 import Image from "next/image"
+import type { Metadata } from "next"
 import { buttonVariants } from "@/components/ui/button-variants"
 import { MessageCircle, Users } from "lucide-react"
+import { showCoursePages } from "@/lib/feature-flags"
 import { cn } from "@/lib/utils"
 
-export const metadata = {
+export const metadata: Metadata = {
   title: "Ålesund Kiteklubb",
-  description: "Kiteklubben for Sunnmøre — Kurs, Spot guide og fellesskap",
+  description: showCoursePages
+    ? "Kiteklubben for Sunnmøre — Kurs, Spot guide og fellesskap"
+    : "Kiteklubben for Sunnmøre — Spot guide og fellesskap",
 }
 
 export default function HomePage() {
@@ -31,7 +35,9 @@ export default function HomePage() {
             <br />
             Vi kiter på snø og på vann.
             <br />
-            Bli med, finn spots, eller meld deg på kurs!
+            {showCoursePages
+              ? "Bli med, finn spots, eller meld deg på kurs!"
+              : "Bli med og finn spots!"}
           </p>
         </div>
       </section>
@@ -55,9 +61,20 @@ export default function HomePage() {
 
             <div className="space-y-6 min-w-0 relative z-10">
               <p className="text-base text-foreground/80 leading-relaxed">
-                Ålesund Kiteklubb er en lokal kiteklubb på Sunnmøre. Vi
-                holder kurs for nybegynnere, og har en guide til
-                de beste kitespottene i området. Bli med i fellesskapet!
+                Ålesund Kiteklubb er en lokal kiteklubb på Sunnmøre.
+                {showCoursePages ? (
+                  <>
+                    {" "}
+                    Vi holder kurs for nybegynnere, og har en guide til de
+                    beste kitespottene i området. Bli med i fellesskapet!
+                  </>
+                ) : (
+                  <>
+                    {" "}
+                    Vi har en guide til de beste kitespottene i området. Bli
+                    med i fellesskapet!
+                  </>
+                )}
               </p>
 
               <div className="flex flex-col sm:flex-row flex-wrap gap-4 pt-4 min-w-0">
@@ -94,7 +111,12 @@ export default function HomePage() {
       {/* Quick Links */}
       <section className="px-6 pb-12 md:pb-16">
         <div className="max-w-4xl mx-auto">
-          <div className="grid sm:grid-cols-2 gap-6">
+          <div
+            className={cn(
+              "grid gap-6",
+              showCoursePages ? "sm:grid-cols-2" : "sm:grid-cols-1 max-w-xl"
+            )}
+          >
             <Link
               href="/spots"
               className="group p-6 bg-card rounded-lg border border-border hover:border-primary/40 card-lift"
@@ -108,18 +130,20 @@ export default function HomePage() {
               </p>
             </Link>
 
-            <Link
-              href="/courses"
-              className="group p-6 bg-card rounded-lg border border-border hover:border-primary/40 card-lift"
-            >
-              <h3 className="text-lg font-semibold text-foreground mb-2 group-hover:text-primary transition-colors">
-                Bli med på kurs
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                Lær å kitesurfe med våre erfarne instruktører — kurs for alle
-                nivåer.
-              </p>
-            </Link>
+            {showCoursePages && (
+              <Link
+                href="/courses"
+                className="group p-6 bg-card rounded-lg border border-border hover:border-primary/40 card-lift"
+              >
+                <h3 className="text-lg font-semibold text-foreground mb-2 group-hover:text-primary transition-colors">
+                  Bli med på kurs
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  Lær å kitesurfe med våre erfarne instruktører — kurs for alle
+                  nivåer.
+                </p>
+              </Link>
+            )}
           </div>
         </div>
       </section>

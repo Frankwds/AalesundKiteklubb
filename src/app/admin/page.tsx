@@ -1,6 +1,7 @@
 import { Suspense } from "react"
 import { redirect } from "next/navigation"
 import { getCurrentUser } from "@/lib/auth"
+import { showCoursePages } from "@/lib/feature-flags"
 import { getInstructors } from "@/lib/queries/instructors"
 import { getCoursesForAdmin } from "@/lib/queries/courses"
 import { getSpots } from "@/lib/queries/spots"
@@ -23,7 +24,7 @@ export default async function AdminPage() {
   const [instructors, courses, spots, subscriptions, users] =
     await Promise.all([
       getInstructors(),
-      getCoursesForAdmin(),
+      showCoursePages ? getCoursesForAdmin() : Promise.resolve([]),
       getSpots(),
       getAllSubscriptions(),
       getAllUsers(),
@@ -32,6 +33,7 @@ export default async function AdminPage() {
   return (
     <Suspense>
       <AdminDashboardClient
+        showCoursePages={showCoursePages}
         instructors={instructors}
         courses={courses}
         spots={spots}

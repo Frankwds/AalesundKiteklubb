@@ -24,6 +24,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { signOut } from "@/lib/actions/auth"
+import { showCoursePages } from "@/lib/feature-flags"
 import { cn } from "@/lib/utils"
 import type { CurrentUser } from "@/lib/auth"
 
@@ -64,7 +65,7 @@ export function NavbarClient({ user }: NavbarClientProps) {
   const navLinks = [
     { href: "/", label: "Hjem" },
     { href: "/spots", label: "Spot guide" },
-    { href: "/courses", label: "Kurs" },
+    ...(showCoursePages ? [{ href: "/courses" as const, label: "Kurs" }] : []),
   ]
 
   const roleLinks: { href: string; label: string }[] = []

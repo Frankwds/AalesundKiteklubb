@@ -10,6 +10,7 @@ import type { CurrentUser } from "@/lib/auth"
 import type { CourseWithFullRelations } from "@/lib/queries/courses"
 
 type Props = {
+  showCoursePages: boolean
   instructors: Awaited<ReturnType<typeof import("@/lib/queries/instructors").getInstructors>>
   courses: CourseWithFullRelations[]
   spots: Awaited<ReturnType<typeof import("@/lib/queries/spots").getSpots>>
@@ -19,6 +20,7 @@ type Props = {
 }
 
 export function AdminDashboardClient({
+  showCoursePages,
   instructors,
   courses,
   spots,
@@ -39,7 +41,9 @@ export function AdminDashboardClient({
         <div className="overflow-x-auto overflow-y-hidden -mx-1 px-1 py-5 shrink-0">
           <TabsList variant="panel">
             <TabsTrigger value="instructors">Instruktører</TabsTrigger>
-            <TabsTrigger value="courses">Kurs</TabsTrigger>
+            {showCoursePages && (
+              <TabsTrigger value="courses">Kurs</TabsTrigger>
+            )}
             <TabsTrigger value="spots">Spots</TabsTrigger>
             <TabsTrigger value="subscribers">Abonnenter</TabsTrigger>
             <TabsTrigger value="users">Rettigheter</TabsTrigger>
@@ -54,9 +58,11 @@ export function AdminDashboardClient({
               currentUser={currentUser}
             />
           </TabsContent>
-          <TabsContent value="courses">
-            <CoursesTab courses={courses} />
-          </TabsContent>
+          {showCoursePages && (
+            <TabsContent value="courses">
+              <CoursesTab courses={courses} />
+            </TabsContent>
+          )}
           <TabsContent value="spots">
             <SpotsTab spots={spots} />
           </TabsContent>

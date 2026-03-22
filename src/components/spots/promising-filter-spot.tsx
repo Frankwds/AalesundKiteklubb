@@ -4,6 +4,7 @@ import { useState, useMemo } from "react"
 import { ChevronDown, CloudSun, Check } from "lucide-react"
 import Image from "next/image"
 import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { getWeatherIconPath } from "@/lib/yr-forecast"
 import type {
@@ -270,13 +271,15 @@ export function PromisingFilterSpot({
                 (valgfritt)
               </span>
             </p>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid w-full grid-cols-4 gap-2">
               {PROMISING_WEATHER_OPTIONS.map((opt) => {
                 const isActive = localWeather.includes(opt.code)
                 return (
                   <button
                     key={opt.code}
                     type="button"
+                    aria-label={opt.label}
+                    aria-pressed={isActive}
                     onClick={() =>
                       setLocalWeather((prev) =>
                         isActive
@@ -285,41 +288,43 @@ export function PromisingFilterSpot({
                       )
                     }
                     className={cn(
-                      "flex cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-all",
+                      "flex h-12 cursor-pointer items-center justify-center rounded-lg border transition-all",
                       isActive
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "border-border bg-background hover:border-primary/40"
+                        ? "border-primary bg-primary-muted ring-1 ring-primary/20"
+                        : "border-border bg-background hover:border-primary/40 hover:bg-muted/50"
                     )}
                   >
                     <Image
                       src={getWeatherIconPath(opt.code)}
                       alt=""
-                      width={18}
-                      height={18}
-                      className="h-[18px] w-[18px]"
+                      width={32}
+                      height={32}
+                      className="h-8 w-8"
                       unoptimized
                     />
-                    {opt.label}
                   </button>
                 )
               })}
             </div>
           </div>
 
-          {/* Actions */}
-          <div className="flex gap-2">
-            <button
+          {/* Actions — match admin dialog buttons (outlinePrimaryLift + primaryLift) */}
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+            <Button
+              type="button"
+              variant="outlinePrimaryLift"
               onClick={handleReset}
-              className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
             >
               Nullstill
-            </button>
-            <button
+            </Button>
+            <Button
+              type="button"
+              variant="primaryLift"
+              size="lg"
               onClick={handleApply}
-              className="ml-auto rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
             >
               Bruk filter
-            </button>
+            </Button>
           </div>
         </div>
       )}

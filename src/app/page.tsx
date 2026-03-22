@@ -37,7 +37,7 @@ export default function HomePage() {
             <br />
             {showCoursePages
               ? "Bli med, finn spots, eller meld deg på kurs!"
-              : "Bli med og finn spots!"}
+              : "Finn kite spots eller bli med i chatten!"}
           </p>
         </div>
       </section>
@@ -88,7 +88,7 @@ export default function HomePage() {
                   )}
                 >
                   <Users className="mr-2 h-5 w-5 shrink-0" />
-                  Facebook gruppe
+                  Facebook
                 </Link>
                 <Link
                   href="https://discord.gg"

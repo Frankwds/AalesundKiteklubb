@@ -6,8 +6,9 @@ import { createClient } from "@/lib/supabase/server"
 import { CoursesPageClient } from "@/components/courses/courses-page-client"
 
 export const metadata = {
-  title: "Kurs — Ålesund Kiteklubb",
+  title: "Kurs",
   description: "Meld deg på kitekurs med erfarne instruktører på Sunnmøre",
+  robots: { index: false, follow: false },
 }
 
 export default async function CoursesPage() {

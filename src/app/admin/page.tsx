@@ -10,8 +10,9 @@ import { getAllUsers } from "@/lib/queries/users"
 import { AdminDashboardClient } from "@/components/admin/admin-dashboard-client"
 
 export const metadata = {
-  title: "Admin — Ålesund Kiteklubb",
+  title: "Admin",
   description: "Administrasjonspanel for Ålesund Kiteklubb",
+  robots: { index: false, follow: false },
 }
 
 export default async function AdminPage() {

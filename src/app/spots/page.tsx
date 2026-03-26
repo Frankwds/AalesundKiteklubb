@@ -5,8 +5,9 @@ import { SpotList } from "@/components/spots/spot-list"
 import { SkeletonCard } from "@/components/ui/skeletons"
 
 export const metadata = {
-  title: "Spot guide — Ålesund Kiteklubb",
+  title: "Spot guide",
   description: "Finn de beste kitespottene på Sunnmøre",
+  alternates: { canonical: "/spots" },
 }
 
 export default async function SpotsPage() {

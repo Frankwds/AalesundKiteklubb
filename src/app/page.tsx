@@ -5,17 +5,46 @@ import { buttonVariants } from "@/components/ui/button-variants"
 import { MessageCircle, Users } from "lucide-react"
 import { showCoursePages } from "@/lib/feature-flags"
 import { cn } from "@/lib/utils"
+import {
+  getDefaultSiteDescription,
+  getSiteUrl,
+  SITE_LOGO_PATH,
+} from "@/lib/site"
+
+const homeDescription = getDefaultSiteDescription()
 
 export const metadata: Metadata = {
-  title: "Ålesund Kiteklubb",
-  description: showCoursePages
-    ? "Kiteklubben for Sunnmøre — Kurs, Spot guide og fellesskap"
-    : "Kiteklubben for Sunnmøre — Spot guide og fellesskap",
+  title: { absolute: "Ålesund Kiteklubb" },
+  description: homeDescription,
+  alternates: { canonical: "/" },
+  openGraph: {
+    title: "Ålesund Kiteklubb",
+    description: homeDescription,
+    url: "/",
+  },
 }
 
 export default function HomePage() {
+  const siteUrl = getSiteUrl()
+  const logoUrl = `${siteUrl}${SITE_LOGO_PATH}`
+  const organizationSchema = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: "Ålesund Kiteklubb",
+    url: siteUrl,
+    logo: logoUrl,
+    description: homeDescription,
+    sameAs: ["https://www.facebook.com/groups/219320601753203"],
+  }
+
   return (
     <div>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(organizationSchema),
+        }}
+      />
       {/* Hero Section */}
       <section className="relative h-[45vh] min-h-[300px] overflow-hidden rounded-t-none md:rounded-t-xl">
         <Image

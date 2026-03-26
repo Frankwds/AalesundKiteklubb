@@ -6,8 +6,9 @@ import { getSpots } from "@/lib/queries/spots"
 import { InstructorDashboardClient } from "@/components/instructor/instructor-dashboard-client"
 
 export const metadata = {
-  title: "Instruktør — Ålesund Kiteklubb",
+  title: "Instruktør",
   description: "Administrer din profil og kurs som instruktør",
+  robots: { index: false, follow: false },
 }
 
 export default async function InstructorPage() {

@@ -4,6 +4,11 @@ import "./globals.css"
 import { Navbar } from "@/components/layout/navbar"
 import { Footer } from "@/components/layout/footer"
 import { Toaster } from "@/components/ui/sonner"
+import {
+  getDefaultSiteDescription,
+  getSiteUrl,
+  SITE_LOGO_PATH,
+} from "@/lib/site"
 
 const syne = Syne({
   subsets: ["latin"],
@@ -17,13 +22,44 @@ const jakarta = Plus_Jakarta_Sans({
   display: "swap",
 })
 
+const siteUrl = getSiteUrl()
+const defaultDescription = getDefaultSiteDescription()
+
 export const metadata: Metadata = {
-  title: "Ålesund Kiteklubb",
-  description: "Kiteklubben for Sunnmøre — Kurs, Spot guide og fellesskap",
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: "Ålesund Kiteklubb",
+    template: "%s | Ålesund Kiteklubb",
+  },
+  description: defaultDescription,
+  applicationName: "Ålesund Kiteklubb",
+  icons: {
+    icon: [{ url: SITE_LOGO_PATH, type: "image/png" }],
+    apple: SITE_LOGO_PATH,
+  },
   openGraph: {
-    title: "Ålesund Kiteklubb",
-    description: "Kiteklubben for Sunnmøre — Kurs, Spot guide og fellesskap",
     type: "website",
+    locale: "nb_NO",
+    url: siteUrl,
+    siteName: "Ålesund Kiteklubb",
+    title: "Ålesund Kiteklubb",
+    description: defaultDescription,
+    images: [
+      {
+        url: SITE_LOGO_PATH,
+        alt: "Ålesund Kiteklubb",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Ålesund Kiteklubb",
+    description: defaultDescription,
+    images: [SITE_LOGO_PATH],
+  },
+  robots: {
+    index: true,
+    follow: true,
   },
 }
 

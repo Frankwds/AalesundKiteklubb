@@ -1,3 +1,4 @@
+import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
@@ -14,18 +15,40 @@ import {
 import { getSpot } from "@/lib/queries/spots"
 import { buildStaticSpotMapUrl } from "@/lib/maps/staticSpotMapUrl"
 import { SpotKiteZonesStaticMap } from "@/components/spots/spot-kite-zones-static-map"
+import { getSiteUrl, SITE_LOGO_PATH } from "@/lib/site"
 
 export async function generateMetadata({
   params,
 }: {
   params: Promise<{ id: string }>
-}) {
+}): Promise<Metadata> {
   const { id } = await params
   const spot = await getSpot(id)
   if (!spot) return { title: "Spot ikke funnet" }
+  const description =
+    spot.description ?? `Kitespot: ${spot.name}, ${spot.area}`
+  const base = getSiteUrl()
+  const ogImage =
+    spot.map_image_url?.startsWith("http") === true
+      ? spot.map_image_url
+      : `${base}${SITE_LOGO_PATH}`
+
   return {
-    title: `${spot.name} — Ålesund Kiteklubb`,
-    description: spot.description ?? `Kitespot: ${spot.name}, ${spot.area}`,
+    title: spot.name,
+    description,
+    alternates: { canonical: `/spots/${id}` },
+    openGraph: {
+      title: spot.name,
+      description,
+      url: `/spots/${id}`,
+      images: [{ url: ogImage, alt: spot.name }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: spot.name,
+      description,
+      images: [ogImage],
+    },
   }
 }
 

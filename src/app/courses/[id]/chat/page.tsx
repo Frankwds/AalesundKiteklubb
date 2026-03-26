@@ -1,3 +1,4 @@
+import type { Metadata } from "next"
 import { redirect } from "next/navigation"
 import { getCurrentUser } from "@/lib/auth"
 import { getMessages } from "@/lib/queries/messages"
@@ -8,7 +9,7 @@ export async function generateMetadata({
   params,
 }: {
   params: Promise<{ id: string }>
-}) {
+}): Promise<Metadata> {
   const { id } = await params
   const supabase = await createClient()
   const { data: course } = await supabase
@@ -18,9 +19,9 @@ export async function generateMetadata({
     .single()
 
   return {
-    title: course
-      ? `${course.title} — Chat — Ålesund Kiteklubb`
-      : "Chat — Ålesund Kiteklubb",
+    title: course ? `${course.title} · Chat` : "Chat",
+    description: "Kurschat for påmeldte deltakere.",
+    robots: { index: false, follow: false },
   }
 }
 

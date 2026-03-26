@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useState, useMemo } from "react"
 import { usePathname, useSearchParams } from "next/navigation"
-import { SearchX, Loader2 } from "lucide-react"
+import { SearchX, Loader2, Map as MapIcon, LayoutGrid } from "lucide-react"
 import { SpotCard } from "./spot-card"
 import { SpotFilters } from "./spot-filters"
 import { PromisingFilterSpot } from "./promising-filter-spot"
+import { SpotMap } from "./spot-map"
 import {
   fetchYrDataClient,
   mapYrToMinimalForecast,
@@ -59,6 +60,7 @@ export function SpotList({ spots }: { spots: Spot[] }) {
     null
   )
   const [loadingPromising, setLoadingPromising] = useState(false)
+  const [viewMode, setViewMode] = useState<"list" | "map">("map")
 
   const { season, area, wind } = filters
 
@@ -221,10 +223,34 @@ export function SpotList({ spots }: { spots: Spot[] }) {
           </button>
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filteredSpots.map((spot) => (
-            <SpotCard key={spot.id} spot={spot} />
-          ))}
+        <div className="space-y-4">
+          <div className="flex justify-end">
+            <div className="inline-flex h-9 items-center justify-center rounded-lg bg-muted p-1 text-muted-foreground">
+              <button
+                onClick={() => setViewMode("map")}
+                className={`inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${viewMode === "map" ? "bg-background text-foreground shadow" : "hover:text-foreground"}`}
+              >
+                <MapIcon className="mr-2 h-4 w-4" />
+                Kart
+              </button>
+              <button
+                onClick={() => setViewMode("list")}
+                className={`inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${viewMode === "list" ? "bg-background text-foreground shadow" : "hover:text-foreground"}`}
+              >
+                <LayoutGrid className="mr-2 h-4 w-4" />
+                Liste
+              </button>
+            </div>
+          </div>
+          {viewMode === "map" ? (
+            <SpotMap spots={filteredSpots} />
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {filteredSpots.map((spot) => (
+                <SpotCard key={spot.id} spot={spot} />
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

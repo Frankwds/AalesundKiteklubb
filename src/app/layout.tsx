@@ -33,10 +33,6 @@ export const metadata: Metadata = {
   },
   description: defaultDescription,
   applicationName: "Ålesund Kiteklubb",
-  icons: {
-    icon: [{ url: SITE_LOGO_PATH, type: "image/png" }],
-    apple: SITE_LOGO_PATH,
-  },
   openGraph: {
     type: "website",
     locale: "nb_NO",

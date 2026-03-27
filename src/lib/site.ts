@@ -16,5 +16,5 @@ export function getSiteUrl(): string {
   return "http://localhost:3000"
 }
 
-/** Club emblem — favicon, OG default, Organization schema logo */
+/** Club emblem — Open Graph, Twitter card, Organization schema logo */
 export const SITE_LOGO_PATH = "/logo-emblem-transparent.png" as const

@@ -12,7 +12,9 @@ import {
   skillLabels,
   waterTypeLabels,
 } from "@/lib/spot-labels"
-import { getSpot } from "@/lib/queries/spots"
+import { getSpot, getSpots } from "@/lib/queries/spots"
+import { getCurrentUser } from "@/lib/auth"
+import { SpotDetailPublicEdit } from "@/components/spots/spot-detail-public-edit"
 import { buildStaticSpotMapUrl } from "@/lib/maps/staticSpotMapUrl"
 import { SpotKiteZonesStaticMap } from "@/components/spots/spot-kite-zones-static-map"
 import { getSiteUrl, SITE_LOGO_PATH } from "@/lib/site"
@@ -58,7 +60,11 @@ export default async function SpotDetailPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  const spot = await getSpot(id)
+  const [spot, allSpots, user] = await Promise.all([
+    getSpot(id),
+    getSpots(),
+    getCurrentUser(),
+  ])
   if (!spot) notFound()
 
   const season = spot.season ? seasonLabels[spot.season] : null
@@ -73,14 +79,16 @@ export default async function SpotDetailPage({
 
   return (
     <div className="px-6 py-8">
-      {/* Back link */}
-      <Link
-        href="/spots"
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Tilbake til Spot guide
-      </Link>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
+        <Link
+          href="/spots"
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Tilbake til Spot guide
+        </Link>
+        <SpotDetailPublicEdit user={user} spot={spot} allSpots={allSpots} />
+      </div>
 
       {/* Top row: Title + badges left, Kart + Yr links right */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between sm:gap-4 mb-8">

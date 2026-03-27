@@ -1,6 +1,8 @@
 "use client"
 
+import { Suspense, useMemo } from "react"
 import Link from "next/link"
+import { useSearchParams } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import {
@@ -10,15 +12,32 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, Loader2 } from "lucide-react"
 
-export default function LoginPage() {
+/** Relative in-app path only; blocks open redirects */
+function safeReturnPath(raw: string | null): string {
+  if (!raw) return "/"
+  if (!raw.startsWith("/") || raw.startsWith("//") || raw.includes("://")) {
+    return "/"
+  }
+  return raw
+}
+
+function LoginForm() {
+  const searchParams = useSearchParams()
+  const next = useMemo(
+    () => safeReturnPath(searchParams.get("next")),
+    [searchParams]
+  )
+
   async function handleSignIn() {
     const supabase = createClient()
+    const callbackUrl = new URL(`${window.location.origin}/auth/callback`)
+    callbackUrl.searchParams.set("next", next)
     await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: callbackUrl.toString(),
       },
     })
   }
@@ -71,5 +90,22 @@ export default function LoginPage() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+function LoginFallback() {
+  return (
+    <div className="min-h-[60vh] flex items-center justify-center p-6">
+      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" aria-hidden />
+      <span className="sr-only">Laster innlogging…</span>
+    </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginFallback />}>
+      <LoginForm />
+    </Suspense>
   )
 }

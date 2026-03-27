@@ -107,7 +107,7 @@ export default async function SpotDetailPage({
               className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm font-medium text-foreground hover:border-primary/40 hover:bg-primary-muted transition-all"
             >
               <MapPin className="h-4 w-4 text-primary" />
-              Google Maps
+              Maps
             </a>
             <a
               href={`https://www.yr.no/nb/v%C3%A6rvarsel/daglig-tabell/${spot.latitude},${spot.longitude}`}

@@ -3,49 +3,64 @@
 import { useEffect, useRef, useState } from "react"
 import { setOptions, importLibrary } from "@googlemaps/js-api-loader"
 import { createRoot, Root } from "react-dom/client"
-import { Loader2 } from "lucide-react"
+import { BookOpen, Cloud, Loader2, MapPin } from "lucide-react"
 
-import { WindCompass } from "@/components/spots/wind-compass"
-import { Badge } from "@/components/ui/badge"
-import { seasonLabels, skillLabels } from "@/lib/spot-labels"
+import { GOOGLE_MAPS_SPOTS_MAP_ID } from "@/lib/maps/map-config"
+import {
+  attachSpotMarkerHoverHandlers,
+  createSpotMarkerElement,
+} from "@/lib/maps/spot-marker-element"
 import type { Database } from "@/types/database"
 
 type Spot = Database["public"]["Tables"]["spots"]["Row"]
 
 function InfoWindowContent({ spot }: { spot: Spot }) {
-  const season = spot.season ? seasonLabels[spot.season] : null
-  const skill = spot.skill_level ? skillLabels[spot.skill_level] : null
-  const d = spot.wind_directions || []
+  const lat = spot.latitude
+  const lon = spot.longitude
+  const hasCoords = lat != null && lon != null
+
+  const buttonClass =
+    "inline-flex w-full min-w-0 items-center justify-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-xs font-medium text-foreground hover:border-primary/40 hover:bg-primary-muted transition-all"
 
   return (
-    <div className="flex flex-col gap-2 p-1 min-w-[200px] max-w-[260px]">
-      <a 
-        href={`/spots/${spot.id}`}
-        className="text-base font-semibold text-primary hover:underline transition-colors block"
-      >
-        {spot.name}
+    <div className="flex w-full min-w-0 max-w-[min(280px,calc(100vw-2.5rem))] flex-col gap-2 px-1 pb-1 pt-0">
+      <a href={`/spots/${spot.id}`} className={buttonClass}>
+        <BookOpen className="h-4 w-4 shrink-0 text-primary" />
+        Guide
       </a>
-      {(season || skill) && (
-        <div className="flex flex-wrap gap-1.5 mt-1">
-          {season && (
-            <Badge variant={season.variant} className="text-[10px] px-1.5 py-0 h-4 leading-4 flex-shrink-0">
-              {season.text}
-            </Badge>
-          )}
-          {skill && (
-            <Badge variant={skill.variant} className="text-[10px] px-1.5 py-0 h-4 leading-4 flex-shrink-0">
-              {skill.text}
-            </Badge>
-          )}
-        </div>
-      )}
-      {d.length > 0 && (
-        <div className="mt-3 flex flex-col items-center">
-          <WindCompass directions={d} size="sm" />
+      <p className="text-base font-semibold text-foreground leading-snug">
+        {spot.name}
+      </p>
+      {hasCoords && (
+        <div className="flex w-full min-w-0 flex-col gap-1.5">
+          <a
+            href={`https://www.google.com/maps?q=${lat},${lon}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={buttonClass}
+          >
+            <MapPin className="h-4 w-4 shrink-0 text-primary" />
+            Maps
+          </a>
+          <a
+            href={`https://www.yr.no/nb/v%C3%A6rvarsel/daglig-tabell/${lat},${lon}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={buttonClass}
+          >
+            <Cloud className="h-4 w-4 shrink-0 text-primary" />
+            Yr.no
+          </a>
         </div>
       )}
     </div>
   )
+}
+
+function disposeMarkers(markers: google.maps.marker.AdvancedMarkerElement[]) {
+  for (const m of markers) {
+    m.map = null
+  }
 }
 
 export function SpotMap({ spots }: { spots: Spot[] }) {
@@ -54,7 +69,7 @@ export function SpotMap({ spots }: { spots: Spot[] }) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const markersRef = useRef<google.maps.Marker[]>([])
+  const markersRef = useRef<google.maps.marker.AdvancedMarkerElement[]>([])
   const infoWindowRef = useRef<google.maps.InfoWindow | null>(null)
   const infoWindowContainerRef = useRef<HTMLDivElement | null>(null)
   const rootRef = useRef<Root | null>(null)
@@ -65,31 +80,37 @@ export function SpotMap({ spots }: { spots: Spot[] }) {
       try {
         const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
         if (!apiKey || apiKey === "GOOGLE_MAPS_API_KEY") {
-          throw new Error("Google Maps API key is not configured. Set NEXT_PUBLIC_GOOGLE_MAPS_API_KEY in .env.local.")
+          throw new Error(
+            "Google Maps API key is not configured. Set NEXT_PUBLIC_GOOGLE_MAPS_API_KEY in .env.local."
+          )
         }
 
         setOptions({ key: apiKey, v: "weekly" })
         await importLibrary("maps")
+        await importLibrary("marker")
 
         const g = (window as Window & { google: typeof globalThis.google }).google
         if (!g || !mapRef.current || cancelled) return
 
-        // Setup React render target for InfoWindow
         const container = document.createElement("div")
         infoWindowContainerRef.current = container
         rootRef.current = createRoot(container)
-        const infoWindow = new g.maps.InfoWindow()
+        const infoWindow = new g.maps.InfoWindow({
+          maxWidth: 320,
+          headerDisabled: true,
+        })
         infoWindowRef.current = infoWindow
 
-        // Initialize map
         const map = new g.maps.Map(mapRef.current, {
-          center: { lat: 62.4722, lng: 6.1549 }, // Default Ålesund area
+          center: { lat: 62.4722, lng: 6.1549 },
           zoom: 9,
+          mapId: GOOGLE_MAPS_SPOTS_MAP_ID,
           mapTypeId: g.maps.MapTypeId.ROADMAP,
           streetViewControl: false,
           mapTypeControl: false,
           fullscreenControl: true,
           gestureHandling: "greedy",
+          clickableIcons: false,
         })
 
         map.addListener("click", () => {
@@ -121,8 +142,7 @@ export function SpotMap({ spots }: { spots: Spot[] }) {
     const g = (window as Window & { google: typeof globalThis.google }).google
     if (!g) return
 
-    // Clear old markers
-    markersRef.current.forEach((marker) => marker.setMap(null))
+    disposeMarkers(markersRef.current)
     markersRef.current = []
 
     if (spots.length === 0) return
@@ -130,32 +150,45 @@ export function SpotMap({ spots }: { spots: Spot[] }) {
     const bounds = new g.maps.LatLngBounds()
     let validSpots = 0
 
-    spots.forEach((spot) => {
-      if (!spot.latitude || !spot.longitude) return
-      
+    const openInfo = (
+      spot: Spot,
+      anchor: google.maps.marker.AdvancedMarkerElement
+    ) => {
+      if (rootRef.current && infoWindowRef.current && infoWindowContainerRef.current) {
+        rootRef.current.render(<InfoWindowContent spot={spot} />)
+        infoWindowRef.current.setContent(infoWindowContainerRef.current)
+        infoWindowRef.current.open({
+          anchor,
+          map: mapInstance,
+          shouldFocus: false,
+        })
+      }
+    }
+
+    for (const spot of spots) {
+      if (spot.latitude == null || spot.longitude == null) continue
+
       const position = { lat: spot.latitude, lng: spot.longitude }
-      const marker = new g.maps.Marker({
-        position,
+
+      const markerElement = createSpotMarkerElement(spot.wind_directions)
+      attachSpotMarkerHoverHandlers(markerElement)
+
+      const marker = new g.maps.marker.AdvancedMarkerElement({
         map: mapInstance,
+        position,
         title: spot.name,
+        content: markerElement,
       })
-
-      marker.addListener("click", () => {
-        if (rootRef.current && infoWindowRef.current && infoWindowContainerRef.current) {
-          rootRef.current.render(<InfoWindowContent spot={spot} />)
-          infoWindowRef.current.setContent(infoWindowContainerRef.current)
-          infoWindowRef.current.open({
-            anchor: marker,
-            map: mapInstance,
-            shouldFocus: false,
-          })
-        }
+      marker.zIndex = 1000
+      markerElement.addEventListener("click", (e: Event) => {
+        e.stopPropagation()
+        openInfo(spot, marker)
       })
-
       markersRef.current.push(marker)
+
       bounds.extend(position)
       validSpots++
-    })
+    }
 
     if (validSpots > 0) {
       if (validSpots === 1) {
@@ -163,7 +196,10 @@ export function SpotMap({ spots }: { spots: Spot[] }) {
         mapInstance.setZoom(12)
       } else {
         mapInstance.fitBounds(bounds, {
-          top: 40, right: 40, bottom: 40, left: 40
+          top: 40,
+          right: 40,
+          bottom: 40,
+          left: 40,
         })
       }
     }

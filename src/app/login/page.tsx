@@ -3,6 +3,10 @@
 import { Suspense, useMemo } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
+import {
+  AUTH_RETURN_PATH_COOKIE,
+  safeReturnPath,
+} from "@/lib/auth/return-path"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import {
@@ -14,15 +18,6 @@ import {
 } from "@/components/ui/card"
 import { ArrowLeft, Loader2 } from "lucide-react"
 
-/** Relative in-app path only; blocks open redirects */
-function safeReturnPath(raw: string | null): string {
-  if (!raw) return "/"
-  if (!raw.startsWith("/") || raw.startsWith("//") || raw.includes("://")) {
-    return "/"
-  }
-  return raw
-}
-
 function LoginForm() {
   const searchParams = useSearchParams()
   const next = useMemo(
@@ -32,12 +27,13 @@ function LoginForm() {
 
   async function handleSignIn() {
     const supabase = createClient()
-    const callbackUrl = new URL(`${window.location.origin}/auth/callback`)
-    callbackUrl.searchParams.set("next", next)
+    const safe = safeReturnPath(next)
+    document.cookie = `${AUTH_RETURN_PATH_COOKIE}=${encodeURIComponent(safe)}; Path=/; Max-Age=600; SameSite=Lax`
     await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: callbackUrl.toString(),
+        // Must match Redirect URLs exactly — query params break matching and Supabase falls back to Site URL.
+        redirectTo: `${window.location.origin}/auth/callback`,
       },
     })
   }

@@ -6,6 +6,9 @@ import {
 
 const STATIC_MAP_BASE = "https://maps.googleapis.com/maps/api/staticmap"
 
+/** When using explicit center (no zone auto-fit), zoom at least this level. */
+const MIN_ZOOM_EXPLICIT = 12
+
 /** Fill (with alpha) + stroke for Static Maps `path` color. */
 const ZONE_STYLE: Record<
   KiteZoneColor,
@@ -73,7 +76,8 @@ export function buildStaticSpotMapUrl({
   const params = new URLSearchParams()
   params.set("size", `${width}x${height}`)
   params.set("scale", "2")
-  params.set("maptype", "satellite")
+  // Satellite/hybrid Static Maps return 403 in some regions/accounts (Google policy).
+  params.set("maptype", "terrain")
   params.set("key", apiKey)
 
   if (hasCoords) {
@@ -98,7 +102,7 @@ export function buildStaticSpotMapUrl({
     }
   } else if (hasCoords) {
     params.set("center", `${lat},${lng}`)
-    params.set("zoom", "11")
+    params.set("zoom", String(MIN_ZOOM_EXPLICIT))
   }
 
   return `${STATIC_MAP_BASE}?${params.toString()}`

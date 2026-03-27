@@ -19,40 +19,42 @@ function InfoWindowContent({ spot }: { spot: Spot }) {
   const lon = spot.longitude
   const hasCoords = lat != null && lon != null
 
-  const buttonClass =
-    "inline-flex w-full min-w-0 items-center justify-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-xs font-medium text-foreground hover:border-primary/40 hover:bg-primary-muted transition-all"
-
   return (
     <div className="flex w-full min-w-0 max-w-[min(280px,calc(100vw-2.5rem))] flex-col gap-2 px-1 pb-1 pt-0">
-      <a href={`/spots/${spot.id}`} className={buttonClass}>
-        <BookOpen className="h-4 w-4 shrink-0 text-primary" />
-        Guide
-      </a>
       <p className="text-base font-semibold text-foreground leading-snug">
         {spot.name}
       </p>
-      {hasCoords && (
-        <div className="flex w-full min-w-0 flex-col gap-1.5">
-          <a
-            href={`https://www.google.com/maps?q=${lat},${lon}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={buttonClass}
-          >
-            <MapPin className="h-4 w-4 shrink-0 text-primary" />
-            Maps
-          </a>
-          <a
-            href={`https://www.yr.no/nb/v%C3%A6rvarsel/daglig-tabell/${lat},${lon}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={buttonClass}
-          >
-            <Cloud className="h-4 w-4 shrink-0 text-primary" />
-            Yr.no
-          </a>
-        </div>
-      )}
+      <div className="flex w-full min-w-0 flex-col gap-1.5 pt-0.5">
+        <a
+          href={`/spots/${spot.id}`}
+          className="inline-flex w-full min-w-0 items-center justify-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-xs font-medium text-foreground hover:border-primary/40 hover:bg-primary-muted transition-all"
+        >
+          <BookOpen className="h-4 w-4 shrink-0 text-primary" />
+          Guide
+        </a>
+        {hasCoords && (
+          <>
+            <a
+              href={`https://www.google.com/maps?q=${lat},${lon}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex w-full min-w-0 items-center justify-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-xs font-medium text-foreground hover:border-primary/40 hover:bg-primary-muted transition-all"
+            >
+              <MapPin className="h-4 w-4 shrink-0 text-primary" />
+              Maps
+            </a>
+            <a
+              href={`https://www.yr.no/nb/v%C3%A6rvarsel/daglig-tabell/${lat},${lon}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex w-full min-w-0 items-center justify-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-xs font-medium text-foreground hover:border-primary/40 hover:bg-primary-muted transition-all"
+            >
+              <Cloud className="h-4 w-4 shrink-0 text-primary" />
+              Yr.no
+            </a>
+          </>
+        )}
+      </div>
     </div>
   )
 }

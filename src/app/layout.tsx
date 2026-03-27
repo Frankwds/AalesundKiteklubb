@@ -4,6 +4,7 @@ import "./globals.css"
 import { Navbar } from "@/components/layout/navbar"
 import { Footer } from "@/components/layout/footer"
 import { Toaster } from "@/components/ui/sonner"
+import { ServiceWorkerRegister } from "@/components/pwa/service-worker-register"
 import {
   getDefaultSiteDescription,
   getSiteUrl,
@@ -53,6 +54,14 @@ export const metadata: Metadata = {
     description: defaultDescription,
     images: [SITE_LOGO_PATH],
   },
+  appleWebApp: {
+    capable: true,
+    title: "Ålesund Kiteklubb",
+    statusBarStyle: "default",
+  },
+  icons: {
+    apple: [{ url: "/logo-emblem-transparent-square.png", type: "image/png" }],
+  },
   robots: {
     index: true,
     follow: true,
@@ -92,6 +101,7 @@ export default function RootLayout({
         </div>
 
         <Toaster richColors position="top-right" />
+        <ServiceWorkerRegister />
       </body>
     </html>
   )

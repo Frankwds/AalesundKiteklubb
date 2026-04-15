@@ -112,7 +112,7 @@ export default function HomePage() {
                   target="_blank"
                   rel="noopener noreferrer"
                   className={cn(
-                    buttonVariants({ size: "xl" }),
+                    buttonVariants({ variant: "outlinePrimary", size: "xl" }),
                     "min-w-0 shrink btn-lift"
                   )}
                 >
@@ -120,9 +120,7 @@ export default function HomePage() {
                   Facebook
                 </Link>
                 <Link
-                  href="https://discord.gg"
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  href="/chat"
                   className={cn(
                     buttonVariants({ variant: "outlinePrimary", size: "xl" }),
                     "min-w-0 shrink btn-lift"

@@ -2,7 +2,7 @@ import Link from "next/link"
 import Image from "next/image"
 import type { Metadata } from "next"
 import { buttonVariants } from "@/components/ui/button-variants"
-import { MessageCircle, Users } from "lucide-react"
+import { MapPin, MessageCircle, Users } from "lucide-react"
 import { showCoursePages } from "@/lib/feature-flags"
 import { cn } from "@/lib/utils"
 import {
@@ -131,51 +131,22 @@ export default function HomePage() {
                   <MessageCircle className="mr-2 h-5 w-5 shrink-0" />
                   Bli med i chatten
                 </Link>
+                <Link
+                  href="/spots"
+                  className={cn(
+                    buttonVariants({ variant: "outlinePrimary", size: "xl" }),
+                    "min-w-0 shrink btn-lift"
+                  )}
+                >
+                  <MapPin className="mr-2 h-5 w-5 shrink-0" />
+                  Finn kite spots
+                </Link>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Quick Links */}
-      <section className="px-6 pb-12 md:pb-16">
-        <div className="max-w-4xl mx-auto">
-          <div
-            className={cn(
-              "grid gap-6",
-              showCoursePages ? "sm:grid-cols-2" : "sm:grid-cols-1 max-w-xl"
-            )}
-          >
-            <Link
-              href="/spots"
-              className="group p-6 bg-card rounded-lg border border-border hover:border-primary/40 card-lift"
-            >
-              <h3 className="text-lg font-semibold text-foreground mb-2 group-hover:text-primary transition-colors">
-                Utforsk Spot guide
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                Finn de beste stedene for kitesurfing på Sunnmøre med vår
-                spottguide.
-              </p>
-            </Link>
-
-            {showCoursePages && (
-              <Link
-                href="/courses"
-                className="group p-6 bg-card rounded-lg border border-border hover:border-primary/40 card-lift"
-              >
-                <h3 className="text-lg font-semibold text-foreground mb-2 group-hover:text-primary transition-colors">
-                  Bli med på kurs
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  Lær å kitesurfe med våre erfarne instruktører — kurs for alle
-                  nivåer.
-                </p>
-              </Link>
-            )}
-          </div>
-        </div>
-      </section>
     </div>
   )
 }

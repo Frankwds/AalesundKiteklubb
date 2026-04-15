@@ -10,7 +10,6 @@ import { SpotWindForecast } from "@/components/spots/spot-wind-forecast"
 import {
   seasonLabels,
   skillLabels,
-  waterTypeLabels,
 } from "@/lib/spot-labels"
 import { getSpot, getSpots } from "@/lib/queries/spots"
 import { getCurrentUser } from "@/lib/auth"
@@ -168,19 +167,6 @@ export default async function SpotDetailPage({
                 {spot.skill_notes}
               </p>
             )}
-          </div>
-        </Section>
-      )}
-
-      {/* Type (water type) */}
-      {spot.water_type && spot.water_type.length > 0 && (
-        <Section title="Type">
-          <div className="flex flex-wrap gap-2">
-            {spot.water_type.map((type) => (
-              <Badge key={type} variant="neutral">
-                {waterTypeLabels[type] ?? type}
-              </Badge>
-            ))}
           </div>
         </Section>
       )}
